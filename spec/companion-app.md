@@ -4,6 +4,11 @@ A small React Native app (iOS + Android) whose only job is to give the headset
 the two things it cannot sense: **where on Earth it is** and **which way is
 true north**.
 
+**Phase 2 artifact** — needed only when the renderer (Quest) lacks sensors.
+The Phase 1 web app ([mobile.md](mobile.md)) senses and renders on the same
+device, so it needs none of this; its sensor code (heading sampling, variance
+gates) should be structured for reuse here via shared TypeScript or WebView.
+
 The app is optional: every capability it provides has an in-headset fallback
 ([geospatial.md](geospatial.md)). It is the *recommended* path because it turns
 a fiddly manual calibration into one guided gesture with better accuracy.

@@ -2,11 +2,16 @@
 
 ## Engine & SDK
 
-- **Unity 6 (URP)** + Meta XR Core SDK + MR Utility Kit (MRUK).
+- **Phase 1 (web/phone):** Three.js + WebXR, TypeScript — see
+  [mobile.md](mobile.md). Platform-agnostic `core/` TypeScript package
+  (geodesy math, catalog client, playback clock, tile streaming) built here
+  and reused as the reference implementation for Phase 2 ports.
+- **Phase 2 (Quest):** Unity 6 (URP) + Meta XR Core SDK + MR Utility Kit (MRUK).
   Rationale: best-supported passthrough/stencil-portal path on Quest, Depth API
   optional, OpenXR-based, large geospatial shader ecosystem.
-- Companion app: React Native / Expo — see [companion-app.md](companion-app.md).
-- Render settings and budgets: see [platform.md](platform.md).
+- Companion app (Phase 2): React Native / Expo — see [companion-app.md](companion-app.md).
+- Render settings and budgets: Quest in [platform.md](platform.md), phone in
+  [mobile.md](mobile.md).
 
 ## Module breakdown (headset app)
 

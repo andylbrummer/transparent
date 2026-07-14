@@ -1,8 +1,11 @@
 # Transparent Earth — Quest 3S Mixed Reality App Specification
 
-**Version:** 0.2 (draft)
-**Target device:** Meta Quest 3S (also runs on Quest 3)
-**Companion:** React Native phone app (iOS + Android) for location/heading
+**Version:** 0.3 (draft)
+**Phase 1 target:** Web app (Three.js + WebXR) — AR magic window on
+ARCore phones (reference device: Pixel 6 Pro), Cardboard stereo toggle,
+gyro/desktop fallback
+**Phase 2 target:** Meta Quest 3S native (also runs on Quest 3), with React
+Native companion app for location/heading
 **Working title:** Transparent Earth
 
 ---
@@ -37,6 +40,7 @@ is that way and that far down; the antipode really is straight down.
 
 | Document | Contents |
 |---|---|
+| [spec/mobile.md](spec/mobile.md) | Phase 1: phone-first web app — WebXR AR magic window, Cardboard stereo, gyro fallback, Tensor G1 budgets |
 | [spec/platform.md](spec/platform.md) | Quest 3S constraints, performance & memory budgets, render settings |
 | [spec/ux.md](spec/ux.md) | First-run flow, interactions, comfort/safety, visual design of portal + transparent Earth |
 | [spec/geospatial.md](spec/geospatial.md) | Location/heading acquisition chains, ECEF/WGS84 coordinates, floating origin, precision |
@@ -61,6 +65,9 @@ is that way and that far down; the antipode really is straight down.
 - G6. Comfortable, standing-or-seated experience at 72 Hz minimum on Quest 3S.
 - G7. Sub-minute setup via companion phone app (GPS + compass transfer), with
   full in-headset fallbacks so the phone is never required.
+- G8. Accessible phone-first delivery: the Phase 1 web app runs the full
+  experience (AR magic window) on ordinary ARCore phones with zero install,
+  sharing the data pipeline with the Quest build.
 
 ### Non-Goals (v1)
 - No multiplayer / shared sessions.
@@ -70,6 +77,15 @@ is that way and that far down; the antipode really is straight down.
 - No hand-tracked geology tools (measuring, core sampling) — future.
 
 ## 4. Milestones
+
+### Phase 1 — Web / phone (P1–P5)
+
+See [spec/mobile.md](spec/mobile.md) for the full table: gyro globe → AR magic
+window portal → seismic playback → weather layers → Cardboard stereo toggle.
+Phase 1 proves the visual design, seismic/weather systems, and data pipeline
+with zero store friction; Phase 2 ports them to true stereo MR.
+
+### Phase 2 — Quest 3S native (M1–M6)
 
 | # | Deliverable | Acceptance |
 |---|---|---|
