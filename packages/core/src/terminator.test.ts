@@ -10,6 +10,7 @@ import {
   EARTH_RADIUS_M,
   SUN_ANGULAR_RADIUS_DEG,
 } from './terminator';
+import { angularDistance, type LatLonAlt } from './geodesy';
 
 describe('subsolarEcef', () => {
   it('returns a non-zero vector', () => {
@@ -142,13 +143,24 @@ describe('generateTerminatorPoints', () => {
     }
   });
 
-  it('returns a closed loop (first ≈ last for large segments)', () => {
-    const points = generateTerminatorPoints(new Date('2024-06-21T12:00:00Z'), 128);
-    const first = points[0];
-    const last = points[points.length - 1];
-    // Not exactly equal because of discrete sampling, but should be close
-    expect(first.lat).toBeCloseTo(last.lat, 1);
-    expect(first.lon).toBeCloseTo(last.lon, 1);
+  it('closes the ring: the last-to-first step matches the segment spacing', () => {
+    // The ring is emitted open — `segments` distinct points, no repeated
+    // closing vertex — so first and last are deliberately one step apart and
+    // the renderer joins them. Closure means that wrap-around step is the
+    // same size as every other, leaving no gap and no overlap.
+    const segments = 128;
+    const points = generateTerminatorPoints(new Date('2024-06-21T12:00:00Z'), segments);
+    expect(points).toHaveLength(segments);
+
+    const step = (a: LatLonAlt, b: LatLonAlt): number =>
+      angularDistance({ ...a, alt: 0 }, { ...b, alt: 0 });
+
+    const expected = (2 * Math.PI) / segments;
+    for (let i = 0; i < segments; i++) {
+      const here = points[i];
+      const next = points[(i + 1) % segments];
+      expect(step(here, next)).toBeCloseTo(expected, 6);
+    }
   });
 });
 
