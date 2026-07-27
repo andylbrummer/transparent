@@ -22,6 +22,8 @@ const FRAGMENT_SHADER = `
   uniform vec3 uCameraPos;
   uniform mat3 uCameraRot;
   uniform float uEarthRadius;
+  uniform float uAspect;
+  uniform float uTanHalfFov;
   uniform int uLayerCount;
   uniform float uLayerRadii[5];
   uniform vec3 uLayerColors[5];
@@ -70,9 +72,11 @@ const FRAGMENT_SHADER = `
   }
 
   void main() {
-    // Ray direction from camera through pixel
+    // Ray direction from camera through pixel. Scaling by aspect and the
+    // half-FOV tangent keeps the planet circular instead of stretching it
+    // to the viewport, and keeps the framing consistent with the camera.
     vec2 uv = vUv * 2.0 - 1.0;
-    vec3 rd = normalize(uCameraRot * vec3(uv.x, uv.y, -1.0));
+    vec3 rd = normalize(uCameraRot * vec3(uv.x * uAspect * uTanHalfFov, uv.y * uTanHalfFov, -1.0));
     vec3 ro = uCameraPos;
 
     // Background color (dark space)
@@ -133,6 +137,8 @@ export class GlobeRenderer {
       uCameraPos: { value: new THREE.Vector3(0, 0, EARTH_RADIUS_M + 2) },
       uCameraRot: { value: new THREE.Matrix3().identity() },
       uEarthRadius: { value: EARTH_RADIUS_M },
+      uAspect: { value: 1 },
+      uTanHalfFov: { value: Math.tan((60 * Math.PI) / 180 / 2) },
       uLayerCount: { value: PREM_LAYERS.length },
       uLayerRadii: { value: premRadiiToMeters() },
       uLayerColors: { value: premColors() },
@@ -159,6 +165,16 @@ export class GlobeRenderer {
   update(camera: THREE.Camera): void {
     const elapsed = this.clock.getElapsedTime();
     this.material.uniforms.uTime.value = elapsed;
+
+    // Track the camera's own framing so the raymarch matches what a
+    // rasterised scene through the same camera would show.
+    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const perspective = camera as THREE.PerspectiveCamera;
+      this.material.uniforms.uAspect.value = perspective.aspect;
+      this.material.uniforms.uTanHalfFov.value = Math.tan(
+        (perspective.fov * Math.PI) / 180 / 2
+      );
+    }
 
     // Camera position in world space (relative to floating origin)
     this.material.uniforms.uCameraPos.value.copy(camera.position);
