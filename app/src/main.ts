@@ -1,26 +1,105 @@
-import * as THREE from 'three';
+/**
+ * Transparent Earth — application entry point.
+ *
+ * Phase 1 gyro/desktop mode: the raymarched PREM globe viewed from orbit,
+ * driven by touch, mouse, and keyboard, with live sensor state on a HUD.
+ * AR and VR attach to the same globe once a session starts.
+ */
 
-function init(): void {
+import * as THREE from 'three';
+import { GlobeRenderer } from './render/globe';
+import { createOrbitController, type OrbitController } from './input/orbit';
+import { createSensorController, type SensorState } from './sensors';
+import { probeCapabilities, DEFAULT_STATE, type AppState, type RenderMode } from './ui/state';
+
+export interface App {
+  readonly scene: THREE.Scene;
+  readonly camera: THREE.PerspectiveCamera;
+  readonly renderer: THREE.WebGLRenderer;
+  readonly globe: GlobeRenderer;
+  readonly orbit: OrbitController;
+  getSensorState(): SensorState;
+  getAppState(): AppState;
+  getAvailableModes(): readonly RenderMode[];
+  getFrameCount(): number;
+  dispose(): void;
+}
+
+function formatFix(state: SensorState): string {
+  switch (state.fix.phase) {
+    case 'resolved':
+      return `fix ±${Math.round(state.fix.accuracy)} m`;
+    case 'acquiring':
+      return state.fix.accuracy === null
+        ? 'locating…'
+        : `locating… ±${Math.round(state.fix.accuracy)} m`;
+    case 'denied':
+      return 'location permission denied';
+    case 'unavailable':
+      return 'location unavailable';
+  }
+}
+
+function formatHeading(state: SensorState): string {
+  if (state.heading !== null) return `heading ${state.heading.toFixed(0)}°`;
+  switch (state.headingReason) {
+    case 'device_moving':
+      return 'hold still…';
+    case 'high_variance':
+      return 'compass interference — move away from metal';
+    case 'sensor_unavailable':
+      return 'no compass';
+    default:
+      return 'reading compass…';
+  }
+}
+
+export function init(): App | null {
   const container = document.getElementById('canvas-container');
-  if (!container) return;
+  if (!container) return null;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x050510);
 
   const camera = new THREE.PerspectiveCamera(
-    75,
+    60,
     window.innerWidth / window.innerHeight,
     0.1,
-    1000
+    1e9
   );
-  camera.position.z = 5;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
-  // Resize handler
+  const globe = new GlobeRenderer();
+  scene.add(globe.getMesh());
+
+  const orbit = createOrbitController();
+
+  const hud = document.createElement('div');
+  hud.id = 'hud';
+  container.appendChild(hud);
+
+  const appState: AppState = DEFAULT_STATE;
+  let availableModes: readonly RenderMode[] = [];
+  let sensorState: SensorState = {
+    heading: null,
+    headingReason: 'insufficient_samples',
+    fix: { phase: 'acquiring', accuracy: null },
+  };
+
+  function renderHud(): void {
+    const modes = availableModes.length > 0 ? availableModes.join('/') : 'probing…';
+    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${appState.mode} · ${modes}`;
+  }
+
+  const sensors = createSensorController((next) => {
+    sensorState = next;
+    renderHud();
+  });
+
   const onResize = (): void => {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -30,16 +109,75 @@ function init(): void {
   };
   window.addEventListener('resize', onResize);
 
-  // Empty scene — just a dark background for now
-  // Future: transparent Earth, seismic layers, weather overlays
+  // Pointer events cover mouse and touch alike; the orbit controller's
+  // touch API takes the pointer count, so a single pointer rotates.
+  const onPointerDown = (e: PointerEvent): void => {
+    renderer.domElement.setPointerCapture(e.pointerId);
+    orbit.onTouchStart(e.clientX, e.clientY, 1);
+  };
+  const onPointerMove = (e: PointerEvent): void => {
+    if (e.buttons === 0) return;
+    orbit.onTouchMove(e.clientX, e.clientY, 1);
+  };
+  const onPointerUp = (): void => orbit.onTouchEnd();
+  const onKeyDown = (e: KeyboardEvent): void => orbit.onKeyDown(e.key);
 
-  // const clock = new THREE.Clock(); // reserved for future delta-time animation
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  renderer.domElement.addEventListener('pointermove', onPointerMove);
+  renderer.domElement.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('keydown', onKeyDown);
+
+  let frameCount = 0;
+  let rafId = 0;
 
   function animate(): void {
-    requestAnimationFrame(animate);
+    rafId = requestAnimationFrame(animate);
+    orbit.updateCamera(camera);
+    globe.update(camera);
     renderer.render(scene, camera);
+    frameCount++;
   }
+
+  sensors.start();
+  renderHud();
   animate();
+
+  // Capability probing decides which session buttons are offered. It must not
+  // block first paint, so the globe is already animating when this lands.
+  void probeCapabilities().then((modes: RenderMode[]) => {
+    availableModes = modes;
+    renderHud();
+  });
+
+  return {
+    scene,
+    camera,
+    renderer,
+    globe,
+    orbit,
+    getSensorState: () => sensorState,
+    getAppState: () => appState,
+    getAvailableModes: () => availableModes,
+    getFrameCount: () => frameCount,
+    dispose() {
+      cancelAnimationFrame(rafId);
+      sensors.stop();
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('keydown', onKeyDown);
+      renderer.dispose();
+    },
+  };
 }
 
-init();
+declare global {
+  interface Window {
+    /**
+     * Instrumentation hook: lets the browser harness inspect live render and
+     * sensor state without reaching into module internals.
+     */
+    __transparentEarth?: App;
+  }
+}
+
+const app = init();
+if (app) window.__transparentEarth = app;
