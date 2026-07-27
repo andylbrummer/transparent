@@ -1,0 +1,14 @@
+node_modules/
+
+# Build output
+dist/
+
+# Local agent/tool state
+.dartai/
+worktrack-mcp.db
+
+# tman shims
+/test
+/test.cmd
+/lint
+/lint.cmd
