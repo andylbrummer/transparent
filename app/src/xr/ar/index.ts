@@ -22,9 +22,23 @@ export type ARState =
 export interface ARController {
   start(): Promise<void>;
   stop(): Promise<void>;
+  /**
+   * Report the current floor hit-test result for this frame. Passing null
+   * means the frame found no floor, which drops back to scanning so the user
+   * is prompted to keep looking rather than tapping into empty space.
+   */
+  onFloorHit(position: THREE.Vector3 | null): void;
   onTap(position: THREE.Vector3): void;
   getState(): ARState;
 }
+
+/** Session factory, injectable so the state machine is testable without a device. */
+export type SessionFactory = () => Promise<XRSession>;
+
+/** Features the portal needs: a floor-relative frame and hit-testing against it. */
+export const AR_SESSION_INIT: XRSessionInit = {
+  requiredFeatures: ['local-floor', 'hit-test'],
+};
 
 /**
  * Check if WebXR immersive-ar is supported.
@@ -40,27 +54,54 @@ export async function isARSupported(): Promise<boolean> {
 
 /**
  * Create an AR controller for the magic window portal.
- * This is a scaffold — actual WebXR session management requires
- * XRSystem.requestSession() and XRReferenceSpace setup.
+ *
+ * Drives the placement flow: request a floor-anchored session, scan until
+ * hit-testing finds the floor, then let the user tap to commit the portal.
+ * A session that is refused after the support probe passed — the usual cause
+ * being a denied camera permission — surfaces as permission_denied rather
+ * than a silent failure.
  */
-export function createARController(): ARController {
+export function createARController(sessionFactory?: SessionFactory): ARController {
   let state: ARState = { phase: 'idle' };
+  let session: XRSession | null = null;
+
+  const requestSession: SessionFactory =
+    sessionFactory ??
+    (async () => {
+      if (!navigator.xr) throw new Error('WebXR unavailable');
+      return navigator.xr.requestSession('immersive-ar', AR_SESSION_INIT);
+    });
 
   return {
     async start() {
-      const supported = await isARSupported();
-      if (!supported) {
+      if (!(await isARSupported())) {
         state = { phase: 'unsupported' };
         return;
       }
+
       state = { phase: 'starting' };
-      // Simulate session startup delay
-      await new Promise((r) => setTimeout(r, 100));
+      try {
+        session = await requestSession();
+      } catch {
+        state = { phase: 'permission_denied' };
+        return;
+      }
       state = { phase: 'scanning' };
     },
 
     async stop() {
+      if (session) {
+        await session.end?.();
+        session = null;
+      }
       state = { phase: 'idle' };
+    },
+
+    onFloorHit(position: THREE.Vector3 | null) {
+      // Only meaningful between session start and portal placement; once
+      // placed the portal is anchored and later hits must not move it.
+      if (state.phase !== 'scanning' && state.phase !== 'placing') return;
+      state = position === null ? { phase: 'scanning' } : { phase: 'placing' };
     },
 
     onTap(position: THREE.Vector3) {
