@@ -5,6 +5,7 @@ dist/
 
 # Local agent/tool state
 .dartai/
+.agnt/
 worktrack-mcp.db
 
 # tman shims
