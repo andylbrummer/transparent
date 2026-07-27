@@ -1,0 +1,50 @@
+{
+  "name": "@transparent-earth/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./heading": {
+      "import": "./dist/heading/index.js",
+      "types": "./dist/heading/index.d.ts"
+    },
+    "./geodesy": {
+      "import": "./dist/geodesy/index.js",
+      "types": "./dist/geodesy/index.d.ts"
+    },
+    "./seismic": {
+      "import": "./dist/seismic/index.js",
+      "types": "./dist/seismic/index.d.ts"
+    },
+    "./tiles": {
+      "import": "./dist/tiles/index.js",
+      "types": "./dist/tiles/index.d.ts"
+    },
+    "./gfs": {
+      "import": "./dist/gfs/index.js",
+      "types": "./dist/gfs/index.d.ts"
+    },
+    "./terminator": {
+      "import": "./dist/terminator/index.js",
+      "types": "./dist/terminator/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0"
+  }
+}
