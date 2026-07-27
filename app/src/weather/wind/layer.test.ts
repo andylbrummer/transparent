@@ -55,7 +55,7 @@ vi.mock('three', async () => {
 });
 
 // Import after mocking
-import { WindLayer, TerminatorLayer, DEFAULT_WIND_CONFIG } from './layer';
+import { WindLayer, DEFAULT_WIND_CONFIG } from './layer';
 
 describe('DEFAULT_WIND_CONFIG', () => {
   it('has particleCount of 8192', () => {
@@ -114,38 +114,3 @@ describe('WindLayer', () => {
   });
 });
 
-describe('TerminatorLayer', () => {
-  const mockScene = {
-    add: vi.fn(),
-    remove: vi.fn(),
-  };
-
-  it('can be instantiated', () => {
-    const layer = new TerminatorLayer(mockScene as unknown as import('three').Scene);
-    expect(layer).toBeDefined();
-    expect(layer.visible).toBe(true);
-    layer.dispose();
-  });
-
-  it('setVisible toggles visibility', () => {
-    const layer = new TerminatorLayer(mockScene as unknown as import('three').Scene);
-    layer.setVisible(false);
-    expect(layer.visible).toBe(false);
-    layer.setVisible(true);
-    expect(layer.visible).toBe(true);
-    layer.dispose();
-  });
-
-  it('updateTerminator sets subsolar uniform', () => {
-    const layer = new TerminatorLayer(mockScene as unknown as import('three').Scene);
-    layer.updateTerminator(new Date('2024-06-21T12:00:00Z'));
-    layer.dispose();
-  });
-
-  it('setNightIntensity clamps to [0,1]', () => {
-    const layer = new TerminatorLayer(mockScene as unknown as import('three').Scene);
-    layer.setNightIntensity(1.5);
-    layer.setNightIntensity(-0.5);
-    layer.dispose();
-  });
-});
