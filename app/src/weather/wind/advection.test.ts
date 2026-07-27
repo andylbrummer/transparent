@@ -8,7 +8,7 @@ import {
   averageParticleSpeed,
   buildParticleAttributes,
   DEFAULT_PARTICLE_CONFIG,
-} from './wind';
+} from './advection';
 import { createEmptyGrid, buildGridFromFn } from '@transparent-earth/core/gfs';
 
 describe('seededRandom', () => {

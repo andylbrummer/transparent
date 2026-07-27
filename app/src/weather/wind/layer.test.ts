@@ -55,7 +55,7 @@ vi.mock('three', async () => {
 });
 
 // Import after mocking
-import { WindLayer, TerminatorLayer, DEFAULT_WIND_CONFIG } from './index';
+import { WindLayer, TerminatorLayer, DEFAULT_WIND_CONFIG } from './layer';
 
 describe('DEFAULT_WIND_CONFIG', () => {
   it('has particleCount of 8192', () => {

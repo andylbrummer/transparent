@@ -1,8 +1,12 @@
 /**
- * WindLayer — GPU particle streamline advection over the globe.
+ * Three.js overlay layers driven by the solar/wind fields.
  *
- * Uses Three.js Points with a custom shader for particle advection.
- * Particles are advected by the GFS wind field sampled from a DataTexture.
+ * - WindLayer: GPU particle streamlines over the globe, advected by the GFS
+ *   wind field sampled from a DataTexture.
+ * - TerminatorLayer: day/night mask shaded from the subsolar point.
+ *
+ * The advection maths these draw lives in ./advection, kept apart so it is
+ * testable without a GL context.
  */
 
 import * as THREE from 'three';
