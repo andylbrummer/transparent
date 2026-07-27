@@ -27,15 +27,20 @@ export type HeadingResult =
 export interface HeadingGateConfig {
   readonly sampleCount: number;
   readonly sampleIntervalMs: number;
-  readonly maxVarianceDeg: number;
   readonly maxSpreadDeg: number;
+  /**
+   * Largest spread still attributable to the user turning the phone rather
+   * than to magnetic interference. Beyond this, a consistent rotation is too
+   * fast to be a hold-still attempt and is treated as an unusable stream.
+   */
+  readonly maxDriftDeg: number;
 }
 
 export const DEFAULT_HEADING_CONFIG: HeadingGateConfig = {
   sampleCount: 3,
   sampleIntervalMs: 500,
-  maxVarianceDeg: 5,
   maxSpreadDeg: 15,
+  maxDriftDeg: 90,
 };
 
 function circularMean(samples: readonly number[]): number {
@@ -53,17 +58,6 @@ function circularMean(samples: readonly number[]): number {
   return deg;
 }
 
-function circularVariance(samples: readonly number[], mean: number): number {
-  if (samples.length === 0) return 0;
-  let sumSq = 0;
-  for (const h of samples) {
-    let diff = Math.abs(h - mean);
-    if (diff > 180) diff = 360 - diff;
-    sumSq += diff * diff;
-  }
-  return sumSq / samples.length;
-}
-
 function circularSpread(samples: readonly number[]): number {
   if (samples.length < 2) return 0;
   let maxDiff = 0;
@@ -77,18 +71,59 @@ function circularSpread(samples: readonly number[]): number {
   return maxDiff;
 }
 
-function median(samples: readonly number[]): number {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
+/** Shortest signed angle from `a` to `b`, in (-180, 180]. */
+function signedDelta(a: number, b: number): number {
+  let d = ((b - a + 180) % 360) - 180;
+  if (d <= -180) d += 360;
+  return d;
+}
+
+/**
+ * Median that respects wrap-around.
+ *
+ * A numeric sort would place 350 next to 10 and pick the wrong sample, so
+ * offsets are taken relative to the circular mean, the median is chosen in
+ * that unwrapped space, then folded back to [0, 360).
+ */
+function circularMedian(samples: readonly number[], mean: number): number {
+  const offsets = samples.map((h) => signedDelta(mean, h)).sort((a, b) => a - b);
+  const mid = Math.floor(offsets.length / 2);
+  const medianOffset =
+    offsets.length % 2 === 0 ? (offsets[mid - 1] + offsets[mid]) / 2 : offsets[mid];
+  return ((mean + medianOffset) % 360 + 360) % 360;
+}
+
+/**
+ * True when every consecutive step turns the same way — the signature of the
+ * user rotating the device, as opposed to a magnetometer scattering readings
+ * around a fixed bearing.
+ */
+function isConsistentRotation(samples: readonly number[]): boolean {
+  if (samples.length < 3) return false;
+  let sign = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const d = signedDelta(samples[i - 1], samples[i]);
+    if (d === 0) return false;
+    const s = Math.sign(d);
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
   }
-  return sorted[mid];
+  return sign !== 0;
 }
 
 /**
  * Evaluate a batch of heading samples against quality gates.
- * Returns the median heading if all gates pass, otherwise rejects with a reason.
+ *
+ * Dispersion alone cannot separate the two failure modes — a slow turn and a
+ * noisy magnetometer produce comparable spreads — so the shape of the stream
+ * decides the reason:
+ *
+ * - within `maxSpreadDeg`      → accept, reporting the circular median
+ * - consistent turn, ≤ maxDrift → `device_moving`, ask the user to hold still
+ * - anything else              → `high_variance`, ask them to move away from
+ *                                 whatever is disturbing the magnetometer
+ *
+ * Reporting these separately matters because the two have opposite remedies.
  */
 export function evaluateHeadingSamples(
   samples: readonly HeadingSample[],
@@ -100,18 +135,17 @@ export function evaluateHeadingSamples(
 
   const headings = samples.map((s) => s.heading);
   const mean = circularMean(headings);
-  const variance = circularVariance(headings, mean);
+  const spread = circularSpread(headings);
 
-  if (variance > config.maxVarianceDeg * config.maxVarianceDeg) {
+  if (spread <= config.maxSpreadDeg) {
+    return { status: 'ok', heading: circularMedian(headings, mean) };
+  }
+
+  if (isConsistentRotation(headings) && spread <= config.maxDriftDeg) {
     return { status: 'reject', reason: 'device_moving' };
   }
 
-  const spread = circularSpread(headings);
-  if (spread > config.maxSpreadDeg) {
-    return { status: 'reject', reason: 'high_variance' };
-  }
-
-  return { status: 'ok', heading: median(headings) };
+  return { status: 'reject', reason: 'high_variance' };
 }
 
 /**

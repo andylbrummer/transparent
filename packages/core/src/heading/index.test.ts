@@ -54,17 +54,18 @@ describe('evaluateHeadingSamples', () => {
     }
   });
 
-  it('handles circular wrap-around (350°, 10°, 5°)', () => {
+  it('handles circular wrap-around (355°, 5°, 0°)', () => {
     const samples = [
-      { heading: 350, timestamp: 0 },
-      { heading: 10, timestamp: 500 },
-      { heading: 5, timestamp: 1000 },
+      { heading: 355, timestamp: 0 },
+      { heading: 5, timestamp: 500 },
+      { heading: 0, timestamp: 1000 },
     ];
     const result = evaluateHeadingSamples(samples);
     expect(result.status).toBe('ok');
     if (result.status === 'ok') {
-      // Median of [5, 10, 350] sorted numerically = 10
-      expect(result.heading).toBe(10);
+      // Clustered on north: a numeric sort would wrongly pick 5, since it
+      // orders these as [0, 5, 355]. The circular median is 0.
+      expect(result.heading).toBeCloseTo(0, 6);
     }
   });
 
