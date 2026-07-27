@@ -46,27 +46,51 @@ export function buildQueryUrl(baseUrl: string, query: CatalogQuery): string {
 
 /**
  * Normalize a USGS GeoJSON feature into an EventRecord.
- * Handles missing fields gracefully.
+ *
+ * Returns null unless every field that positions the event is genuinely
+ * present. A substituted coordinate or magnitude would render a phantom
+ * quake at 0°N 0°E rather than surfacing the bad record, so missing data
+ * rejects the feature outright.
+ *
+ * `place` is the one exception: it is a display label, not geometry, so a
+ * missing one falls back without discarding an otherwise valid event.
  */
 export function normalizeEvent(feature: unknown): EventRecord | null {
+  if (typeof feature !== 'object' || feature === null) return null;
+
   const f = feature as Record<string, unknown>;
   const props = (f.properties ?? {}) as Record<string, unknown>;
   const geom = (f.geometry ?? {}) as Record<string, unknown>;
-  const coords = (Array.isArray(geom.coordinates) ? geom.coordinates : []) as number[];
+  const coords = Array.isArray(geom.coordinates) ? (geom.coordinates as unknown[]) : [];
 
-  const id = String(f.id ?? props.code ?? 'unknown');
-  const time = String(props.time ?? new Date().toISOString());
-  const lat = Number(coords[1] ?? 0);
-  const lon = Number(coords[0] ?? 0);
-  const depthKm = Number(coords[2] ?? 0) / 1000; // USGS depth in meters
-  const mag = Number(props.mag ?? 0);
-  const name = String(props.place ?? 'Unknown location');
+  const rawId = f.id ?? props.code;
+  if (rawId === undefined || rawId === null || String(rawId) === '') return null;
 
-  if (!id || isNaN(lat) || isNaN(lon) || isNaN(mag)) {
-    return null;
-  }
+  if (props.time === undefined || props.time === null) return null;
 
-  return { id, time, lat, lon, depthKm, mag, name };
+  const lon = toFiniteNumber(coords[0]);
+  const lat = toFiniteNumber(coords[1]);
+  const depth = toFiniteNumber(coords[2]);
+  const mag = toFiniteNumber(props.mag);
+
+  if (lon === null || lat === null || depth === null || mag === null) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+
+  return {
+    id: String(rawId),
+    time: String(props.time),
+    lat,
+    lon,
+    depthKm: depth / 1000, // USGS fixture depth in metres
+    mag,
+    name: String(props.place ?? 'Unknown location'),
+  };
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
