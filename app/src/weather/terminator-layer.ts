@@ -91,6 +91,19 @@ export class TerminatorLayer {
     return this.mesh.visible;
   }
 
+  /** Night-side opacity currently in effect, after clamping. */
+  get nightIntensity(): number {
+    return this.material.uniforms.uNightIntensity.value as number;
+  }
+
+  /**
+   * Direction of the subsolar point the mask is shaded from. Copied, so a
+   * caller cannot reach in and move the sun.
+   */
+  get subsolarDirection(): THREE.Vector3 {
+    return (this.material.uniforms.uSubsolar.value as THREE.Vector3).clone();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
