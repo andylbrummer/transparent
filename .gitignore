@@ -13,3 +13,12 @@ worktrack-mcp.db
 /test.cmd
 /lint
 /lint.cmd
+
+# worktrack loop state is per-clone (lease holder carries an email); the
+# workspace binding and the workflow manifest are shared, so they are committed.
+.worktrack/*
+!.worktrack/mcp.json
+!.worktrack/templates.json
+
+# tman run logs and failure digests (per-clone)
+/.tman/

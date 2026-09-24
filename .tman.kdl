@@ -23,3 +23,9 @@ alias "lint" {
     args "run" "lint"
 }
 
+
+alias "build" {
+    command "npm"
+    args "run" "build"
+    max-time "15m"
+}
