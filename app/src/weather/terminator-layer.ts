@@ -22,10 +22,10 @@ export class TerminatorLayer {
     this.material = new THREE.ShaderMaterial({
       vertexShader: /* glsl */ `
         varying vec3 vNormal;
-        varying vec3 vPosition;
         void main() {
-          vNormal = normalize(normalMatrix * normal);
-          vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
+          // World-space normal: uSubsolar is a world (ECEF) direction, so a
+          // view-space normal would drag the night side around with the camera.
+          vNormal = normalize(mat3(modelMatrix) * normal);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -35,10 +35,8 @@ export class TerminatorLayer {
         uniform vec3 uNightColor;
 
         varying vec3 vNormal;
-        varying vec3 vPosition;
 
         void main() {
-          // Transform subsolar to view space (approximate: assume sphere at origin)
           vec3 normal = normalize(vNormal);
           vec3 subsolarDir = normalize(uSubsolar);
 
