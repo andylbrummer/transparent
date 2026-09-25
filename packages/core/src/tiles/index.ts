@@ -25,7 +25,7 @@ export type TileState =
   | { kind: 'idle' }
   | { kind: 'loading'; attempt: number }
   | { kind: 'loaded'; blob: ArrayBuffer; timestamp: number }
-  | { kind: 'failed'; terminal: boolean; lastError: string; timestamp: number };
+  | { kind: 'failed'; attempt: number; terminal: boolean; lastError: string; timestamp: number };
 
 /** Provider-specific tile URL template. */
 export interface TileProvider {
@@ -152,6 +152,7 @@ export interface TileStreamerState {
   readonly provider: TileProvider;
   readonly cache: TileLruCache;
   readonly retryPolicy: RetryPolicy;
+  /** In-flight and failed tiles. Loaded tiles live only in `cache`. */
   readonly pending: ReadonlyMap<string, TileState>;
   readonly status: ProviderStatus;
   readonly offlineSince: number | null; // timestamp or null
@@ -173,29 +174,36 @@ export function createTileStreamerState(
   };
 }
 
-/** Transition a tile to loading state. */
+/** Attempt number of the tile's latest fetch, or 0 if it has none. */
+function lastAttempt(tile: TileState | undefined): number {
+  return tile?.kind === 'loading' || tile?.kind === 'failed' ? tile.attempt : 0;
+}
+
+/** Transition a tile to loading state. A retry after a failure counts on. */
 export function startTileFetch(
   state: TileStreamerState,
   key: TileKey
 ): TileStreamerState {
   const s = tileKeyString(key);
-  const current = state.pending.get(s);
-  const attempt = current?.kind === 'loading' ? current.attempt + 1 : 1;
+  const attempt = lastAttempt(state.pending.get(s)) + 1;
   const nextPending = new Map(state.pending);
   nextPending.set(s, { kind: 'loading', attempt });
   return { ...state, pending: nextPending };
 }
 
-/** Record a successful tile fetch. */
+/**
+ * Record a successful tile fetch. The buffer goes to the LRU cache only;
+ * keeping it in `pending` too would hold every tile ever loaded and defeat
+ * the cache's bound.
+ */
 export function tileFetchSuccess(
   state: TileStreamerState,
   key: TileKey,
   buffer: ArrayBuffer
 ): TileStreamerState {
-  const s = tileKeyString(key);
   state.cache.set(key, buffer);
   const nextPending = new Map(state.pending);
-  nextPending.set(s, { kind: 'loaded', blob: buffer, timestamp: Date.now() });
+  nextPending.delete(tileKeyString(key));
   return {
     ...state,
     pending: nextPending,
@@ -211,12 +219,12 @@ export function tileFetchFailure(
   error: string
 ): TileStreamerState {
   const s = tileKeyString(key);
-  const current = state.pending.get(s);
-  const attempt = current?.kind === 'loading' ? current.attempt : 1;
+  const attempt = Math.max(1, lastAttempt(state.pending.get(s)));
   const terminal = attempt >= state.retryPolicy.maxAttempts;
   const nextPending = new Map(state.pending);
   nextPending.set(s, {
     kind: 'failed',
+    attempt,
     terminal,
     lastError: error,
     timestamp: Date.now(),

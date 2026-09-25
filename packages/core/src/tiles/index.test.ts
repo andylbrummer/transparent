@@ -60,12 +60,12 @@ describe('nextRetryDelay', () => {
 
 describe('isTerminalFailure', () => {
   it('returns true for terminal failed state', () => {
-    const state = { kind: 'failed' as const, terminal: true, lastError: 'err', timestamp: 0 };
+    const state = { kind: 'failed' as const, attempt: 3, terminal: true, lastError: 'err', timestamp: 0 };
     expect(isTerminalFailure(state)).toBe(true);
   });
 
   it('returns false for non-terminal failed state', () => {
-    const state = { kind: 'failed' as const, terminal: false, lastError: 'err', timestamp: 0 };
+    const state = { kind: 'failed' as const, attempt: 1, terminal: false, lastError: 'err', timestamp: 0 };
     expect(isTerminalFailure(state)).toBe(false);
   });
 
@@ -181,8 +181,18 @@ describe('tileFetchSuccess', () => {
     const buf = new ArrayBuffer(16);
     state = tileFetchSuccess(state, { z: 1, x: 0, y: 0 }, buf);
     expect(state.cache.get({ z: 1, x: 0, y: 0 })).toBe(buf);
-    expect(state.pending.get('1/0/0')?.kind).toBe('loaded');
+    expect(getTileState(state, { z: 1, x: 0, y: 0 }).kind).toBe('loaded');
     expect(state.status).toBe('online');
+  });
+
+  it('holds loaded buffers only in the bounded cache', () => {
+    let state = createTileStreamerState(GIBS_CLOUD_PROVIDER, 1);
+    state = tileFetchSuccess(state, { z: 1, x: 0, y: 0 }, new ArrayBuffer(16));
+    state = tileFetchSuccess(state, { z: 1, x: 1, y: 0 }, new ArrayBuffer(16));
+    expect(state.pending.size).toBe(0);
+    // Evicted from the cache, so it must be fetchable again rather than
+    // reported loaded from a stale copy.
+    expect(getTileState(state, { z: 1, x: 0, y: 0 }).kind).toBe('idle');
   });
 });
 
@@ -207,6 +217,23 @@ describe('tileFetchFailure', () => {
     expect((tile as { terminal: boolean }).terminal).toBe(true);
     expect(state.status).toBe('offline');
     expect(state.offlineSince).not.toBeNull();
+  });
+});
+
+describe('retry sequence', () => {
+  it('goes terminal after maxAttempts fetch/fail cycles', () => {
+    const key = { z: 1, x: 0, y: 0 };
+    let state = createTileStreamerState(GIBS_CLOUD_PROVIDER, 128, {
+      ...DEFAULT_RETRY_POLICY,
+      maxAttempts: 3,
+    });
+    for (let i = 1; i <= 3; i++) {
+      state = startTileFetch(state, key);
+      state = tileFetchFailure(state, key, 'network error');
+      expect(canRetry(state, key)).toBe(i < 3);
+    }
+    expect(canRetry(state, key)).toBe(false);
+    expect(state.status).toBe('offline');
   });
 });
 
