@@ -38,12 +38,12 @@ describe('normalizeEvent', () => {
     const feature = {
       id: 'us7000abc',
       properties: {
-        time: '2024-01-01T00:00:00Z',
+        time: 1704067200000, // USGS: epoch ms
         mag: 6.5,
         place: 'Test Location',
       },
       geometry: {
-        coordinates: [120.5, 35.2, 15000],
+        coordinates: [120.5, 35.2, 15], // USGS: depth in km
       },
     };
     const event = normalizeEvent(feature);
@@ -51,7 +51,8 @@ describe('normalizeEvent', () => {
     expect(event?.id).toBe('us7000abc');
     expect(event?.lat).toBe(35.2);
     expect(event?.lon).toBe(120.5);
-    expect(event?.depthKm).toBe(15); // 15000m / 1000
+    expect(event?.depthKm).toBe(15);
+    expect(event?.time).toBe('2024-01-01T00:00:00.000Z');
     expect(event?.mag).toBe(6.5);
     expect(event?.name).toBe('Test Location');
   });
@@ -59,7 +60,7 @@ describe('normalizeEvent', () => {
   it('handles missing place', () => {
     const feature = {
       id: 'test1',
-      properties: { time: '2024-01-01T00:00:00Z', mag: 5.0 },
+      properties: { time: 1704067200000, mag: 5.0 },
       geometry: { coordinates: [0, 0, 0] },
     };
     const event = normalizeEvent(feature);

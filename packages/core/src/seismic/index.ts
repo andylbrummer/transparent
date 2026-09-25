@@ -66,7 +66,9 @@ export function normalizeEvent(feature: unknown): EventRecord | null {
   const rawId = f.id ?? props.code;
   if (rawId === undefined || rawId === null || String(rawId) === '') return null;
 
-  if (props.time === undefined || props.time === null) return null;
+  // USGS reports origin time as epoch milliseconds.
+  const timeMs = toFiniteNumber(props.time);
+  if (timeMs === null) return null;
 
   const lon = toFiniteNumber(coords[0]);
   const lat = toFiniteNumber(coords[1]);
@@ -78,10 +80,10 @@ export function normalizeEvent(feature: unknown): EventRecord | null {
 
   return {
     id: String(rawId),
-    time: String(props.time),
+    time: new Date(timeMs).toISOString(),
     lat,
     lon,
-    depthKm: depth / 1000, // USGS fixture depth in metres
+    depthKm: depth, // USGS reports depth in kilometres
     mag,
     name: String(props.place ?? 'Unknown location'),
   };
@@ -100,7 +102,7 @@ export interface ClockState {
   readonly running: boolean;
   readonly wallTimeMs: number;      // current wall timestamp
   readonly simTimeMs: number;       // current simulation timestamp
-  readonly compression: number;     // wall seconds per sim second (1 = real-time)
+  readonly compression: number;     // sim seconds per wall second (1 = real-time)
   readonly activeEvents: readonly EventRecord[];
 }
 
