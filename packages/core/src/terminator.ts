@@ -6,14 +6,7 @@
  * Points on the sphere with dot(subsolar, point) >= 0 are in daylight.
  */
 
-import {
-  type Vec3,
-  type LatLonAlt,
-  vec3,
-  subsolarPoint,
-  geodeticToEcef,
-  WGS84,
-} from './geodesy';
+import { type Vec3, type LatLonAlt, subsolarPoint } from './geodesy';
 
 /** Earth mean radius in metres (spherical approximation for terminator). */
 export const EARTH_RADIUS_M = 6371000;

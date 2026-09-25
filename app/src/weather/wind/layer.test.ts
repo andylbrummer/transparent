@@ -42,7 +42,7 @@ vi.mock('three', async () => {
       geometry: { dispose: vi.fn() },
     })),
     Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => ({ x, y, z, set: vi.fn() })),
-    Color: vi.fn().mockImplementation((hex = 0) => ({ r: 0, g: 0, b: 0 })),
+    Color: vi.fn().mockImplementation(() => ({ r: 0, g: 0, b: 0 })),
     BufferAttribute: vi.fn(),
     RepeatWrapping: 1000,
     ClampToEdgeWrapping: 1001,

@@ -37,7 +37,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
