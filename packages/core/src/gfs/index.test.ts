@@ -15,6 +15,7 @@ import {
   isDaylight,
 } from './index';
 import { EARTH_RADIUS_M } from '../terminator';
+import { subsolarPoint } from '../geodesy';
 
 describe('wrapLon', () => {
   it('wraps 190 to -170', () => {
@@ -313,8 +314,10 @@ describe('isDaylight', () => {
     const lat = (Math.asin(ss.z / EARTH_RADIUS_M) * 180) / Math.PI;
     const lon = (Math.atan2(ss.y, ss.x) * 180) / Math.PI;
 
-    // Reference: from geodesy subsolarPoint test, expected ~0.2° lat, ~43° lon
-    expect(lat).toBeCloseTo(0.2, 0); // within 1°
-    expect(lon).toBeCloseTo(43, 0); // within 1°
+    const expected = subsolarPoint(utc);
+    expect(Math.abs(lat - expected.lat)).toBeLessThan(0.5);
+    expect(Math.abs(lon - expected.lon)).toBeLessThan(0.5);
+    // Three hours past Greenwich noon the sun is over the Atlantic, not Asia
+    expect(lon).toBeCloseTo(-43, 0);
   });
 });

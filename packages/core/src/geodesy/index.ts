@@ -182,46 +182,51 @@ export function fromFloatingOrigin(originEcef: Vec3, local: Vec3): Vec3 {
 }
 
 /**
+ * Sun's equatorial coordinates and Greenwich sidereal time at a UTC instant.
+ * Simplified astronomical algorithm accurate to ~0.5° for 2000–2050.
+ * All angles in radians.
+ *
+ * Reference: NOAA Solar Calculator (approximate)
+ */
+function sunEquatorial(utc: Date): { declination: number; rightAscension: number; gmst: number } {
+  // Days since J2000.0 (Date.UTC(2000, 0, 1, 12, 0, 0))
+  const J2000 = 946728000000;
+  const jd = (utc.getTime() - J2000) / 86400000;
+
+  // Mean longitude (degrees) and mean anomaly (radians) of the sun
+  const L = (280.46 + 0.9856474 * jd) % 360;
+  const g = ((357.529 + 0.9856003 * jd) * Math.PI) / 180;
+
+  // Ecliptic longitude and obliquity of the ecliptic (radians)
+  const lambda = ((L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * Math.PI) / 180;
+  const epsilon = ((23.439 - 0.0000004 * jd) * Math.PI) / 180;
+
+  return {
+    declination: Math.asin(Math.sin(epsilon) * Math.sin(lambda)),
+    rightAscension: Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda)),
+    gmst: 4.894961213 + 6.300388099 * jd,
+  };
+}
+
+/** Wrap an angle in degrees to [-180, 180). */
+function wrapDegrees180(deg: number): number {
+  return ((((deg + 180) % 360) + 360) % 360) - 180;
+}
+
+/**
  * Solar position: compute azimuth and elevation of the sun at a given
- * location and UTC instant. Uses a simplified astronomical algorithm
- * accurate to ~0.5° for the period 2000–2050.
+ * location and UTC instant.
  *
  * Returns azimuth (degrees from north, clockwise) and elevation (degrees
  * above horizon; negative = below).
- *
- * Reference: NOAA Solar Calculator (approximate)
  */
 export function solarPosition(lla: LatLonAlt, utc: Date): { azimuth: number; elevation: number } {
   const latRad = (lla.lat * Math.PI) / 180;
   const lonRad = (lla.lon * Math.PI) / 180;
+  const { declination: delta, rightAscension: alpha, gmst } = sunEquatorial(utc);
 
-  // Julian day number (days since J2000.0)
-  const msPerDay = 86400000;
-  const J2000 = 946728000000; // Date.UTC(2000, 0, 1, 12, 0, 0)
-  const jd = (utc.getTime() - J2000) / msPerDay;
-
-  // Mean longitude of the sun (degrees)
-  const L = (280.46 + 0.9856474 * jd) % 360;
-
-  // Mean anomaly of the sun (radians)
-  const g = ((357.529 + 0.9856003 * jd) * Math.PI) / 180;
-
-  // Ecliptic longitude of the sun (radians)
-  const lambda = ((L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * Math.PI) / 180;
-
-  // Obliquity of the ecliptic (radians)
-  const epsilon = ((23.439 - 0.0000004 * jd) * Math.PI) / 180;
-
-  // Right ascension and declination
-  const alpha = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda));
-  const delta = Math.asin(Math.sin(epsilon) * Math.sin(lambda));
-
-  // Local apparent sidereal time (radians)
-  let theta0 = (4.894961213 + 6.300388099 * jd + lonRad) % (2 * Math.PI);
-  if (theta0 < 0) {
-    theta0 += 2 * Math.PI;
-  }
-  const hourAngle = theta0 - alpha;
+  // Local hour angle: local sidereal time minus right ascension
+  const hourAngle = gmst + lonRad - alpha;
 
   // Elevation
   const sinElev =
@@ -242,28 +247,15 @@ export function solarPosition(lla: LatLonAlt, utc: Date): { azimuth: number; ele
 
 /**
  * Compute the subsolar point (lat/lon where the sun is directly overhead)
- * at a given UTC instant.
+ * at a given UTC instant: the longitude where the local hour angle is zero.
  */
 export function subsolarPoint(utc: Date): LatLonAlt {
-  const msPerDay = 86400000;
-  const J2000 = 946728000000;
-  const jd = (utc.getTime() - J2000) / msPerDay;
-
-  const L = (280.46 + 0.9856474 * jd) % 360;
-  const g = ((357.529 + 0.9856003 * jd) * Math.PI) / 180;
-  const lambda = ((L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * Math.PI) / 180;
-  const epsilon = ((23.439 - 0.0000004 * jd) * Math.PI) / 180;
-
-  const declination = Math.asin(Math.sin(epsilon) * Math.sin(lambda));
-  const rightAscension = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda));
-
-  // Greenwich Mean Sidereal Time at 0h UT (radians)
-  const gmst = (4.894961213 + 6.300388099 * jd) % (2 * Math.PI);
-  const longitude = ((gmst - rightAscension) * 180) / Math.PI;
+  const { declination, rightAscension, gmst } = sunEquatorial(utc);
+  const longitude = ((rightAscension - gmst) * 180) / Math.PI;
 
   return {
     lat: (declination * 180) / Math.PI,
-    lon: ((longitude + 180) % 360) - 180, // wrap to [-180, 180]
+    lon: wrapDegrees180(longitude),
     alt: 0,
   };
 }

@@ -156,7 +156,29 @@ describe('solar position', () => {
     // 2024-03-20 15:00 UTC (approximate equinox)
     const sp = subsolarPoint(new Date('2024-03-20T15:00:00Z'));
     expect(sp.lat).toBeCloseTo(0.2, 0); // declination ~0.2° at equinox
-    expect(sp.lon).toBeCloseTo(43, 0); // ~43°E at 15:00 UTC (not 0°)
+    // Three hours past Greenwich noon the sun is ~45° west, less the ~7 min
+    // the equation of time puts it behind mean time in late March.
+    expect(sp.lon).toBeCloseTo(-43, 0);
+  });
+
+  it('puts the sun overhead at the subsolar point', () => {
+    for (const iso of ['2024-03-20T06:00:00Z', '2024-06-21T18:00:00Z', '2024-12-21T23:00:00Z']) {
+      const utc = new Date(iso);
+      expect(solarPosition(subsolarPoint(utc), utc).elevation).toBeGreaterThan(89.5);
+    }
+  });
+
+  it('moves the subsolar point westward through the day', () => {
+    // 06:00 UTC: over the Indian Ocean (~90°E); 18:00 UTC: over the Pacific (~90°W)
+    expect(subsolarPoint(new Date('2024-03-20T06:00:00Z')).lon).toBeCloseTo(92, 0);
+    expect(subsolarPoint(new Date('2024-03-20T18:00:00Z')).lon).toBeCloseTo(-88, 0);
+  });
+
+  it('wraps subsolar longitude into [-180, 180) before J2000', () => {
+    const sp = subsolarPoint(new Date('1990-01-01T18:00:00Z'));
+    expect(sp.lon).toBeGreaterThanOrEqual(-180);
+    expect(sp.lon).toBeLessThan(180);
+    expect(solarPosition(sp, new Date('1990-01-01T18:00:00Z')).elevation).toBeGreaterThan(89.5);
   });
 
   it('solar elevation is high at noon in summer', () => {
