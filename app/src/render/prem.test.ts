@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas, EARTH_RADIUS_M } from './prem';
+import { EARTH_RADIUS_M } from '@transparent-earth/core';
+import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
 
 describe('PREM layers', () => {
   it('has 5 layers', () => {
@@ -16,9 +17,13 @@ describe('PREM layers', () => {
     expect(PREM_LAYERS[0].radiusKm).toBeCloseTo(1221.5, 1);
   });
 
-  it('crust extends above Earth surface', () => {
+  it('crust is the outermost shell, ending at the surface', () => {
     const crust = PREM_LAYERS[PREM_LAYERS.length - 1];
-    expect(crust.radiusKm).toBeGreaterThan(6371);
+    expect(crust.radiusKm * 1000).toBe(EARTH_RADIUS_M);
+  });
+
+  it('upper mantle ends at the PREM Moho, 24.4 km down', () => {
+    expect(PREM_LAYERS[3].radiusKm).toBeCloseTo(6371 - 24.4, 1);
   });
 });
 
@@ -26,7 +31,7 @@ describe('premRadiiToMeters', () => {
   it('converts to meters correctly', () => {
     const radii = premRadiiToMeters();
     expect(radii[0]).toBeCloseTo(1221500, 0);
-    expect(radii[4]).toBeCloseTo(6406000, 0);
+    expect(radii[4]).toBeCloseTo(6371000, 0);
   });
 });
 
@@ -43,11 +48,5 @@ describe('premAlphas', () => {
     expect(alphas.length).toBe(5);
     expect(alphas[0]).toBeCloseTo(0.9, 2); // inner core most opaque
     expect(alphas[4]).toBeCloseTo(0.15, 2); // crust most transparent
-  });
-});
-
-describe('EARTH_RADIUS_M', () => {
-  it('equals 6,371,000 meters', () => {
-    expect(EARTH_RADIUS_M).toBe(6_371_000);
   });
 });

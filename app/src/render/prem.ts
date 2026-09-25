@@ -1,17 +1,15 @@
 /**
  * PREM (Preliminary Reference Earth Model) layer radii in kilometers.
- * These define the boundaries of Earth's interior shells.
+ * Each radius is the layer's outer boundary: inner-core boundary, core-mantle
+ * boundary, 670 km discontinuity, Moho (24.4 km deep), and the surface.
  */
 export const PREM_LAYERS = [
   { name: 'inner core', radiusKm: 1221.5, color: [1.0, 0.8, 0.2] as const, alpha: 0.9 },
   { name: 'outer core', radiusKm: 3480.0, color: [1.0, 0.5, 0.1] as const, alpha: 0.7 },
   { name: 'lower mantle', radiusKm: 5701.0, color: [0.8, 0.3, 0.1] as const, alpha: 0.5 },
-  { name: 'upper mantle', radiusKm: 6371.0, color: [0.6, 0.4, 0.2] as const, alpha: 0.3 },
-  { name: 'crust', radiusKm: 6371.0 + 35.0, color: [0.3, 0.6, 0.3] as const, alpha: 0.15 },
+  { name: 'upper mantle', radiusKm: 6346.6, color: [0.6, 0.4, 0.2] as const, alpha: 0.3 },
+  { name: 'crust', radiusKm: 6371.0, color: [0.3, 0.6, 0.3] as const, alpha: 0.15 },
 ] as const;
-
-/** Earth radius in meters (WGS84) */
-export const EARTH_RADIUS_M = 6_371_000;
 
 /** Convert PREM layer radii to origin-relative shader units (meters) */
 export function premRadiiToMeters(): Float32Array {
