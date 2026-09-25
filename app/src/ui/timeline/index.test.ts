@@ -11,8 +11,8 @@ import {
 
 describe('selectPreset', () => {
   it('selects Tōhoku 2011', () => {
-    const state = selectPreset(DEFAULT_TIMELINE, 'toff2011');
-    expect(state.selectedEvent?.id).toBe('toff2011');
+    const state = selectPreset(DEFAULT_TIMELINE, 'tohoku2011');
+    expect(state.selectedEvent?.id).toBe('tohoku2011');
     expect(state.selectedEvent?.mag).toBe(9.1);
   });
 

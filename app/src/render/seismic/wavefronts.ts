@@ -105,7 +105,7 @@ export function isInPShadowZone(
  */
 export const NOTABLE_EVENTS: readonly EventRecord[] = [
   {
-    id: 'toff2011',
+    id: 'tohoku2011',
     time: '2011-03-11T05:46:24Z',
     lat: 38.297,
     lon: 142.373,

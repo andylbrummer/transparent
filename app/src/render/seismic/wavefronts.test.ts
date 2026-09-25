@@ -102,7 +102,7 @@ describe('isInPShadowZone', () => {
 
 describe('NOTABLE_EVENTS', () => {
   it('contains Tōhoku 2011', () => {
-    const event = NOTABLE_EVENTS.find((e) => e.id === 'toff2011');
+    const event = NOTABLE_EVENTS.find((e) => e.id === 'tohoku2011');
     expect(event).toBeDefined();
     expect(event?.mag).toBe(9.1);
   });
