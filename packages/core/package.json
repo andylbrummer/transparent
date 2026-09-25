@@ -30,8 +30,8 @@
       "types": "./dist/gfs/index.d.ts"
     },
     "./terminator": {
-      "import": "./dist/terminator/index.js",
-      "types": "./dist/terminator/index.d.ts"
+      "import": "./dist/terminator.js",
+      "types": "./dist/terminator.d.ts"
     }
   },
   "scripts": {
