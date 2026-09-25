@@ -17,8 +17,10 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
+  // Exposure: loopback. Serving to a phone on the LAN is a posture change the
+  // project has not declared; pass `--host` for a one-off session instead.
   server: {
-    host: true,
+    host: '127.0.0.1',
     port: 5173,
   },
 });
