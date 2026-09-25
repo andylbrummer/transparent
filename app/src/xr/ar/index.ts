@@ -9,6 +9,9 @@
  */
 
 import * as THREE from 'three';
+import { isSessionModeSupported, openSession, type SessionFactory } from '../session';
+
+export type { SessionFactory } from '../session';
 
 export type ARState =
   | { phase: 'unsupported' }
@@ -32,9 +35,6 @@ export interface ARController {
   getState(): ARState;
 }
 
-/** Session factory, injectable so the state machine is testable without a device. */
-export type SessionFactory = () => Promise<XRSession>;
-
 /** Features the portal needs: a floor-relative frame and hit-testing against it. */
 export const AR_SESSION_INIT: XRSessionInit = {
   requiredFeatures: ['local-floor', 'hit-test'],
@@ -43,13 +43,8 @@ export const AR_SESSION_INIT: XRSessionInit = {
 /**
  * Check if WebXR immersive-ar is supported.
  */
-export async function isARSupported(): Promise<boolean> {
-  if (!navigator.xr) return false;
-  try {
-    return await navigator.xr.isSessionSupported('immersive-ar');
-  } catch {
-    return false;
-  }
+export function isARSupported(): Promise<boolean> {
+  return isSessionModeSupported('immersive-ar');
 }
 
 /**
@@ -57,11 +52,8 @@ export async function isARSupported(): Promise<boolean> {
  *
  * Drives the placement flow: request a floor-anchored session, scan until
  * hit-testing finds the floor, then let the user tap to commit the portal.
- * A session refused with NotAllowedError (a denied camera permission)
- * surfaces as permission_denied, and NotSupportedError (a required feature
- * missing) as unsupported; any other failure propagates to the caller.
- * A session the platform ends on its own (e.g. the system back gesture)
- * returns the controller to idle.
+ * A denied camera permission surfaces as permission_denied, and a session
+ * the platform ends on its own returns the controller to idle.
  */
 export function createARController(sessionFactory?: SessionFactory): ARController {
   let state: ARState = { phase: 'idle' };
@@ -82,25 +74,22 @@ export function createARController(sessionFactory?: SessionFactory): ARControlle
       }
 
       state = { phase: 'starting' };
-      let opened: XRSession;
+      let outcome;
       try {
-        opened = await requestSession();
-      } catch (error) {
-        const name = error instanceof DOMException ? error.name : '';
-        if (name === 'NotAllowedError') state = { phase: 'permission_denied' };
-        else if (name === 'NotSupportedError') state = { phase: 'unsupported' };
-        else {
+        outcome = await openSession(requestSession, (ended) => {
+          if (session !== ended) return;
+          session = null;
           state = { phase: 'idle' };
-          throw error;
-        }
+        });
+      } catch (error) {
+        state = { phase: 'idle' };
+        throw error;
+      }
+      if (outcome.kind !== 'opened') {
+        state = { phase: outcome.kind };
         return;
       }
-      session = opened;
-      opened.addEventListener('end', () => {
-        if (session !== opened) return;
-        session = null;
-        state = { phase: 'idle' };
-      });
+      session = outcome.session;
       state = { phase: 'scanning' };
     },
 
