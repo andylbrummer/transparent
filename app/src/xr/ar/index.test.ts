@@ -123,12 +123,16 @@ describe('headingToRotation', () => {
     expect(vec.z).toBeCloseTo(-1, 5);
   });
 
-  it('rotates 90° heading correctly', () => {
+  it('puts north on the left when the user faces east', () => {
     const rot = headingToRotation(90);
-    const vec = new THREE.Vector3(0, 0, -1).applyMatrix4(rot);
-    // -Z rotated 90° CCW around Y → points toward +X (east)
-    expect(vec.x).toBeCloseTo(1, 5);
-    expect(vec.z).toBeCloseTo(0, 5);
+    const north = new THREE.Vector3(0, 0, -1).applyMatrix4(rot);
+    expect(north.x).toBeCloseTo(-1, 5);
+    expect(north.z).toBeCloseTo(0, 5);
+  });
+
+  it('puts east straight ahead when the user faces east', () => {
+    const east = new THREE.Vector3(1, 0, 0).applyMatrix4(headingToRotation(90));
+    expect(east.z).toBeCloseTo(-1, 5);
   });
 });
 

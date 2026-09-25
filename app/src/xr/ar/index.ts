@@ -117,15 +117,16 @@ export function createARController(sessionFactory?: SessionFactory): ARControlle
 }
 
 /**
- * Compute the ENU-to-world rotation matrix from a heading (degrees, clockwise from north).
- * Returns a THREE.Matrix4 that rotates the globe so north aligns with the user's heading.
+ * Compute the ENU-to-world rotation from the heading the user faced when the
+ * session started (degrees, clockwise from north).
+ *
+ * In the ENU model frame north is -Z and east is +X; in the XR world frame
+ * -Z is wherever the user faced. Facing heading h, true north lies h degrees
+ * counter-clockwise (seen from above) of forward, which is a +h rotation
+ * about +Y.
  */
 export function headingToRotation(headingDeg: number): THREE.Matrix4 {
-  const headingRad = (headingDeg * Math.PI) / 180;
-  const rot = new THREE.Matrix4();
-  // Rotate around Y (up) so that -Z (nadir) points toward heading
-  rot.makeRotationY(-headingRad);
-  return rot;
+  return new THREE.Matrix4().makeRotationY((headingDeg * Math.PI) / 180);
 }
 
 /**
