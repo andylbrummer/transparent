@@ -5,7 +5,8 @@
  */
 
 import * as THREE from 'three';
-import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas, EARTH_RADIUS_M } from './prem';
+import { EARTH_RADIUS_M } from '@transparent-earth/core';
+import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
 
 const VERTEX_SHADER = `
   varying vec2 vUv;
@@ -21,17 +22,15 @@ const FRAGMENT_SHADER = `
 
   uniform vec3 uCameraPos;
   uniform mat3 uCameraRot;
-  uniform float uEarthRadius;
   uniform float uAspect;
   uniform float uTanHalfFov;
   uniform int uLayerCount;
   uniform float uLayerRadii[5];
   uniform vec3 uLayerColors[5];
   uniform float uLayerAlphas[5];
-  uniform float uTime;
 
   #define MAX_STEPS 64
-  #define MAX_DIST 15000000.0
+  #define NO_HIT 1.0e20
   #define EPS 1000.0
 
   struct Hit {
@@ -55,7 +54,7 @@ const FRAGMENT_SHADER = `
   // Find the nearest shell intersection along the ray
   Hit marchShells(vec3 ro, vec3 rd) {
     Hit hit;
-    hit.t = MAX_DIST;
+    hit.t = NO_HIT;
     hit.layer = -1;
 
     for (int i = 0; i < 5; i++) {
@@ -88,62 +87,49 @@ const FRAGMENT_SHADER = `
     float t = 0.0;
 
     for (int step = 0; step < MAX_STEPS; step++) {
+      // No shell ahead of the ray. Deciding this by hit, not by a distance
+      // cap, keeps the globe visible from any orbit distance.
       Hit hit = marchShells(p, rd);
-      if (hit.t >= MAX_DIST) break;
+      if (hit.layer < 0) break;
 
       // Move to intersection point
       t += hit.t + EPS;
       p = ro + rd * t;
 
-      if (hit.layer >= 0) {
-        vec3 layerColor = uLayerColors[hit.layer];
-        float layerAlpha = uLayerAlphas[hit.layer];
+      vec3 layerColor = uLayerColors[hit.layer];
+      float layerAlpha = uLayerAlphas[hit.layer];
 
-        // Fresnel-like transparency: more transparent when looking straight down (nadir)
-        // and more opaque at grazing angles (horizon)
-        float nDotV = abs(dot(normalize(p), rd));
-        float fresnel = pow(1.0 - nDotV, 2.0);
-        layerAlpha *= (0.3 + 0.7 * fresnel);
+      // Fresnel-like transparency: more transparent when looking straight down (nadir)
+      // and more opaque at grazing angles (horizon)
+      float nDotV = abs(dot(normalize(p), rd));
+      float fresnel = pow(1.0 - nDotV, 2.0);
+      layerAlpha *= (0.3 + 0.7 * fresnel);
 
-        color = mix(color, layerColor, layerAlpha * alpha);
-        alpha *= (1.0 - layerAlpha);
+      color = mix(color, layerColor, layerAlpha * alpha);
+      alpha *= (1.0 - layerAlpha);
 
-        if (alpha < 0.01) break;
-      }
+      if (alpha < 0.01) break;
     }
 
     gl_FragColor = vec4(color, 1.0);
   }
 `;
 
-export interface GlobeUniforms {
-  uCameraPos: THREE.Vector3;
-  uCameraRot: THREE.Matrix3;
-  uEarthRadius: number;
-  uLayerCount: number;
-  uLayerRadii: Float32Array;
-  uLayerColors: Float32Array;
-  uLayerAlphas: Float32Array;
-  uTime: number;
-}
-
 export class GlobeRenderer {
   private material: THREE.ShaderMaterial;
   private mesh: THREE.Mesh;
-  private clock = new THREE.Clock();
+  private readonly rotation = new THREE.Matrix4();
 
   constructor() {
     const uniforms = {
       uCameraPos: { value: new THREE.Vector3(0, 0, EARTH_RADIUS_M + 2) },
       uCameraRot: { value: new THREE.Matrix3().identity() },
-      uEarthRadius: { value: EARTH_RADIUS_M },
       uAspect: { value: 1 },
       uTanHalfFov: { value: Math.tan((60 * Math.PI) / 180 / 2) },
       uLayerCount: { value: PREM_LAYERS.length },
       uLayerRadii: { value: premRadiiToMeters() },
       uLayerColors: { value: premColors() },
       uLayerAlphas: { value: premAlphas() },
-      uTime: { value: 0 },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -156,6 +142,10 @@ export class GlobeRenderer {
 
     const geometry = new THREE.PlaneGeometry(2, 2);
     this.mesh = new THREE.Mesh(geometry, this.material);
+    // A fullscreen quad placed in clip space by the vertex shader: its world
+    // bounds say nothing about visibility, so culling would drop the planet
+    // whenever the origin leaves the frustum (e.g. looking at the limb).
+    this.mesh.frustumCulled = false;
   }
 
   getMesh(): THREE.Mesh {
@@ -163,9 +153,6 @@ export class GlobeRenderer {
   }
 
   update(camera: THREE.Camera): void {
-    const elapsed = this.clock.getElapsedTime();
-    this.material.uniforms.uTime.value = elapsed;
-
     // Track the camera's own framing so the raymarch matches what a
     // rasterised scene through the same camera would show.
     if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
@@ -179,21 +166,8 @@ export class GlobeRenderer {
     // Camera position in world space (relative to floating origin)
     this.material.uniforms.uCameraPos.value.copy(camera.position);
 
-    // Camera rotation matrix (extract from quaternion)
-    const rot = new THREE.Matrix4().makeRotationFromQuaternion(camera.quaternion);
-    const mat3 = new THREE.Matrix3();
-    mat3.setFromMatrix4(rot);
-    this.material.uniforms.uCameraRot.value.copy(mat3);
-  }
-
-  setCameraPosition(pos: THREE.Vector3): void {
-    this.material.uniforms.uCameraPos.value.copy(pos);
-  }
-
-  setCameraRotation(quat: THREE.Quaternion): void {
-    const rot = new THREE.Matrix4().makeRotationFromQuaternion(quat);
-    const mat3 = new THREE.Matrix3();
-    mat3.setFromMatrix4(rot);
-    this.material.uniforms.uCameraRot.value.copy(mat3);
+    // Runs every frame: reuse the scratch matrix rather than allocating.
+    this.rotation.makeRotationFromQuaternion(camera.quaternion);
+    this.material.uniforms.uCameraRot.value.setFromMatrix4(this.rotation);
   }
 }
