@@ -2,8 +2,10 @@
 """
 Spot-check test for travel-time texture against ObsPy TauP.
 
-Compares 20 random (depth, distance) samples from the generated texture
-against freshly computed ObsPy arrivals. Passes if all within 2 seconds.
+Compares 20 random texels of the generated texture against freshly
+computed ObsPy arrivals at that texel's exact (depth, distance), and checks
+that the core shadow zones hold no direct arrivals. Passes if every sample
+matches to within the texture's decisecond quantisation.
 
 Usage:
     python3 tools/pipeline/test_traveltime.py
@@ -16,116 +18,104 @@ from pathlib import Path
 
 try:
     import numpy as np
-    from PIL import Image
     from obspy.taup import TauPyModel
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Install: pip install obspy numpy pillow")
+    print("Install: pip install obspy numpy")
     sys.exit(1)
+
+from generate_traveltime import P_PHASES, S_PHASES, SURFACE_PHASE, PHASE_LIST
+
+# Stored times are rounded to 0.1 s.
+TOLERANCE_S = 0.05 + 1e-6
 
 
 def load_texture():
     output_dir = Path(__file__).parent / "output"
-    img = Image.open(output_dir / "traveltime.png")
-    texture = np.array(img, dtype=np.uint16)
-
     with open(output_dir / "traveltime_manifest.json") as f:
         manifest = json.load(f)
 
+    assert manifest["format"] == "uint16le", manifest["format"]
+    texture = np.fromfile(output_dir / "traveltime.bin", dtype="<u2").reshape(
+        manifest["height"], manifest["width"], 3
+    )
     return texture, manifest
 
 
-def sample_texture(texture, manifest, depth_km, distance_deg):
-    max_depth = manifest["maxDepthKm"]
-    max_dist = manifest["maxDistanceDeg"]
-    h, w = texture.shape[:2]
+def decode(value, manifest):
+    return None if value == manifest["sentinel"] else value * manifest["timeScale"]
 
-    di = int((depth_km / max_depth) * (h - 1))
-    dj = int((distance_deg / max_dist) * (w - 1))
-    di = max(0, min(di, h - 1))
-    dj = max(0, min(dj, w - 1))
 
-    p_time = texture[di, dj, 0]
-    s_time = texture[di, dj, 1]
-    surf_time = texture[di, dj, 2]
-
-    sentinel = manifest["sentinel"]
-    scale = manifest["timeScale"]
-
-    return {
-        "P": None if p_time == sentinel else p_time * scale,
-        "S": None if s_time == sentinel else s_time * scale,
-        "surface": None if surf_time == sentinel else surf_time * scale,
-    }
+def first_arrival(arrivals, names):
+    return next((arr.time for arr in arrivals if arr.name in names), None)
 
 
 def test_spot_checks():
     texture, manifest = load_texture()
     model = TauPyModel(manifest["model"])
+    depths = manifest["depthSamples"]
+    distances = manifest["distanceSamples"]
 
     random.seed(42)
     errors = []
 
     for _ in range(20):
-        depth = random.uniform(0, manifest["maxDepthKm"])
-        distance = random.uniform(0, manifest["maxDistanceDeg"])
+        i = random.randrange(manifest["height"])
+        j = random.randrange(manifest["width"])
+        depth, distance = depths[i], distances[j]
 
-        sampled = sample_texture(texture, manifest, depth, distance)
+        arrivals = model.get_travel_times(
+            source_depth_in_km=depth,
+            distance_in_degree=distance,
+            phase_list=PHASE_LIST,
+        )
 
-        try:
-            arrivals = model.get_travel_times(
-                source_depth_in_km=depth,
-                distance_in_degree=distance,
-                phase_list=["P", "S", "p", "s", "PP", "SS", "Rayleigh"]
-            )
-
-            expected_p = None
-            expected_s = None
-            for arr in arrivals:
-                if arr.name in ("P", "p", "PP") and expected_p is None:
-                    expected_p = arr.time
-                elif arr.name in ("S", "s", "SS") and expected_s is None:
-                    expected_s = arr.time
-
-            if sampled["P"] is not None and expected_p is not None:
-                diff = abs(sampled["P"] - expected_p)
-                if diff > 2.0:
-                    errors.append(f"P-wave at ({depth:.1f}km, {distance:.1f}°): "
-                                  f"texture={sampled['P']:.1f}s, expected={expected_p:.1f}s, diff={diff:.1f}s")
-
-            if sampled["S"] is not None and expected_s is not None:
-                diff = abs(sampled["S"] - expected_s)
-                if diff > 2.0:
-                    errors.append(f"S-wave at ({depth:.1f}km, {distance:.1f}°): "
-                                  f"texture={sampled['S']:.1f}s, expected={expected_s:.1f}s, diff={diff:.1f}s")
-
-        except Exception:
-            # No arrival expected — check sentinel
-            if sampled["P"] is not None:
-                errors.append(f"Unexpected P arrival at ({depth:.1f}km, {distance:.1f}°)")
+        for channel, label, names in (
+            (0, "P", P_PHASES),
+            (1, "S", S_PHASES),
+            (2, "surface", (SURFACE_PHASE,)),
+        ):
+            sampled = decode(texture[i, j, channel], manifest)
+            expected = first_arrival(arrivals, names)
+            where = f"{label} at ({depth:.1f}km, {distance:.2f}°)"
+            if (sampled is None) != (expected is None):
+                errors.append(f"{where}: texture={sampled}, expected={expected}")
+            elif sampled is not None and abs(sampled - expected) > TOLERANCE_S:
+                errors.append(f"{where}: texture={sampled:.2f}s, expected={expected:.2f}s")
 
     if errors:
-        print(f"FAILED: {len(errors)} spot checks exceeded 2s tolerance:")
+        print(f"FAILED: {len(errors)} spot check(s) disagree with TauP:")
         for e in errors:
             print(f"  {e}")
         return 1
 
-    print("PASSED: All 20 spot checks within 2s tolerance")
+    print("PASSED: 20 spot checks match TauP")
     return 0
 
 
 def test_core_shadow():
-    """Test that S-wave has no arrival for shallow source > 104°."""
+    """Direct P and S must be absent inside their core shadow zones."""
     texture, manifest = load_texture()
+    depths = np.array(manifest["depthSamples"])
+    distances = np.array(manifest["distanceSamples"])
 
-    sampled = sample_texture(texture, manifest, 10.0, 110.0)
-    sentinel = manifest["sentinel"]
+    def texel(depth_km, distance_deg):
+        i = int(np.abs(depths - depth_km).argmin())
+        j = int(np.abs(distances - distance_deg).argmin())
+        return texture[i, j]
 
-    if sampled["S"] is not None:
-        print(f"FAILED: S-wave should be shadowed at 10km, 110° but got {sampled['S']:.1f}s")
+    failures = []
+    if decode(texel(10.0, 110.0)[1], manifest) is not None:
+        failures.append("S should be shadowed at 10km, 110°")
+    if decode(texel(10.0, 120.0)[0], manifest) is not None:
+        failures.append("P should be shadowed at 10km, 120°")
+
+    if failures:
+        for f in failures:
+            print(f"FAILED: {f}")
         return 1
 
-    print("PASSED: S-wave core shadow detected at 10km, 110°")
+    print("PASSED: P and S core shadows present")
     return 0
 
 

@@ -22,3 +22,7 @@ worktrack-mcp.db
 
 # tman run logs and failure digests (per-clone)
 /.tman/
+
+# Generated pipeline outputs and Python bytecode
+/tools/pipeline/output/
+__pycache__/
