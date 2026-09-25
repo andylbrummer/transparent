@@ -13,7 +13,7 @@ export interface OrbitState {
   distance: number;
   /** Horizontal rotation angle in radians */
   azimuth: number;
-  /** Vertical rotation angle in radians (0 = equator, PI/2 = north pole) */
+  /** Angle from the +Y pole in radians (0 = above the pole, PI/2 = equator) */
   polar: number;
   /** Target point to orbit around */
   target: THREE.Vector3;
