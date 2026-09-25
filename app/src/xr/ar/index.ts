@@ -57,9 +57,11 @@ export async function isARSupported(): Promise<boolean> {
  *
  * Drives the placement flow: request a floor-anchored session, scan until
  * hit-testing finds the floor, then let the user tap to commit the portal.
- * A session that is refused after the support probe passed — the usual cause
- * being a denied camera permission — surfaces as permission_denied rather
- * than a silent failure.
+ * A session refused with NotAllowedError (a denied camera permission)
+ * surfaces as permission_denied, and NotSupportedError (a required feature
+ * missing) as unsupported; any other failure propagates to the caller.
+ * A session the platform ends on its own (e.g. the system back gesture)
+ * returns the controller to idle.
  */
 export function createARController(sessionFactory?: SessionFactory): ARController {
   let state: ARState = { phase: 'idle' };
@@ -80,21 +82,33 @@ export function createARController(sessionFactory?: SessionFactory): ARControlle
       }
 
       state = { phase: 'starting' };
+      let opened: XRSession;
       try {
-        session = await requestSession();
-      } catch {
-        state = { phase: 'permission_denied' };
+        opened = await requestSession();
+      } catch (error) {
+        const name = error instanceof DOMException ? error.name : '';
+        if (name === 'NotAllowedError') state = { phase: 'permission_denied' };
+        else if (name === 'NotSupportedError') state = { phase: 'unsupported' };
+        else {
+          state = { phase: 'idle' };
+          throw error;
+        }
         return;
       }
+      session = opened;
+      opened.addEventListener('end', () => {
+        if (session !== opened) return;
+        session = null;
+        state = { phase: 'idle' };
+      });
       state = { phase: 'scanning' };
     },
 
     async stop() {
-      if (session) {
-        await session.end?.();
-        session = null;
-      }
+      const ending = session;
+      session = null;
       state = { phase: 'idle' };
+      if (ending) await ending.end();
     },
 
     onFloorHit(position: THREE.Vector3 | null) {

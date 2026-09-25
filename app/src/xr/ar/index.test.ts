@@ -42,7 +42,17 @@ describe('AR portal placement flow', () => {
   function startedController(): ReturnType<typeof createARController> {
     endCalls = 0;
     mockSupportedDevice();
-    return createARController(async () => ({ end: async () => void endCalls++ }) as unknown as XRSession);
+    return createARController(async () => fakeSession());
+  }
+
+  /** An XRSession stand-in: real EventTarget, end() fires 'end' like a UA. */
+  function fakeSession(): XRSession {
+    const session = new EventTarget() as EventTarget & { end(): Promise<void> };
+    session.end = async () => {
+      endCalls++;
+      session.dispatchEvent(new Event('end'));
+    };
+    return session as unknown as XRSession;
   }
 
   afterEach(() => {
@@ -100,10 +110,43 @@ describe('AR portal placement flow', () => {
   it('reports permission_denied when the session is refused', async () => {
     mockSupportedDevice();
     const controller = createARController(async () => {
-      throw new Error('NotAllowedError');
+      throw new DOMException('camera denied', 'NotAllowedError');
     });
     await controller.start();
     expect(controller.getState().phase).toBe('permission_denied');
+  });
+
+  it('reports unsupported when a required feature is missing', async () => {
+    mockSupportedDevice();
+    const controller = createARController(async () => {
+      throw new DOMException('no hit-test', 'NotSupportedError');
+    });
+    await controller.start();
+    expect(controller.getState().phase).toBe('unsupported');
+  });
+
+  it('propagates unexpected session failures instead of blaming permissions', async () => {
+    mockSupportedDevice();
+    const controller = createARController(async () => {
+      throw new TypeError('bad init');
+    });
+    await expect(controller.start()).rejects.toThrow('bad init');
+    expect(controller.getState().phase).toBe('idle');
+  });
+
+  it('returns to idle when the platform ends the session', async () => {
+    let session: XRSession | null = null;
+    endCalls = 0;
+    mockSupportedDevice();
+    const controller = createARController(async () => (session = fakeSession()));
+    await controller.start();
+
+    await session!.end();
+    expect(controller.getState().phase).toBe('idle');
+
+    // stop() after an external end must not end the dead session again
+    await controller.stop();
+    expect(endCalls).toBe(1);
   });
 
   it('ends the session on stop', async () => {
