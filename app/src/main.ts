@@ -109,9 +109,17 @@ export function init(): App | null {
   };
   window.addEventListener('resize', onResize);
 
+  // iOS only grants orientation events from inside a user gesture, so the
+  // first touch asks; everywhere else this resolves without a prompt.
+  let orientationPermissionAsked = false;
+
   // Pointer events cover mouse and touch alike; the orbit controller's
   // touch API takes the pointer count, so a single pointer rotates.
   const onPointerDown = (e: PointerEvent): void => {
+    if (!orientationPermissionAsked) {
+      orientationPermissionAsked = true;
+      void sensors.requestPermission();
+    }
     renderer.domElement.setPointerCapture(e.pointerId);
     orbit.onTouchStart(e.clientX, e.clientY, 1);
   };
