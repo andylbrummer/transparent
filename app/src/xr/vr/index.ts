@@ -9,9 +9,11 @@
 
 import * as THREE from 'three';
 import { type ThermalProxy } from '../../perf/thermal';
+import { isSessionModeSupported, openSession, type SessionFactory } from '../session';
 
 export type VRState =
   | { phase: 'unsupported' }
+  | { phase: 'permission_denied' }
   | { phase: 'idle' }
   | { phase: 'starting' }
   | { phase: 'running'; session: XRSession }
@@ -34,62 +36,93 @@ export const SESSION_SOFT_CAP_MS = 10 * 60 * 1000;
 /** Clock provider for testability */
 export type NowProvider = () => number;
 
+/** The glass platform stands on the floor; fall back to eye level without it. */
+export const VR_SESSION_INIT: XRSessionInit = {
+  optionalFeatures: ['local-floor'],
+};
+
 /**
  * Check if WebXR immersive-vr is supported.
  */
-export async function isVRSupported(): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !navigator.xr) return false;
-  try {
-    return await navigator.xr.isSessionSupported('immersive-vr');
-  } catch {
-    return false;
-  }
+export function isVRSupported(): Promise<boolean> {
+  return isSessionModeSupported('immersive-vr');
 }
 
 /**
  * Create a VR controller for Cardboard stereo mode.
  */
-export function createVRController(thermalProxy?: ThermalProxy, nowProvider?: NowProvider): VRController {
+export function createVRController(
+  thermalProxy?: ThermalProxy,
+  nowProvider?: NowProvider,
+  sessionFactory?: SessionFactory
+): VRController {
   const now = nowProvider ?? performance.now.bind(performance);
   let state: VRState = { phase: 'idle' };
   const resolutionScale = DEFAULT_RESOLUTION_SCALE;
-  let sessionStartTime = 0;
+  let sessionStartTime: number | null = null;
+
+  const requestSession: SessionFactory =
+    sessionFactory ??
+    (async () => {
+      if (!navigator.xr) throw new Error('WebXR unavailable');
+      return navigator.xr.requestSession('immersive-vr', VR_SESSION_INIT);
+    });
+
+  function toIdle(): void {
+    state = { phase: 'idle' };
+    sessionStartTime = null;
+  }
 
   return {
     async start() {
-      const supported = await isVRSupported();
-      if (!supported) {
+      if (!(await isVRSupported())) {
         state = { phase: 'unsupported' };
         return;
       }
       state = { phase: 'starting' };
-      // Actual session would be requested here; scaffold simulates
-      await new Promise((r) => setTimeout(r, 50));
-      state = { phase: 'running', session: {} as XRSession };
+      let outcome;
+      try {
+        outcome = await openSession(requestSession, (ended) => {
+          if (state.phase === 'running' && state.session === ended) toIdle();
+        });
+      } catch (error) {
+        toIdle();
+        throw error;
+      }
+      if (outcome.kind !== 'opened') {
+        state = { phase: outcome.kind };
+        return;
+      }
+      state = { phase: 'running', session: outcome.session };
       sessionStartTime = now();
     },
 
     async stop() {
+      if (state.phase !== 'running') {
+        toIdle();
+        return;
+      }
+      const { session } = state;
       state = { phase: 'ending' };
-      await new Promise((r) => setTimeout(r, 50));
-      state = { phase: 'idle' };
-      sessionStartTime = 0;
+      try {
+        await session.end();
+      } finally {
+        toIdle();
+      }
     },
 
     getState(): VRState {
+      if (state.phase !== 'running') return state;
       // Check thermal state if proxy available
-      if (thermalProxy && state.phase === 'running') {
+      if (thermalProxy) {
         const msg = thermalProxy.sessionMessage();
         if (msg && thermalProxy.getState() === 'critical') {
           return { phase: 'thermal_limited', message: msg };
         }
       }
       // Check soft cap
-      if (state.phase === 'running' && sessionStartTime > 0) {
-        const elapsed = now() - sessionStartTime;
-        if (elapsed > SESSION_SOFT_CAP_MS) {
-          return { phase: 'thermal_limited', message: 'Session soft cap reached (10 min). Consider a break.' };
-        }
+      if (sessionStartTime !== null && now() - sessionStartTime > SESSION_SOFT_CAP_MS) {
+        return { phase: 'thermal_limited', message: 'Session soft cap reached (10 min). Consider a break.' };
       }
       return state;
     },

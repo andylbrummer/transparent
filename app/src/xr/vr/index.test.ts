@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   createVRController,
   isVRSupported,
@@ -18,6 +18,33 @@ describe('isVRSupported', () => {
 });
 
 describe('createVRController', () => {
+  let endCalls: number;
+
+  function mockSupportedDevice(): void {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { xr: { isSessionSupported: async () => true } },
+    });
+  }
+
+  /** An XRSession stand-in: real EventTarget, end() fires 'end' like a UA. */
+  function fakeSession(): XRSession {
+    const session = new EventTarget() as EventTarget & { end(): Promise<void> };
+    session.end = async () => {
+      endCalls++;
+      session.dispatchEvent(new Event('end'));
+    };
+    return session as unknown as XRSession;
+  }
+
+  beforeEach(() => {
+    endCalls = 0;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: undefined });
+  });
+
   it('starts in idle state', () => {
     const controller = createVRController();
     expect(controller.getState().phase).toBe('idle');
@@ -29,25 +56,39 @@ describe('createVRController', () => {
     expect(controller.getState().phase).toBe('unsupported');
   });
 
-  it('transitions through phases with mocked XR', async () => {
-    const originalXR = (globalThis as any).navigator?.xr;
-    (globalThis as any).navigator = {
-      xr: {
-        isSessionSupported: async () => true,
-      },
-    };
-
-    const controller = createVRController();
+  it('runs a real session and ends it on stop', async () => {
+    mockSupportedDevice();
+    const session = fakeSession();
+    const controller = createVRController(undefined, undefined, async () => session);
     await controller.start();
-    expect(controller.getState().phase).toBe('running');
+    const state = controller.getState();
+    expect(state.phase).toBe('running');
+    if (state.phase === 'running') expect(state.session).toBe(session);
 
     await controller.stop();
+    expect(endCalls).toBe(1);
     expect(controller.getState().phase).toBe('idle');
+  });
 
-    // Restore
-    if (originalXR) {
-      (globalThis as any).navigator.xr = originalXR;
-    }
+  it('returns to idle when the platform ends the session', async () => {
+    mockSupportedDevice();
+    const session = fakeSession();
+    const controller = createVRController(undefined, undefined, async () => session);
+    await controller.start();
+
+    await session.end();
+    expect(controller.getState().phase).toBe('idle');
+    await controller.stop();
+    expect(endCalls).toBe(1);
+  });
+
+  it('reports permission_denied when the session is refused', async () => {
+    mockSupportedDevice();
+    const controller = createVRController(undefined, undefined, async () => {
+      throw new DOMException('denied', 'NotAllowedError');
+    });
+    await controller.start();
+    expect(controller.getState().phase).toBe('permission_denied');
   });
 
   it('returns default resolution scale', () => {
@@ -71,15 +112,9 @@ describe('createVRController', () => {
   });
 
   it('reports thermal limit when proxy is critical', async () => {
-    const originalXR = (globalThis as any).navigator?.xr;
-    (globalThis as any).navigator = {
-      xr: {
-        isSessionSupported: async () => true,
-      },
-    };
-
+    mockSupportedDevice();
     const thermal = new ThermalProxy();
-    const controller = createVRController(thermal);
+    const controller = createVRController(thermal, undefined, async () => fakeSession());
     await controller.start();
 
     // Force critical
@@ -92,40 +127,20 @@ describe('createVRController', () => {
     if (state.phase === 'thermal_limited') {
       expect(state.message).toContain('Thermal');
     }
-
-    // Restore
-    if (originalXR) {
-      (globalThis as any).navigator.xr = originalXR;
-    }
   });
 
-  it('reports soft cap after 10 minutes', async () => {
-    const originalXR = (globalThis as any).navigator?.xr;
-    (globalThis as any).navigator = {
-      xr: {
-        isSessionSupported: async () => true,
-      },
-    };
-
-    // Start mockTime at a positive value so sessionStartTime > 0
-    let mockTime = 1000;
-    const controller = createVRController(undefined, () => mockTime);
+  it('reports soft cap after 10 minutes, even from a zero clock', async () => {
+    mockSupportedDevice();
+    let mockTime = 0;
+    const controller = createVRController(undefined, () => mockTime, async () => fakeSession());
     await controller.start();
 
-    // Advance past soft cap
-    mockTime = 1000 + SESSION_SOFT_CAP_MS + 1000;
+    mockTime = SESSION_SOFT_CAP_MS + 1000;
 
-    // getState checks elapsed = now() - sessionStartTime
-    // sessionStartTime was set to now() at start() = 1000
-    // elapsed = (1000 + 600000 + 1000) - 1000 = 601000 > 600000
     const state = controller.getState();
     expect(state.phase).toBe('thermal_limited');
     if (state.phase === 'thermal_limited') {
       expect(state.message).toContain('soft cap');
-    }
-
-    if (originalXR) {
-      (globalThis as any).navigator.xr = originalXR;
     }
   });
 });
