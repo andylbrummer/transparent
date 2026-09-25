@@ -125,6 +125,9 @@ export function init(): App | null {
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   renderer.domElement.addEventListener('pointerup', onPointerUp);
+  // A cancelled pointer (browser gesture, lost capture) ends the drag too;
+  // otherwise the next touch would jump from the stale position.
+  renderer.domElement.addEventListener('pointercancel', onPointerUp);
   window.addEventListener('keydown', onKeyDown);
 
   let frameCount = 0;
@@ -164,7 +167,13 @@ export function init(): App | null {
       sensors.stop();
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKeyDown);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('pointercancel', onPointerUp);
       renderer.dispose();
+      renderer.domElement.remove();
+      hud.remove();
     },
   };
 }
