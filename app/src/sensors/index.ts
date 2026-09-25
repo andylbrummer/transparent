@@ -92,7 +92,14 @@ export function createSensorController(callback: SensorCallback): SensorControll
     const heading = headingFromOrientation(event as CompassEvent);
     if (heading === null) return;
 
-    samples.push({ heading, timestamp: eventTimestamp(event) });
+    // Orientation fires at display rate. Spacing samples by the configured
+    // interval makes the gate judge a ~1 s hold, not three events 33 ms
+    // apart that a steadily turning phone would pass.
+    const timestamp = eventTimestamp(event);
+    const previous = samples[samples.length - 1];
+    if (previous && timestamp - previous.timestamp < DEFAULT_HEADING_CONFIG.sampleIntervalMs) return;
+
+    samples.push({ heading, timestamp });
     // Gate on the most recent window only; stale samples from before the user
     // stopped turning would otherwise keep the spread wide forever.
     while (samples.length > DEFAULT_HEADING_CONFIG.sampleCount) samples.shift();

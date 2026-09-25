@@ -1,10 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { DEFAULT_HEADING_CONFIG } from '@transparent-earth/core/heading';
 import { createSensorController, headingFromOrientation, type SensorState } from './index';
 
-/** Dispatch an absolute-orientation event the way Chrome/Android reports it. */
-function dispatchHeading(alpha: number): void {
+/** Event clock for dispatched orientation events, in ms. */
+let eventClockMs = 0;
+
+/**
+ * Dispatch an absolute-orientation event the way Chrome/Android reports it,
+ * `afterMs` after the previous one (default: one full sample interval).
+ */
+function dispatchHeading(alpha: number, afterMs = DEFAULT_HEADING_CONFIG.sampleIntervalMs): void {
+  eventClockMs += afterMs;
   const event = new Event('deviceorientationabsolute');
   Object.assign(event, { alpha, beta: 80, gamma: 0, absolute: true });
+  Object.defineProperty(event, 'timeStamp', { value: eventClockMs });
   window.dispatchEvent(event);
 }
 
@@ -101,6 +110,24 @@ describe('createSensorController', () => {
     const last = seen[seen.length - 1];
     expect(last.heading).toBeCloseTo(45, 6);
     expect(last.headingReason).toBeNull();
+    controller.stop();
+  });
+
+  it('samples at the configured interval, not at the event rate', () => {
+    installGeolocation();
+    const seen: SensorState[] = [];
+    const controller = createSensorController((s) => seen.push(s));
+    controller.start();
+
+    // A phone turning ~1°/frame at 60 Hz: three events 16 ms apart look
+    // steady, but they must count as one sample, not a completed hold.
+    dispatchHeading(315);
+    dispatchHeading(314, 16);
+    dispatchHeading(313, 16);
+
+    const last = seen[seen.length - 1];
+    expect(last.heading).toBeNull();
+    expect(last.headingReason).toBe('insufficient_samples');
     controller.stop();
   });
 
