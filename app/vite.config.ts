@@ -7,6 +7,9 @@ const coreSrc = fileURLToPath(new URL('../packages/core/src', import.meta.url));
 
 export default defineConfig({
   root: '.',
+  // Relative asset URLs, so the build works under the GitHub Pages project
+  // path (/<repo>/) as well as at a domain root.
+  base: './',
   resolve: {
     alias: [{ find: /^@transparent-earth\/core(.*)$/, replacement: `${coreSrc}$1` }],
   },
