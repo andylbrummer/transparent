@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
 import { createLookController } from '../input/look';
+import { StereoRig } from './stereo';
 import { LabelLayer, MAX_VISIBLE_LABELS, estimateLabelSize, labelText, rankLabels, type PlaceLabel } from './labels';
 
 const WIDTH = 400;
@@ -117,6 +118,32 @@ describe('LabelLayer', () => {
     expect(element.textContent).toBe('Farallon slab · 1500 km');
     expect(element.style.transform).toBe('translate(200.0px, 400.0px) translate(-50%, -50%)');
     layer.dispose();
+  });
+
+  it('in stereo, shows each name to both eyes with the disparity of its depth', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, [{ labels: [label('California', -119.5, 37.0, 1)] }]);
+    layer.setStereo(true);
+    const rig = new StereoRig();
+    const eyeWidth = WIDTH / 2;
+    rig.update(cameraAimedAt(-119.5, 37.0), eyeWidth, HEIGHT);
+    layer.update(rig.left, eyeWidth, HEIGHT, rig.right);
+
+    const x = (selector: string): number => {
+      const element = parent.querySelector(`${selector} .place-label`) as HTMLElement;
+      expect(element.style.display).toBe('');
+      return Number(/translate\(([-\d.]+)px/.exec(element.style.transform)?.[1]);
+    };
+    // ~2000 km away, nearer than where the eyes converge: the left eye sees
+    // it right of centre and the right eye left of it, so it floats forward.
+    expect(x('.place-labels--left-eye')).toBeGreaterThan(eyeWidth / 2);
+    expect(x('.place-labels--right-eye')).toBeLessThan(eyeWidth / 2);
+
+    layer.setStereo(false);
+    expect((parent.querySelector('.place-labels--right-eye') as HTMLElement).style.display).toBe('none');
+    expect(parent.querySelector('.place-labels--left-eye')).toBeNull();
+    layer.dispose();
+    expect(parent.children.length).toBe(0);
   });
 });
 
