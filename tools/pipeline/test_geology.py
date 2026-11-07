@@ -67,6 +67,14 @@ check(len(deep) > 0 and all(0 < label["depthKm"] < 2891 for label in deep), "dee
 
 order = [(LABEL_KIND_ORDER.index(label["kind"]), label["priority"]) for label in labels]
 check(order == sorted(order), "labels sorted by kind, then priority")
+plumes = {p["name"]: p for p in json.loads((OUTPUT_DIR / "geology.json").read_text(encoding="utf-8"))["plumes"]}
+check(plumes.get("Iceland", {}).get("depthKm") == 2891, "Iceland's plume reaches the core-mantle boundary")
+hawaii = plumes.get("Hawaii", {})
+check(hawaii.get("depthKm") == 2891 and hawaii.get("rootLon") == -162.0, "Hawaii's plume leans to its ULVZ root")
+check(plumes.get("Reunion", {}).get("possibleDepthKm") == 2891 and plumes["Reunion"]["depthKm"] == 1000,
+      "a potentially deep plume is certain to 1000 km, possible to the CMB")
+check(plumes.get("Eifel", {}).get("depthKm") == 660, "an upper-mantle plume stops at 660 km")
+check("Yellowstone" not in plumes, "unclassified hotspots get no conduit")
 volcanoes = [label["name"] for label in labels if label["kind"] == "volcano"]
 check(volcanoes.index("Kilauea") < volcanoes.index("Yellowstone"), "a recently erupting volcano outranks an old one")
 

@@ -6,7 +6,8 @@ Writes the line and label data the app draws through the see-through Earth:
 
     app/public/geo/tectonics.json  plate boundaries by kind, and active faults
     app/public/geo/geology.json    plates, deep-Earth structures, hotspots,
-                                   subduction zones and volcanoes
+                                   subduction zones and volcanoes, plus the
+                                   plume conduit under each classified hotspot
 
 Sources (attribution required where noted, see app/public/geo/ATTRIBUTION.md):
 
@@ -79,6 +80,25 @@ FAULT_SIMPLIFY_QUANTA = 2
 # NCEI last-eruption codes, most recent first: D1 = 1964 or later ... D7 = BC.
 ERUPTION_RANK = {"D1": 1, "D2": 2, "D3": 3, "D4": 4, "D5": 5, "D6": 6, "D7": 7}
 UNDATED_RANK = 8
+
+# How deep tomography traces each plume class (Whittaker et al. 2015, after
+# Montelli et al. 2006 and Courtillot et al. 2003), as conduit extents in km:
+# (depth the class is imaged to, depth it may reach). Secondary/tertiary and
+# unclassified hotspots get no conduit: the catalogue makes no depth claim.
+CMB_DEPTH_KM = 2891  # PREM core-mantle boundary, 6371 - 3480
+PLUME_EXTENT_KM = {
+    "Deep": (CMB_DEPTH_KM, None),
+    "Potentially Deep": (1000, CMB_DEPTH_KM),
+    "mid-mantle": (1000, None),
+    "upper mantle": (660, None),
+}
+# French & Romanowicz (2015) Nature 525, 95 image Hawaii's plume as a broad
+# conduit rooted at the core-mantle boundary; Montelli et al. (2006) did not
+# resolve it below the mid-mantle.
+PLUME_TYPE_OVERRIDES = {"Hawaii": "Deep"}
+# Deep plumes whose root has been imaged off-axis end at that root, so the
+# conduit leans the way the plume does.
+PLUME_ROOTS = {"Hawaii": "Hawaiian mega-ULVZ", "Iceland": "Iceland ULVZ"}
 
 HOTSPOT_RANK = {"Deep": 1, "Potentially Deep": 2, "mid-mantle": 3, "upper mantle": 4, "Secondary/Tertiary": 5}
 UNKNOWN_PLUME_RANK = 6
@@ -326,8 +346,9 @@ def build_plate_labels(plates: dict) -> list[dict]:
     return labels
 
 
-def build_hotspot_labels(gpml: str) -> list[dict]:
-    labels = []
+def parse_hotspots(gpml: str) -> list[dict]:
+    """name, lon, lat and plume class of each Whittaker hotspot."""
+    hotspots = []
     for member in gpml.split("<gml:featureMember>")[1:]:
         attrs = dict(re.findall(
             r"<gpml:key>(.*?)</gpml:key>\s*<gpml:valueType[^>]*>[^<]*</gpml:valueType>\s*<gpml:value>(.*?)</gpml:value>",
@@ -335,10 +356,34 @@ def build_hotspot_labels(gpml: str) -> list[dict]:
         pos = re.search(r"<gml:pos>\s*([-0-9.eE]+)\s+([-0-9.eE]+)\s*</gml:pos>", member)
         if not pos or "HotspotNam" not in attrs:
             raise ValueError("hotspot feature without a name or position")
-        lat, lon = float(pos.group(1)), float(pos.group(2))
-        labels.append({"kind": "hotspot", "name": attrs["HotspotNam"].replace("_", " "), "lon": round(lon, 2),
-                       "lat": round(lat, 2), "priority": HOTSPOT_RANK.get(attrs.get("PlumeType"), UNKNOWN_PLUME_RANK)})
-    return labels
+        name = attrs["HotspotNam"].replace("_", " ")
+        hotspots.append({"name": name, "lat": float(pos.group(1)), "lon": float(pos.group(2)),
+                         "plumeType": PLUME_TYPE_OVERRIDES.get(name, attrs.get("PlumeType"))})
+    return hotspots
+
+
+def build_hotspot_labels(hotspots: list[dict]) -> list[dict]:
+    return [{"kind": "hotspot", "name": h["name"], "lon": round(h["lon"], 2), "lat": round(h["lat"], 2),
+             "priority": HOTSPOT_RANK.get(h["plumeType"], UNKNOWN_PLUME_RANK)} for h in hotspots]
+
+
+def build_plumes(hotspots: list[dict]) -> list[dict]:
+    """Plume conduits: from the hotspot down to the depth its class is imaged
+    to (depthKm), and on to possibleDepthKm where the class may reach deeper."""
+    roots = {s["name"]: s for s in DEEP_STRUCTURES}
+    plumes = []
+    for h in hotspots:
+        extent = PLUME_EXTENT_KM.get(h["plumeType"])
+        if extent is None:
+            continue
+        depth, possible = extent
+        root = roots[PLUME_ROOTS[h["name"]]] if h["name"] in PLUME_ROOTS else h
+        plume = {"name": h["name"], "lon": round(h["lon"], 2), "lat": round(h["lat"], 2),
+                 "rootLon": root["lon"], "rootLat": root["lat"], "depthKm": depth}
+        if possible is not None:
+            plume["possibleDepthKm"] = possible
+        plumes.append(plume)
+    return plumes
 
 
 def build_volcano_labels(volcanoes: list[dict]) -> list[dict]:
@@ -371,7 +416,10 @@ def main() -> None:
     for name, polylines in layers.items():
         print(f"{name}: {len(polylines)} polylines, {sum(len(p) // 2 for p in polylines)} points", file=sys.stderr)
 
-    labels = (build_plate_labels(sources["plates"]) + build_deep_labels() + build_hotspot_labels(sources["hotspots"])
+    hotspots = parse_hotspots(sources["hotspots"])
+    plumes = build_plumes(hotspots)
+    print(f"plumes: {len(plumes)}", file=sys.stderr)
+    labels = (build_plate_labels(sources["plates"]) + build_deep_labels() + build_hotspot_labels(hotspots)
               + build_subduction_labels(longest_subduction, plate_names(sources["plates"]))
               + build_volcano_labels(sources["volcanoes"]))
     labels.sort(key=lambda label: (LABEL_KIND_ORDER.index(label["kind"]), label["priority"], label["name"]))
@@ -388,6 +436,7 @@ def main() -> None:
         "source": "PB2002 plates (ODC-By 1.0), Whittaker et al. 2015 hotspots (CC BY 3.0), GEM faults (CC BY-SA 4.0), "
                   "NOAA NCEI volcanoes (public domain), deep structures curated from literature. See ATTRIBUTION.md.",
         "labels": labels,
+        "plumes": plumes,
     })
 
 
