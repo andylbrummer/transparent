@@ -44,8 +44,8 @@ app draws on the far-side surface. Standard library only.
   state/province lines (1:50m), quantized to 0.01° and delta-encoded as flat
   integer arrays `[lon0, lat0, dlon1, dlat1, ...]` in hundredths of a degree
 - `app/public/geo/labels.json` — country (1:110m), state/province (1:50m) and
-  city (1:110m) names, sorted by Natural Earth's minimum label zoom, which the
-  app uses as declutter priority
+  city (1:110m) names, sorted by kind (countries, states, cities) and then by
+  Natural Earth's minimum label zoom; the app declutters in that order
 
 ```bash
 python3 tools/pipeline/generate_geo.py

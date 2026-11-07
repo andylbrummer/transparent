@@ -71,8 +71,11 @@ for key, lon, lat in [
         label is not None and abs(label["lon"] - lon) < 3 and abs(label["lat"] - lat) < 3,
         f"{key[0]} label {key[1]} near ({lon}, {lat})",
     )
-priorities = [label["priority"] for label in labels]
-check(priorities == sorted(priorities), "labels sorted by priority")
+kind_order = ["country", "state", "city"]
+order = [(kind_order.index(label["kind"]), label["priority"]) for label in labels]
+check(order == sorted(order), "labels sorted by kind, then priority")
+names = [label["name"] for label in labels]
+check(names.index("California") < names.index("Los Angeles"), "a state outranks a city inside it")
 
 if failures:
     print(f"\n{len(failures)} check(s) failed")

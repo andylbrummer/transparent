@@ -12,9 +12,11 @@ Outlines are polylines quantized to 0.01° (~1.1 km, finer than the 1:50m
 source) and delta-encoded as flat integer arrays:
     [lon0, lat0, dlon1, dlat1, dlon2, dlat2, ...]  in hundredths of a degree
 
-Labels are sorted by Natural Earth's minimum label zoom (lower = more
-important), one scale shared across countries, states and cities, so the
-app declutters by keeping whichever comes first.
+Labels are sorted by kind (countries, then states/provinces, then cities)
+and within a kind by Natural Earth's minimum label zoom (lower = more
+important). The app declutters by keeping whichever comes first, so a
+region's name beats a city inside it: from Austin, "California" must not
+lose to "Los Angeles" just because Natural Earth ranks the city higher.
 
 Usage:
     python3 tools/pipeline/generate_geo.py [--source-dir DIR]
@@ -125,7 +127,7 @@ def build_labels(source_dir: Path | None) -> dict:
                 {"kind": kind, "name": name, "lon": round(lon, 2), "lat": round(lat, 2), "priority": priority}
             )
     kind_order = list(LABEL_SOURCES)
-    labels.sort(key=lambda label: (label["priority"], kind_order.index(label["kind"]), label["name"]))
+    labels.sort(key=lambda label: (kind_order.index(label["kind"]), label["priority"], label["name"]))
     print(f"labels: {len(labels)}", file=sys.stderr)
     return {
         "source": "Natural Earth 1:110m countries and places, 1:50m states/provinces (public domain)",
