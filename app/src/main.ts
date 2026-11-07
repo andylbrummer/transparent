@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { GlobeRenderer, BLUE_MARBLE_URL } from './render/globe';
 import { OutlineLayer, type OutlineData } from './render/outlines';
+import { CompassBar } from './render/compass-bar';
 import { LabelLayer, type LabelData } from './render/labels';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, type SensorState } from './sensors';
@@ -142,6 +143,8 @@ export function init(): App | null {
   hud.id = 'hud';
   container.appendChild(hud);
 
+  const compassBar = new CompassBar(container);
+
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
   resetButton.type = 'button';
@@ -223,10 +226,12 @@ export function init(): App | null {
     globe.getMesh().visible = position !== null;
     if (outlines) outlines.getObject().visible = position !== null;
     labels?.setVisible(position !== null);
+    compassBar.setVisible(position !== null);
     if (position) {
       look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
       globe.update(camera, renderer.domElement.height);
       labels?.update(camera, window.innerWidth, window.innerHeight);
+      compassBar.update(camera, position, window.innerWidth);
     }
     renderer.render(scene, camera);
     frameCount++;
@@ -269,6 +274,7 @@ export function init(): App | null {
       renderer.dispose();
       renderer.domElement.remove();
       hud.remove();
+      compassBar.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();
     },
