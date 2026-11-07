@@ -14,6 +14,7 @@ import { CompassBar } from './render/compass-bar';
 import { LabelLayer, type LabelData } from './render/labels';
 import { SlabLayer, PlumeLayer, type SlabData, type Plume } from './render/interior';
 import { QuakeLayer, type QuakeData } from './render/quakes';
+import { StereoRig } from './render/stereo';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, type SensorState } from './sensors';
 import { probeCapabilities, DEFAULT_STATE, type AppState, type RenderMode } from './ui/state';
@@ -25,6 +26,7 @@ import {
   type InteriorLayerName,
   type LayerSwitch,
 } from './ui/layers-panel';
+import { CardboardToggle } from './ui/cardboard';
 
 /** geology.json: labels plus the plume conduits under classified hotspots. */
 interface GeologyData extends LabelData {
@@ -195,6 +197,7 @@ export function init(): App | null {
       interiorObjects.quakes = quakes.getObject();
       geoRoot.add(quakes.getObject());
       labels = new LabelLayer(container, [placeLabels, geology, quakeData]);
+      labels.setStereo(cardboard.isActive());
       for (const layer of LAYER_SWITCHES) applyLayer(layer, layerVisibility[layer.id]);
       geoStatus = 'ready';
       renderHud();
@@ -252,7 +255,9 @@ export function init(): App | null {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    for (const layer of fatLineLayers) layer.setResolution(w, h);
+    // Line widths are CSS px of the viewport they draw into: one eye's in stereo.
+    const lineWidth = cardboard.isActive() ? Math.floor(w / 2) : w;
+    for (const layer of fatLineLayers) layer.setResolution(lineWidth, h);
     renderHud();
   };
   window.addEventListener('resize', onResize);
@@ -266,6 +271,11 @@ export function init(): App | null {
   // Pointer events cover mouse and touch alike; the look controller tracks
   // each pointer id, so one finger turns and two pinch.
   const onPointerDown = (e: PointerEvent): void => {
+    // In the viewer the only input is its button, which taps the screen: leave.
+    if (cardboard.isActive()) {
+      cardboard.exit();
+      return;
+    }
     if (!orientationPermissionAsked) {
       orientationPermissionAsked = true;
       void sensors.requestPermission();
@@ -286,6 +296,18 @@ export function init(): App | null {
   renderer.domElement.addEventListener('pointercancel', onPointerUp);
   window.addEventListener('keydown', onKeyDown);
 
+  const stereoRig = new StereoRig();
+  const cardboard = new CardboardToggle(container, (stereo) => {
+    // Entering is a tap on the button, so iOS can still be asked for the compass here.
+    if (stereo && !orientationPermissionAsked) {
+      orientationPermissionAsked = true;
+      void sensors.requestPermission();
+    }
+    layersPanel.setOpen(false);
+    labels?.setStereo(stereo);
+    onResize();
+  });
+
   let frameCount = 0;
   let rafId = 0;
 
@@ -297,13 +319,25 @@ export function init(): App | null {
     geoRoot.visible = position !== null;
     labels?.setVisible(position !== null);
     compassBar.setVisible(position !== null);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const stereo = position !== null && cardboard.isActive();
     if (position) {
       look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
-      globe.update(camera, renderer.domElement.height);
-      labels?.update(camera, window.innerWidth, window.innerHeight);
-      compassBar.update(camera, position, window.innerWidth);
     }
-    renderer.render(scene, camera);
+    if (stereo) {
+      const eyeWidth = Math.floor(width / 2);
+      stereoRig.update(camera, eyeWidth, height);
+      labels?.update(stereoRig.left, eyeWidth, height, stereoRig.right);
+      stereoRig.render(renderer, scene, width, height, (eye) => globe.update(eye, renderer.domElement.height));
+    } else {
+      if (position) {
+        globe.update(camera, renderer.domElement.height);
+        labels?.update(camera, width, height);
+        compassBar.update(camera, position, width);
+      }
+      renderer.render(scene, camera);
+    }
     frameCount++;
   }
 
@@ -342,6 +376,7 @@ export function init(): App | null {
       for (const layer of fatLineLayers) layer.dispose();
       quakes?.dispose();
       layersPanel.dispose();
+      cardboard.dispose();
       labels?.dispose();
       renderer.dispose();
       renderer.domElement.remove();

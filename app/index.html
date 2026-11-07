@@ -33,6 +33,13 @@
         text-shadow: 0 0 3px #000, 0 1px 2px #000;
         white-space: nowrap;
       }
+      /* Cardboard: each eye's labels clipped to its half of the screen. */
+      .place-labels--left-eye {
+        right: 50%;
+      }
+      .place-labels--right-eye {
+        left: 50%;
+      }
       .place-label {
         position: absolute;
         left: 0;
@@ -183,7 +190,8 @@
         color: #9fdcff;
       }
       #reset-offset,
-      #layers-toggle {
+      #layers-toggle,
+      #cardboard-toggle {
         position: fixed;
         z-index: 1;
         top: calc(env(safe-area-inset-top) + 58px);
@@ -203,13 +211,19 @@
       #layers-toggle {
         left: calc(env(safe-area-inset-left) + 12px);
       }
+      #cardboard-toggle {
+        top: calc(env(safe-area-inset-top) + 110px);
+        right: calc(env(safe-area-inset-right) + 12px);
+      }
       #reset-offset:active,
       #layers-toggle:active,
+      #cardboard-toggle:active,
       #layers-toggle[aria-expanded='true'] {
         background: rgba(60, 70, 120, 0.9);
       }
       #reset-offset:focus-visible,
       #layers-toggle:focus-visible,
+      #cardboard-toggle:focus-visible,
       .layer-switch input:focus-visible {
         outline: 2px solid #9fdcff;
         outline-offset: 2px;
@@ -270,6 +284,15 @@
       .layer-switch__caption {
         font-size: 11px;
         color: rgba(232, 236, 255, 0.65);
+      }
+      /* Cardboard: nothing but the two eyes; the viewer's button taps to leave. */
+      body.stereo #hud,
+      body.stereo .compass-bar,
+      body.stereo #reset-offset,
+      body.stereo #layers-toggle,
+      body.stereo #layers-panel,
+      body.stereo #cardboard-toggle {
+        display: none;
       }
       #hud {
         position: fixed;
