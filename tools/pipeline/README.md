@@ -35,7 +35,27 @@ python3 tools/pipeline/test_traveltime.py
 - `tools/pipeline/output/traveltime.bin` — height × width × 3 uint16 LE, row = depth
 - `tools/pipeline/output/traveltime_manifest.json` — metadata + sample arrays
 
+## Outlines and Labels
+
+`generate_geo.py` downloads Natural Earth (public domain) and writes what the
+app draws on the far-side surface. Standard library only.
+
+- `app/public/geo/outlines.json` — coastlines, country borders and
+  state/province lines (1:50m), quantized to 0.01° and delta-encoded as flat
+  integer arrays `[lon0, lat0, dlon1, dlat1, ...]` in hundredths of a degree
+- `app/public/geo/labels.json` — country (1:110m), state/province (1:50m) and
+  city (1:110m) names, sorted by Natural Earth's minimum label zoom, which the
+  app uses as declutter priority
+
+```bash
+python3 tools/pipeline/generate_geo.py
+python3 tools/pipeline/test_geo.py
+```
+
+These outputs are committed: the Pages deploy runs no pipeline step, so an
+uncommitted asset would never ship.
+
 ## Assets
 
-Baked assets (Blue Marble, Black Marble, plate boundaries) go in
-`app/public/assets/` and are gitignored. Regenerate via pipeline scripts.
+Imagery (Blue Marble) is fetched by the app at runtime from NASA GIBS, not
+baked. Nothing under `app/public/` is gitignored.
