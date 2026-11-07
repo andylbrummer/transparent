@@ -100,6 +100,23 @@ python3 tools/pipeline/generate_seismicity.py
 python3 tools/pipeline/test_seismicity.py
 ```
 
+## Plate Motion
+
+`generate_plate_motion.py` writes `app/public/geo/plate-motion.json`: an
+arrow on each of ~1650 evenly spread points showing where the plate under it
+moves in 3 Myr, in the NNR-MORVEL56 no-net-rotation frame (Argus, Gordon &
+DeMets 2011). Each point is assigned to the plate whose MORVEL56 outline
+contains it, and moves by that plate's angular velocity. One polyline per
+arrow — base, tip, barb, tip, barb — in the `outlines.json` encoding.
+
+Poles and outlines come from the `platemotion` wheel on PyPI;
+`--source-dir` takes its `platemotion/data/` directory instead.
+
+```bash
+python3 tools/pipeline/generate_plate_motion.py
+python3 tools/pipeline/test_plate_motion.py
+```
+
 ## Assets
 
 Imagery (Blue Marble) is fetched by the app at runtime from NASA GIBS, not
