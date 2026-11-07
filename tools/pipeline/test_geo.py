@@ -13,32 +13,9 @@ Usage:
 """
 
 import json
-import math
-import sys
 
 from generate_geo import OUTPUT_DIR, QUANTUM_PER_DEG, decode_polyline, encode_polyline
-
-failures = []
-
-
-def check(condition: bool, message: str) -> None:
-    print(("ok   " if condition else "FAIL ") + message)
-    if not condition:
-        failures.append(message)
-
-
-def nearest_point_deg(polylines: list[list[int]], lon: float, lat: float) -> float:
-    """Smallest great-circle distance, in degrees, from (lon, lat) to any vertex."""
-    best = math.inf
-    la1 = math.radians(lat)
-    for encoded in polylines:
-        for plon, plat in decode_polyline(encoded):
-            la2 = math.radians(plat)
-            dlon = math.radians(plon - lon)
-            c = math.sin(la1) * math.sin(la2) + math.cos(la1) * math.cos(la2) * math.cos(dlon)
-            best = min(best, math.degrees(math.acos(max(-1.0, min(1.0, c)))))
-    return best
-
+from geo_test_support import check, finish, nearest_point_deg
 
 # Encoding round trip, including repeated points that must be dropped.
 points = [[-118.2437, 34.0522], [-118.2437, 34.0522], [-117.1611, 32.7157], [-122.4194, 37.7749]]
@@ -77,7 +54,4 @@ check(order == sorted(order), "labels sorted by kind, then priority")
 names = [label["name"] for label in labels]
 check(names.index("California") < names.index("Los Angeles"), "a state outranks a city inside it")
 
-if failures:
-    print(f"\n{len(failures)} check(s) failed")
-    sys.exit(1)
-print("\nall checks passed")
+finish()
