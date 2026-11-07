@@ -6,6 +6,7 @@
  *   a one-finger drag nudges heading to correct the compass.
  * - No attitude (desktop, no compass): a one-finger/mouse drag aims the view.
  * - Two-finger pinch (or +/-) zooms by narrowing the field of view.
+ * - Reset (button or R) clears the drag offset and keeps the zoom.
  *
  * World space is ECEF; the view is built in the local East-North-Up frame.
  */
@@ -59,7 +60,12 @@ export interface LookController {
     screenAngleDeg: number
   ): void;
   getState(): LookState;
-  reset(): void;
+  /**
+   * Clear the drag offset - heading nudge and manual aim - so the view
+   * snaps back to where the phone points. Zoom is the user's own choice
+   * and is kept.
+   */
+  resetOffset(): void;
 }
 
 const DEG = Math.PI / 180;
@@ -100,6 +106,10 @@ export function createLookController(): LookController {
         pitchRad: clamp(state.pitchRad + dyRad, -HALF_PI, HALF_PI),
       };
     }
+  }
+
+  function resetOffset(): void {
+    state = { ...DEFAULT_LOOK_STATE, fovDeg: state.fovDeg };
   }
 
   function pinchDistance(): number {
@@ -158,7 +168,7 @@ export function createLookController(): LookController {
           break;
         case 'r':
         case 'R':
-          state = { ...DEFAULT_LOOK_STATE };
+          resetOffset();
           break;
       }
     },
@@ -198,9 +208,6 @@ export function createLookController(): LookController {
       return state;
     },
 
-    reset() {
-      state = { ...DEFAULT_LOOK_STATE };
-      pointers.clear();
-    },
+    resetOffset,
   };
 }

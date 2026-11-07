@@ -125,17 +125,33 @@ describe('createLookController', () => {
     expect(look.getState().pitchRad).toBe(-Math.PI / 2);
   });
 
-  it('resets aim and zoom with R', () => {
+  it('snaps a nudged heading back to the compass, keeping the zoom', () => {
+    const look = createLookController();
+    const camera = new THREE.PerspectiveCamera();
+    const upright = { alpha: 0, beta: 90, gamma: 0 };
+    look.updateCamera(camera, AUSTIN, upright, 0);
+    look.onPointerDown(1, 0, 400);
+    look.onPointerMove(1, 300, 400, 800);
+    look.onPointerUp(1);
+    look.onKeyDown('+');
+    const zoomed = look.getState().fovDeg;
+
+    look.resetOffset();
+    look.updateCamera(camera, AUSTIN, upright, 0);
+
+    expectDirection(forward(camera), NORTH);
+    expect(look.getState().headingNudgeRad).toBe(0);
+    expect(look.getState().fovDeg).toBe(zoomed);
+    expect(zoomed).toBeLessThan(DEFAULT_FOV_DEG);
+  });
+
+  it('resets the manual aim with R', () => {
     const look = createLookController();
     look.onKeyDown('ArrowUp');
-    look.onKeyDown('+');
+    look.onKeyDown('ArrowLeft');
     look.onKeyDown('r');
 
-    expect(look.getState()).toEqual({
-      headingNudgeRad: 0,
-      yawRad: 0,
-      pitchRad: -Math.PI / 2,
-      fovDeg: DEFAULT_FOV_DEG,
-    });
+    expect(look.getState().yawRad).toBe(0);
+    expect(look.getState().pitchRad).toBe(-Math.PI / 2);
   });
 });

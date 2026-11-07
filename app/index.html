@@ -54,6 +54,27 @@
         font-size: 11px;
         color: #ffffff;
       }
+      #reset-offset {
+        position: fixed;
+        top: calc(env(safe-area-inset-top) + 12px);
+        right: calc(env(safe-area-inset-right) + 12px);
+        padding: 10px 14px;
+        min-height: 44px;
+        font: 600 14px/1 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        background: rgba(20, 24, 48, 0.78);
+        border: 1px solid rgba(160, 180, 255, 0.45);
+        border-radius: 22px;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      #reset-offset:active {
+        background: rgba(60, 70, 120, 0.9);
+      }
+      #reset-offset:focus-visible {
+        outline: 2px solid #9fdcff;
+        outline-offset: 2px;
+      }
       #hud {
         position: fixed;
         left: 0;

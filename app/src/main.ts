@@ -127,6 +127,15 @@ export function init(): App | null {
   hud.id = 'hud';
   container.appendChild(hud);
 
+  const resetButton = document.createElement('button');
+  resetButton.id = 'reset-offset';
+  resetButton.type = 'button';
+  resetButton.textContent = 'Reset offset';
+  resetButton.title = 'Snap the view back to where the phone points';
+  container.appendChild(resetButton);
+  const onResetClick = (): void => look.resetOffset();
+  resetButton.addEventListener('click', onResetClick);
+
   const appState: AppState = DEFAULT_STATE;
   let availableModes: readonly RenderMode[] = [];
   let sensorState: SensorState = {
@@ -240,6 +249,8 @@ export function init(): App | null {
       renderer.dispose();
       renderer.domElement.remove();
       hud.remove();
+      resetButton.removeEventListener('click', onResetClick);
+      resetButton.remove();
     },
   };
 }
