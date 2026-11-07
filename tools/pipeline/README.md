@@ -68,6 +68,9 @@ volcanoes, adds a short curated list of deep-Earth structures, and writes:
 - `app/public/geo/geology.json` — labels for plates, deep structures (with a
   `depthKm`), hotspots, subduction zones and volcanoes, sorted by kind and
   then priority.
+  It also carries `plumes`: a conduit under each hotspot whose plume class
+  makes a depth claim, from the surface to `depthKm` (and on to
+  `possibleDepthKm` where the class may reach the core-mantle boundary).
 
 Faults are drawn but not named (GEM's names are local segment names), and
 deep-structure positions are approximate centres from the cited papers.
@@ -76,6 +79,25 @@ Licences differ per source; `app/public/geo/ATTRIBUTION.md` carries them.
 ```bash
 python3 tools/pipeline/generate_geology.py
 python3 tools/pipeline/test_geology.py
+```
+
+## Slabs and Earthquakes
+
+`generate_seismicity.py` downloads Slab2 (Hayes et al. 2018) and the USGS
+ComCat catalogue and writes:
+
+- `app/public/geo/slabs.json` — slab-surface depth contours every 40 km down
+  to 700 km, grouped by depth, same polyline encoding as `outlines.json`.
+- `app/public/geo/quakes.json` — every M5+ earthquake since 1973 at its
+  hypocentre, as columns (`lon`, `lat` in quanta, `depthKm`,
+  `magnitude10`) sorted by magnitude, plus `quake` labels for M8+.
+
+The Slab2 archive is 140 MB; `--source-dir` takes its extracted
+`Slab2_CONTOURS/` directory and a `usgs_quakes.csv` instead.
+
+```bash
+python3 tools/pipeline/generate_seismicity.py
+python3 tools/pipeline/test_seismicity.py
 ```
 
 ## Assets
