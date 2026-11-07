@@ -7,7 +7,8 @@
  */
 
 import * as THREE from 'three';
-import { GlobeRenderer } from './render/globe';
+import { subsolarEcef } from '@transparent-earth/core';
+import { GlobeRenderer, BLUE_MARBLE_URL } from './render/globe';
 import { createOrbitController, type OrbitController } from './input/orbit';
 import { createSensorController, type SensorState } from './sensors';
 import { probeCapabilities, DEFAULT_STATE, type AppState, type RenderMode } from './ui/state';
@@ -76,6 +77,21 @@ export function init(): App | null {
   const globe = new GlobeRenderer();
   scene.add(globe.getMesh());
 
+  let imageryStatus: 'loading' | 'ready' | 'failed' = 'loading';
+  new THREE.TextureLoader().load(
+    BLUE_MARBLE_URL,
+    (texture) => {
+      globe.setSurfaceImagery(texture);
+      imageryStatus = 'ready';
+      renderHud();
+    },
+    undefined,
+    () => {
+      imageryStatus = 'failed';
+      renderHud();
+    }
+  );
+
   const orbit = createOrbitController();
 
   const hud = document.createElement('div');
@@ -92,7 +108,8 @@ export function init(): App | null {
 
   function renderHud(): void {
     const modes = availableModes.length > 0 ? availableModes.join('/') : 'probing…';
-    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${appState.mode} · ${modes}`;
+    const imagery = imageryStatus === 'ready' ? '' : ` · surface imagery ${imageryStatus}`;
+    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${appState.mode} · ${modes}${imagery}`;
   }
 
   const sensors = createSensorController((next) => {
@@ -140,9 +157,15 @@ export function init(): App | null {
 
   let frameCount = 0;
   let rafId = 0;
+  // The subsolar point moves 0.25°/min: once a second is far finer than visible.
+  let sunUpdatedAtMs = Number.NEGATIVE_INFINITY;
 
-  function animate(): void {
+  function animate(now: number): void {
     rafId = requestAnimationFrame(animate);
+    if (now - sunUpdatedAtMs >= 1000) {
+      globe.setSunDirection(subsolarEcef(new Date()));
+      sunUpdatedAtMs = now;
+    }
     orbit.updateCamera(camera);
     globe.update(camera);
     renderer.render(scene, camera);
@@ -151,7 +174,7 @@ export function init(): App | null {
 
   sensors.start();
   renderHud();
-  animate();
+  animate(performance.now());
 
   // Capability probing decides which session buttons are offered. It must not
   // block first paint, so the globe is already animating when this lands.

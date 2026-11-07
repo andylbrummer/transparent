@@ -1,12 +1,27 @@
 /**
  * Raymarched transparent Earth renderer.
- * Uses a single fullscreen quad with a fragment shader that raymarches
- * through PREM interior shells.
+ *
+ * A single fullscreen quad whose fragment shader follows each view ray
+ * through every PREM boundary it crosses, front to back: the near-side
+ * surface, down through mantle and core, and out through the far-side
+ * surface. World space is ECEF (metres, origin at Earth's centre).
  */
 
 import * as THREE from 'three';
-import { EARTH_RADIUS_M } from '@transparent-earth/core';
+import { EARTH_RADIUS_M, type Vec3 } from '@transparent-earth/core';
 import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
+
+/**
+ * NASA GIBS Blue Marble (Next Generation) as one equirectangular image.
+ * 4096×2048 keeps the texture at 32 MB of GPU memory, inside every phone's
+ * max texture size, at ~10 km per texel — finer than a far-side pixel.
+ */
+export const BLUE_MARBLE_URL =
+  'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap' +
+  '&VERSION=1.3.0&LAYERS=BlueMarble_NextGeneration&CRS=EPSG:4326&BBOX=-90,-180,90,180' +
+  '&WIDTH=4096&HEIGHT=2048&FORMAT=image/jpeg';
+
+const LAYER_COUNT = PREM_LAYERS.length;
 
 const VERTEX_SHADER = `
   varying vec2 vUv;
@@ -20,98 +35,94 @@ const FRAGMENT_SHADER = `
   precision highp float;
   varying vec2 vUv;
 
+  #define LAYERS ${LAYER_COUNT}
+  #define SURFACE ${LAYER_COUNT - 1}
+  #define PI 3.141592653589793
+
   uniform vec3 uCameraPos;
   uniform mat3 uCameraRot;
   uniform float uAspect;
   uniform float uTanHalfFov;
-  uniform int uLayerCount;
-  uniform float uLayerRadii[5];
-  uniform vec3 uLayerColors[5];
-  uniform float uLayerAlphas[5];
+  // |camera|^2 - r^2 per layer, computed on the CPU in double precision:
+  // in float32 both terms are ~4e13 and their difference at the surface
+  // (a few 1e7) would be lost to cancellation.
+  uniform float uLayerC[LAYERS];
+  uniform vec3 uLayerColors[LAYERS];
+  uniform float uLayerAlphas[LAYERS];
+  uniform sampler2D uSurface;
+  uniform float uSurfaceReady;
+  uniform vec3 uSunDir;
 
-  #define MAX_STEPS 64
-  #define NO_HIT 1.0e20
-  #define EPS 1000.0
+  const vec3 SPACE = vec3(0.01, 0.012, 0.03);
 
-  struct Hit {
-    float t;
-    int layer;
-  };
-
-  // Analytic sphere intersection (ray origin, direction, center, radius)
-  bool sphereIntersect(vec3 ro, vec3 rd, vec3 center, float radius, out float tEnter, out float tExit) {
-    vec3 oc = ro - center;
-    float b = dot(oc, rd);
-    float c = dot(oc, oc) - radius * radius;
-    float discriminant = b * b - c;
-    if (discriminant < 0.0) return false;
-    float sqrtD = sqrt(discriminant);
-    tEnter = -b - sqrtD;
-    tExit = -b + sqrtD;
+  // Ray/sphere roots for a sphere at the origin, given b = dot(ro, rd) and
+  // c = |ro|^2 - r^2. Uses the cancellation-free form: one root from
+  // -b +/- sqrt, the other from the product of roots (c).
+  bool intersect(float b, float c, out float tEnter, out float tExit) {
+    float disc = b * b - c;
+    if (disc <= 0.0) return false;
+    float s = sqrt(disc);
+    float q = b < 0.0 ? -b + s : -b - s;
+    float other = c / q;
+    tEnter = min(q, other);
+    tExit = max(q, other);
     return true;
   }
 
-  // Find the nearest shell intersection along the ray
-  Hit marchShells(vec3 ro, vec3 rd) {
-    Hit hit;
-    hit.t = NO_HIT;
-    hit.layer = -1;
+  vec2 equirectUv(vec3 n) {
+    float lon = atan(n.y, n.x);
+    float lat = asin(clamp(n.z, -1.0, 1.0));
+    return vec2(lon / (2.0 * PI) + 0.5, lat / PI + 0.5);
+  }
 
-    for (int i = 0; i < 5; i++) {
-      if (i >= uLayerCount) break;
-      float tEnter, tExit;
-      if (sphereIntersect(ro, rd, vec3(0.0), uLayerRadii[i], tEnter, tExit)) {
-        if (tEnter > 0.0 && tEnter < hit.t) {
-          hit.t = tEnter;
-          hit.layer = i;
-        }
-      }
+  // Composite one boundary crossing into the running colour/transmittance.
+  // exiting: the ray leaves this sphere (seen from inside).
+  void shadeBoundary(int i, vec3 p, vec3 rd, bool exiting, inout vec3 color, inout float trans) {
+    vec3 n = normalize(p);
+    float rim = pow(1.0 - abs(dot(n, rd)), 3.0);
+    vec3 tint;
+    float a;
+    if (i == SURFACE) {
+      vec3 albedo = uSurfaceReady > 0.5 ? texture2D(uSurface, equirectUv(n)).rgb : uLayerColors[i];
+      // Night side stays legible: this is a geology view, not a photo.
+      float daylight = smoothstep(-0.08, 0.15, dot(n, uSunDir));
+      tint = albedo * mix(0.22, 1.0, daylight);
+      // Near side: glass underfoot, solid toward the horizon. Far side: the
+      // destination of the view, shown nearly opaque.
+      a = exiting ? 0.9 : mix(0.06, 0.95, rim);
+    } else {
+      tint = uLayerColors[i];
+      a = uLayerAlphas[i] * (0.12 + 0.88 * rim);
     }
-    return hit;
+    color += trans * a * tint;
+    trans *= 1.0 - a;
   }
 
   void main() {
-    // Ray direction from camera through pixel. Scaling by aspect and the
-    // half-FOV tangent keeps the planet circular instead of stretching it
-    // to the viewport, and keeps the framing consistent with the camera.
     vec2 uv = vUv * 2.0 - 1.0;
     vec3 rd = normalize(uCameraRot * vec3(uv.x * uAspect * uTanHalfFov, uv.y * uTanHalfFov, -1.0));
     vec3 ro = uCameraPos;
+    float b = dot(ro, rd);
 
-    // Background color (dark space)
-    vec3 color = vec3(0.02, 0.02, 0.04);
-    float alpha = 1.0;
+    vec3 color = vec3(0.0);
+    float trans = 1.0;
+    float tEnter, tExit;
 
-    // Raymarch through shells from outside in
-    vec3 p = ro;
-    float t = 0.0;
-
-    for (int step = 0; step < MAX_STEPS; step++) {
-      // No shell ahead of the ray. Deciding this by hit, not by a distance
-      // cap, keeps the globe visible from any orbit distance.
-      Hit hit = marchShells(p, rd);
-      if (hit.layer < 0) break;
-
-      // Move to intersection point
-      t += hit.t + EPS;
-      p = ro + rd * t;
-
-      vec3 layerColor = uLayerColors[hit.layer];
-      float layerAlpha = uLayerAlphas[hit.layer];
-
-      // Fresnel-like transparency: more transparent when looking straight down (nadir)
-      // and more opaque at grazing angles (horizon)
-      float nDotV = abs(dot(normalize(p), rd));
-      float fresnel = pow(1.0 - nDotV, 2.0);
-      layerAlpha *= (0.3 + 0.7 * fresnel);
-
-      color = mix(color, layerColor, layerAlpha * alpha);
-      alpha *= (1.0 - layerAlpha);
-
-      if (alpha < 0.01) break;
+    // Concentric spheres: every entry precedes every exit, entries run
+    // outer to inner and exits inner to outer, so no sort is needed.
+    for (int k = 0; k < LAYERS; k++) {
+      int i = LAYERS - 1 - k;
+      if (intersect(b, uLayerC[i], tEnter, tExit) && tEnter > 0.0) {
+        shadeBoundary(i, ro + rd * tEnter, rd, false, color, trans);
+      }
+    }
+    for (int i = 0; i < LAYERS; i++) {
+      if (intersect(b, uLayerC[i], tEnter, tExit) && tExit > 0.0) {
+        shadeBoundary(i, ro + rd * tExit, rd, true, color, trans);
+      }
     }
 
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color + trans * SPACE, 1.0);
   }
 `;
 
@@ -119,6 +130,7 @@ export class GlobeRenderer {
   private material: THREE.ShaderMaterial;
   private mesh: THREE.Mesh;
   private readonly rotation = new THREE.Matrix4();
+  private readonly layerRadii = premRadiiToMeters();
 
   constructor() {
     const uniforms = {
@@ -126,10 +138,12 @@ export class GlobeRenderer {
       uCameraRot: { value: new THREE.Matrix3().identity() },
       uAspect: { value: 1 },
       uTanHalfFov: { value: Math.tan((60 * Math.PI) / 180 / 2) },
-      uLayerCount: { value: PREM_LAYERS.length },
-      uLayerRadii: { value: premRadiiToMeters() },
+      uLayerC: { value: new Float32Array(LAYER_COUNT) },
       uLayerColors: { value: premColors() },
       uLayerAlphas: { value: premAlphas() },
+      uSurface: { value: null as THREE.Texture | null },
+      uSurfaceReady: { value: 0 },
+      uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -152,6 +166,27 @@ export class GlobeRenderer {
     return this.mesh;
   }
 
+  /**
+   * Drape an equirectangular image (lon -180..180 left to right, north up)
+   * on the surface shell. No mipmaps: the atan seam at the antimeridian
+   * would otherwise pick the coarsest level along a visible line.
+   */
+  setSurfaceImagery(texture: THREE.Texture): void {
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    this.material.uniforms.uSurface.value = texture;
+    this.material.uniforms.uSurfaceReady.value = 1;
+  }
+
+  /** Point the daylight at the subsolar direction (ECEF, any length). */
+  setSunDirection(subsolar: Vec3): void {
+    (this.material.uniforms.uSunDir.value as THREE.Vector3).set(subsolar.x, subsolar.y, subsolar.z).normalize();
+  }
+
   update(camera: THREE.Camera): void {
     // Track the camera's own framing so the raymarch matches what a
     // rasterised scene through the same camera would show.
@@ -163,8 +198,14 @@ export class GlobeRenderer {
       );
     }
 
-    // Camera position in world space (relative to floating origin)
     this.material.uniforms.uCameraPos.value.copy(camera.position);
+
+    // Double precision here, so the shader never subtracts two ~4e13 floats.
+    const layerC = this.material.uniforms.uLayerC.value as Float32Array;
+    const distanceSq = camera.position.lengthSq();
+    for (let i = 0; i < LAYER_COUNT; i++) {
+      layerC[i] = distanceSq - this.layerRadii[i] * this.layerRadii[i];
+    }
 
     // Runs every frame: reuse the scratch matrix rather than allocating.
     this.rotation.makeRotationFromQuaternion(camera.quaternion);
