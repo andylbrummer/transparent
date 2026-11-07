@@ -14,7 +14,29 @@ import {
   type RejectReason,
 } from '@transparent-earth/core/heading';
 
+/** Where the user stands, from the latest geolocation reading at any accuracy. */
+export interface SurfacePosition {
+  readonly lat: number;
+  readonly lon: number;
+}
+
+/**
+ * Device attitude as W3C DeviceOrientation Euler angles in degrees, with
+ * alpha referenced to north: the device frame is Rz(alpha)·Rx(beta)·Ry(gamma)
+ * in East-North-Up.
+ */
+export interface DeviceAttitude {
+  readonly alpha: number;
+  readonly beta: number;
+  readonly gamma: number;
+}
+
 export interface SensorState {
+  /**
+   * Latest position at any accuracy: at planetary scale even a coarse fix
+   * places the view correctly, so this does not wait for `fix` to resolve.
+   */
+  readonly position: SurfacePosition | null;
   /** Accepted heading in degrees clockwise from true north, or null while ungated. */
   readonly heading: number | null;
   /** Why a heading is unavailable — drives the retry guidance shown to the user. */
@@ -33,6 +55,12 @@ export interface SensorController {
    */
   requestPermission(): Promise<boolean>;
   getState(): SensorState;
+  /**
+   * Latest north-referenced attitude, or null until one arrives. Polled per
+   * frame by the camera rather than emitted, so orientation at display rate
+   * never re-renders the HUD.
+   */
+  getAttitude(): DeviceAttitude | null;
 }
 
 /** Minimal shapes for the orientation event fields browsers disagree on. */
@@ -67,6 +95,26 @@ function normalizeDegrees(deg: number): number {
 }
 
 /**
+ * Offset that turns iOS's arbitrary-origin alpha into a north-referenced
+ * one, or null when the event carries no compass heading. A north-referenced
+ * alpha satisfies heading = 360 - alpha for both a flat and an upright phone.
+ */
+export function compassAlphaOffset(event: CompassEvent): number | null {
+  if (typeof event.webkitCompassHeading !== 'number' || Number.isNaN(event.webkitCompassHeading)) return null;
+  if (typeof event.alpha !== 'number' || Number.isNaN(event.alpha)) return null;
+  return normalizeDegrees(360 - event.webkitCompassHeading - event.alpha);
+}
+
+/** Step angle `from` toward `to` by `weight` along the shorter arc, in degrees. */
+export function blendDegrees(from: number, to: number, weight: number): number {
+  const delta = ((to - from + 540) % 360) - 180;
+  return normalizeDegrees(from + delta * weight);
+}
+
+/** Weight each compass reading carries in the smoothed iOS alpha offset. */
+const COMPASS_OFFSET_WEIGHT = 0.05;
+
+/**
  * Create a sensor controller that drives heading and fix state.
  *
  * Emits on every accepted sensor event rather than on a timer, so the globe
@@ -75,6 +123,7 @@ function normalizeDegrees(deg: number): number {
 export function createSensorController(callback: SensorCallback): SensorController {
   const samples: HeadingSample[] = [];
   let state: SensorState = {
+    position: null,
     heading: null,
     headingReason: 'insufficient_samples',
     fix: { phase: 'acquiring', accuracy: null },
@@ -82,13 +131,32 @@ export function createSensorController(callback: SensorCallback): SensorControll
   let running = false;
   let watchId: number | null = null;
   let orientationTarget: string | null = null;
+  let attitude: DeviceAttitude | null = null;
+  let compassOffset: number | null = null;
 
   function emit(): void {
     callback(state);
   }
 
+  function trackAttitude(event: CompassEvent): void {
+    if (typeof event.alpha !== 'number' || typeof event.beta !== 'number' || typeof event.gamma !== 'number') return;
+    let alpha: number;
+    if (event.absolute) {
+      alpha = event.alpha;
+    } else {
+      // iOS: smooth the offset, since single compass readings jitter by
+      // several degrees while the gyro-integrated alpha does not.
+      const offset = compassAlphaOffset(event);
+      if (offset === null) return;
+      compassOffset = compassOffset === null ? offset : blendDegrees(compassOffset, offset, COMPASS_OFFSET_WEIGHT);
+      alpha = event.alpha + compassOffset;
+    }
+    attitude = { alpha: normalizeDegrees(alpha), beta: event.beta, gamma: event.gamma };
+  }
+
   function onOrientation(event: Event): void {
     if (!running) return;
+    trackAttitude(event as CompassEvent);
     const heading = headingFromOrientation(event as CompassEvent);
     if (heading === null) return;
 
@@ -114,7 +182,11 @@ export function createSensorController(callback: SensorCallback): SensorControll
 
   function onPosition(position: GeolocationPosition): void {
     if (!running) return;
-    state = { ...state, fix: nextFixState(state.fix, { accuracy: position.coords.accuracy }, false) };
+    state = {
+      ...state,
+      position: { lat: position.coords.latitude, lon: position.coords.longitude },
+      fix: nextFixState(state.fix, { accuracy: position.coords.accuracy }, false),
+    };
     emit();
   }
 
@@ -134,6 +206,8 @@ export function createSensorController(callback: SensorCallback): SensorControll
       if (running) return;
       running = true;
       samples.length = 0;
+      attitude = null;
+      compassOffset = null;
 
       if (typeof navigator !== 'undefined' && navigator.geolocation) {
         watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
@@ -181,6 +255,10 @@ export function createSensorController(callback: SensorCallback): SensorControll
 
     getState() {
       return state;
+    },
+
+    getAttitude() {
+      return attitude;
     },
   };
 }

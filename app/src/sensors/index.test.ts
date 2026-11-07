@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DEFAULT_HEADING_CONFIG } from '@transparent-earth/core/heading';
-import { createSensorController, headingFromOrientation, type SensorState } from './index';
+import {
+  blendDegrees,
+  compassAlphaOffset,
+  createSensorController,
+  headingFromOrientation,
+  type SensorState,
+} from './index';
 
 /** Event clock for dispatched orientation events, in ms. */
 let eventClockMs = 0;
@@ -83,7 +89,82 @@ describe('headingFromOrientation', () => {
   });
 });
 
+describe('compassAlphaOffset', () => {
+  it('makes alpha satisfy heading = 360 - alpha', () => {
+    // iOS: alpha starts wherever the page loaded; compass says 30° true.
+    const offset = compassAlphaOffset({ alpha: 100, webkitCompassHeading: 30 } as never);
+    expect(offset).toBe(230);
+    expect(360 - ((100 + (offset as number)) % 360)).toBe(30);
+  });
+
+  it('is null without a compass heading', () => {
+    expect(compassAlphaOffset({ alpha: 100 } as never)).toBeNull();
+  });
+});
+
+describe('blendDegrees', () => {
+  it('steps along the shorter arc across north', () => {
+    expect(blendDegrees(350, 10, 0.5)).toBeCloseTo(0, 9);
+    expect(blendDegrees(10, 350, 0.25)).toBeCloseTo(5, 9);
+  });
+});
+
 describe('createSensorController', () => {
+  it('places the user on the first reading, before the fix resolves', () => {
+    const geo = installGeolocation();
+    const seen: SensorState[] = [];
+    const controller = createSensorController((s) => seen.push(s));
+    controller.start();
+    expect(seen[0].position).toBeNull();
+
+    geo.emit(900);
+    const last = seen[seen.length - 1];
+    expect(last.fix.phase).toBe('acquiring');
+    expect(last.position).toEqual({ lat: 30.2672, lon: -97.7431 });
+    controller.stop();
+  });
+
+  it('passes an absolute attitude through on every event, not per sample', () => {
+    installGeolocation();
+    const controller = createSensorController(() => undefined);
+    controller.start();
+    expect(controller.getAttitude()).toBeNull();
+
+    dispatchHeading(315);
+    dispatchHeading(300, 16);
+    expect(controller.getAttitude()).toEqual({ alpha: 300, beta: 80, gamma: 0 });
+    controller.stop();
+  });
+
+  it('references the iOS relative alpha to north through the compass', () => {
+    installGeolocation();
+    delete (window as { ondeviceorientationabsolute?: unknown }).ondeviceorientationabsolute;
+    const controller = createSensorController(() => undefined);
+    controller.start();
+
+    const event = new Event('deviceorientation');
+    Object.assign(event, { alpha: 100, beta: 90, gamma: 0, absolute: false, webkitCompassHeading: 30 });
+    window.dispatchEvent(event);
+
+    // Facing 30° true, so north-referenced alpha is 330.
+    expect(controller.getAttitude()?.alpha).toBeCloseTo(330, 9);
+    controller.stop();
+  });
+
+  it('withholds attitude when the event has no north reference', () => {
+    installGeolocation();
+    delete (window as { ondeviceorientationabsolute?: unknown }).ondeviceorientationabsolute;
+    const controller = createSensorController(() => undefined);
+    controller.start();
+
+    const event = new Event('deviceorientation');
+    Object.assign(event, { alpha: 100, beta: 90, gamma: 0, absolute: false });
+    window.dispatchEvent(event);
+
+    expect(controller.getAttitude()).toBeNull();
+    controller.stop();
+  });
+
   it('emits immediately on start rather than after a poll interval', () => {
     installGeolocation();
     const seen: SensorState[] = [];

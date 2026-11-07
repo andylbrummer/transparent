@@ -101,6 +101,7 @@ export function init(): App | null {
   const appState: AppState = DEFAULT_STATE;
   let availableModes: readonly RenderMode[] = [];
   let sensorState: SensorState = {
+    position: null,
     heading: null,
     headingReason: 'insufficient_samples',
     fix: { phase: 'acquiring', accuracy: null },
