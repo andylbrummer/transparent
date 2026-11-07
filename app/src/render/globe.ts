@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { EARTH_RADIUS_M, type Vec3 } from '@transparent-earth/core';
+import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
 
 /**
@@ -51,9 +51,9 @@ const FRAGMENT_SHADER = `
   uniform float uLayerAlphas[LAYERS];
   uniform sampler2D uSurface;
   uniform float uSurfaceReady;
-  uniform vec3 uSunDir;
 
   const vec3 SPACE = vec3(0.01, 0.012, 0.03);
+  const float SURFACE_GAIN = 1.4;
 
   // Ray/sphere roots for a sphere at the origin, given b = dot(ro, rd) and
   // c = |ro|^2 - r^2. Uses the cancellation-free form: one root from
@@ -84,15 +84,18 @@ const FRAGMENT_SHADER = `
     float a;
     if (i == SURFACE) {
       vec3 albedo = uSurfaceReady > 0.5 ? texture2D(uSurface, equirectUv(n)).rgb : uLayerColors[i];
-      // Night side stays legible: this is a geology view, not a photo.
-      float daylight = smoothstep(-0.08, 0.15, dot(n, uSunDir));
-      tint = albedo * mix(0.22, 1.0, daylight);
+      // Unlit and boosted: this is a geology view, not a photo, so land
+      // masses must read clearly through the shells.
+      tint = min(albedo * SURFACE_GAIN, vec3(1.0));
       // Near side: glass underfoot, solid toward the horizon. Far side: the
       // destination of the view, shown nearly opaque.
       a = exiting ? 0.9 : mix(0.06, 0.95, rim);
     } else {
+      // Glass shells: clear face-on - eight face-on crossings of even a few
+      // percent each stack into a haze over the far side - so only the rim,
+      // where the ray grazes the boundary, draws the structure.
       tint = uLayerColors[i];
-      a = uLayerAlphas[i] * (0.12 + 0.88 * rim);
+      a = uLayerAlphas[i] * rim;
     }
     color += trans * a * tint;
     trans *= 1.0 - a;
@@ -143,7 +146,6 @@ export class GlobeRenderer {
       uLayerAlphas: { value: premAlphas() },
       uSurface: { value: null as THREE.Texture | null },
       uSurfaceReady: { value: 0 },
-      uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -169,22 +171,18 @@ export class GlobeRenderer {
   /**
    * Drape an equirectangular image (lon -180..180 left to right, north up)
    * on the surface shell. No mipmaps: the atan seam at the antimeridian
-   * would otherwise pick the coarsest level along a visible line.
+   * would otherwise pick the coarsest level along a visible line. Colour
+   * space stays untagged: this raw shader writes no output encoding, so a
+   * linear-decoded sample would be shown as if sRGB, crushing mid-tones.
    */
   setSurfaceImagery(texture: THREE.Texture): void {
     texture.generateMipmaps = false;
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
     texture.wrapS = THREE.RepeatWrapping;
-    texture.colorSpace = THREE.SRGBColorSpace;
     texture.needsUpdate = true;
     this.material.uniforms.uSurface.value = texture;
     this.material.uniforms.uSurfaceReady.value = 1;
-  }
-
-  /** Point the daylight at the subsolar direction (ECEF, any length). */
-  setSunDirection(subsolar: Vec3): void {
-    (this.material.uniforms.uSunDir.value as THREE.Vector3).set(subsolar.x, subsolar.y, subsolar.z).normalize();
   }
 
   update(camera: THREE.Camera): void {

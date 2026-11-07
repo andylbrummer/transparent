@@ -43,13 +43,6 @@ describe('GlobeRenderer', () => {
     expect(layerC[0]).toBeCloseTo((EARTH_RADIUS_M + 1.5) ** 2 - innerCoreRadius ** 2, -7);
   });
 
-  it('normalises the sun direction it is given', () => {
-    const globe = new GlobeRenderer();
-    globe.setSunDirection({ x: 0, y: 3 * EARTH_RADIUS_M, z: 0 });
-    const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
-    expect((uniforms.uSunDir.value as THREE.Vector3).toArray()).toEqual([0, 1, 0]);
-  });
-
   it('marks the surface imagery ready once a texture is set', () => {
     const globe = new GlobeRenderer();
     const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
@@ -59,5 +52,7 @@ describe('GlobeRenderer', () => {
     expect(uniforms.uSurface.value).toBe(texture);
     expect(uniforms.uSurfaceReady.value).toBe(1);
     expect(texture.generateMipmaps).toBe(false);
+    // The raw shader writes no output encoding, so samples must not be linearised.
+    expect(texture.colorSpace).toBe(THREE.NoColorSpace);
   });
 });

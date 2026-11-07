@@ -7,7 +7,6 @@
  */
 
 import * as THREE from 'three';
-import { subsolarEcef } from '@transparent-earth/core';
 import { GlobeRenderer, BLUE_MARBLE_URL } from './render/globe';
 import { createOrbitController, type OrbitController } from './input/orbit';
 import { createSensorController, type SensorState } from './sensors';
@@ -158,15 +157,9 @@ export function init(): App | null {
 
   let frameCount = 0;
   let rafId = 0;
-  // The subsolar point moves 0.25°/min: once a second is far finer than visible.
-  let sunUpdatedAtMs = Number.NEGATIVE_INFINITY;
 
-  function animate(now: number): void {
+  function animate(): void {
     rafId = requestAnimationFrame(animate);
-    if (now - sunUpdatedAtMs >= 1000) {
-      globe.setSunDirection(subsolarEcef(new Date()));
-      sunUpdatedAtMs = now;
-    }
     orbit.updateCamera(camera);
     globe.update(camera);
     renderer.render(scene, camera);
@@ -175,7 +168,7 @@ export function init(): App | null {
 
   sensors.start();
   renderHud();
-  animate(performance.now());
+  animate();
 
   // Capability probing decides which session buttons are offered. It must not
   // block first paint, so the globe is already animating when this lands.
