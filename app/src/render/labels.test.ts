@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
-import { LabelLayer, MAX_VISIBLE_LABELS, estimateLabelSize, type PlaceLabel } from './labels';
+import { createLookController } from '../input/look';
+import { LabelLayer, MAX_VISIBLE_LABELS, estimateLabelSize, rankLabels, type PlaceLabel } from './labels';
 
 const WIDTH = 400;
 const HEIGHT = 800;
@@ -24,9 +25,9 @@ function label(name: string, lon: number, lat: number, priority: number, kind: P
 describe('LabelLayer', () => {
   it('shows a place the camera points at and hides one behind it', () => {
     const parent = document.createElement('div');
-    const layer = new LabelLayer(parent, {
-      labels: [label('California', -119.5, 37.0, 1), label('Western Australia', 121.6, -25.8, 2)],
-    });
+    const layer = new LabelLayer(parent, [
+      { labels: [label('California', -119.5, 37.0, 1), label('Western Australia', 121.6, -25.8, 2)] },
+    ]);
     // Western Australia is almost straight down from Austin: behind a camera aimed west at California.
     layer.update(cameraAimedAt(-119.5, 37.0), WIDTH, HEIGHT);
 
@@ -36,9 +37,9 @@ describe('LabelLayer', () => {
 
   it('keeps the higher-priority label where two collide', () => {
     const parent = document.createElement('div');
-    const layer = new LabelLayer(parent, {
-      labels: [label('California', -119.5, 37.0, 1), label('Fresno', -119.6, 37.0, 5, 'city')],
-    });
+    const layer = new LabelLayer(parent, [
+      { labels: [label('California', -119.5, 37.0, 1), label('Fresno', -119.6, 37.0, 5, 'city')] },
+    ]);
     layer.update(cameraAimedAt(-119.5, 37.0), WIDTH, HEIGHT);
 
     expect(layer.visibleNames()).toEqual(['California']);
@@ -50,7 +51,7 @@ describe('LabelLayer', () => {
     // A grid around the aim point, spaced far apart on screen.
     const labels: PlaceLabel[] = [];
     for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) labels.push(label(`p${i}-${j}`, -125 + i, 32 + j * 0.6, i * 12 + j));
-    const layer = new LabelLayer(parent, { labels });
+    const layer = new LabelLayer(parent, [{ labels }]);
     const camera = cameraAimedAt(-119.5, 37.0);
     camera.fov = 2; // magnify, so the grid spreads out across the viewport
     camera.updateProjectionMatrix();
@@ -63,13 +64,57 @@ describe('LabelLayer', () => {
 
   it('positions a shown label at its projected screen point', () => {
     const parent = document.createElement('div');
-    const layer = new LabelLayer(parent, { labels: [label('California', -119.5, 37.0, 1)] });
+    const layer = new LabelLayer(parent, [{ labels: [label('California', -119.5, 37.0, 1)] }]);
     layer.update(cameraAimedAt(-119.5, 37.0), WIDTH, HEIGHT);
 
     const element = parent.querySelector('.place-label') as HTMLElement;
     expect(element.style.display).toBe('');
     expect(element.style.transform).toBe('translate(200.0px, 400.0px) translate(-50%, -50%)');
     layer.dispose();
+  });
+
+  it('ranks every source together: a volcano from one file loses to a state from another', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, [
+      { labels: [label('Lassen Peak', -119.5, 37.0, 1, 'volcano')] },
+      { labels: [label('California', -119.5, 37.0, 9)] },
+    ]);
+    layer.update(cameraAimedAt(-119.5, 37.0), WIDTH, HEIGHT);
+
+    expect(layer.visibleNames()).toEqual(['California']);
+    layer.dispose();
+  });
+
+  it('places a deep structure at its depth, not on the surface', () => {
+    const parent = document.createElement('div');
+    // Straight down from Austin is through the core; a label 1500 km under
+    // Austin itself sits dead centre of that view, while one on the surface
+    // there would be behind the camera.
+    const deep: PlaceLabel = { ...label('Farallon slab', -97.74, 30.27, 1, 'deep'), depthKm: 1500 };
+    const layer = new LabelLayer(parent, [{ labels: [deep] }]);
+    // The look controller's default view: straight down from Austin.
+    const camera = new THREE.PerspectiveCamera(60, WIDTH / HEIGHT, 0.1, 1e9);
+    createLookController().updateCamera(camera, { lat: 30.27, lon: -97.74 }, null, 0);
+    layer.update(camera, WIDTH, HEIGHT);
+
+    expect(layer.visibleNames()).toEqual(['Farallon slab']);
+    const element = parent.querySelector('.place-label') as HTMLElement;
+    expect(element.textContent).toBe('Farallon slab · 1500 km');
+    expect(element.style.transform).toBe('translate(200.0px, 400.0px) translate(-50%, -50%)');
+    layer.dispose();
+  });
+});
+
+describe('rankLabels', () => {
+  it('orders by kind, then priority, keeping source order for ties', () => {
+    const ranked = rankLabels([
+      label('Fuji', 0, 0, 2, 'volcano'),
+      label('Etna', 0, 0, 1, 'volcano'),
+      label('Pacific plate', 0, 0, 5, 'plate'),
+      label('Hawaii', 0, 0, 1, 'hotspot'),
+      label('Iceland', 0, 0, 1, 'hotspot'),
+    ]);
+    expect(ranked.map((l) => l.name)).toEqual(['Pacific plate', 'Hawaii', 'Iceland', 'Etna', 'Fuji']);
   });
 });
 
