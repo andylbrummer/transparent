@@ -23,6 +23,37 @@
            gesture for panning and cancel the pointer stream mid-drag. */
         touch-action: none;
       }
+      .place-labels {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        /* Names sit over the canvas but must never swallow drags. */
+        pointer-events: none;
+        font-family: system-ui, -apple-system, sans-serif;
+        text-shadow: 0 0 3px #000, 0 1px 2px #000;
+        white-space: nowrap;
+      }
+      .place-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        will-change: transform;
+      }
+      .place-label--country {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #ffe2a0;
+      }
+      .place-label--state {
+        font-size: 11px;
+        color: #d4ddff;
+      }
+      .place-label--city {
+        font-size: 11px;
+        color: #ffffff;
+      }
       #hud {
         position: fixed;
         left: 0;
