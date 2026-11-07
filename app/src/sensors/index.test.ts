@@ -1,12 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DEFAULT_HEADING_CONFIG } from '@transparent-earth/core/heading';
+import { decimalYear, magneticDeclination } from '@transparent-earth/core/magnetic';
 import {
   blendDegrees,
   compassAlphaOffset,
   createSensorController,
-  headingFromOrientation,
+  magneticHeadingFromOrientation,
   type SensorState,
 } from './index';
+
+/** Every geolocation reading below: Austin, on this instant. */
+const FIX_TIME_MS = Date.UTC(2026, 10, 7, 18);
+const AUSTIN_DECLINATION = magneticDeclination(30.2672, -97.7431, 0, decimalYear(new Date(FIX_TIME_MS)));
+
+/** Normalize to [0, 360). */
+function wrap(deg: number): number {
+  return ((deg % 360) + 360) % 360;
+}
 
 /** Event clock for dispatched orientation events, in ms. */
 let eventClockMs = 0;
@@ -58,7 +68,7 @@ function installGeolocation(handlers: PositionHandlers = {}): {
     emit: (accuracy: number) =>
       success?.({
         coords: { latitude: 30.2672, longitude: -97.7431, altitude: 149, accuracy },
-        timestamp: 1,
+        timestamp: FIX_TIME_MS,
       } as GeolocationPosition),
     fail: (code: number) =>
       error?.({ code, PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 } as GeolocationPositionError),
@@ -74,24 +84,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('headingFromOrientation', () => {
+describe('magneticHeadingFromOrientation', () => {
   it('inverts alpha into a clockwise compass bearing', () => {
-    expect(headingFromOrientation({ alpha: 90, absolute: true } as never)).toBe(270);
-    expect(headingFromOrientation({ alpha: 0, absolute: true } as never)).toBe(0);
+    expect(magneticHeadingFromOrientation({ alpha: 90, absolute: true } as never)).toBe(270);
+    expect(magneticHeadingFromOrientation({ alpha: 0, absolute: true } as never)).toBe(0);
   });
 
-  it('prefers the iOS true-north heading when present', () => {
-    expect(headingFromOrientation({ alpha: 90, absolute: true, webkitCompassHeading: 42 } as never)).toBe(42);
+  it('prefers the iOS compass heading when present', () => {
+    expect(magneticHeadingFromOrientation({ alpha: 90, absolute: true, webkitCompassHeading: 42 } as never)).toBe(42);
   });
 
   it('rejects a non-absolute event, which carries no north reference', () => {
-    expect(headingFromOrientation({ alpha: 90, absolute: false } as never)).toBeNull();
+    expect(magneticHeadingFromOrientation({ alpha: 90, absolute: false } as never)).toBeNull();
   });
 });
 
 describe('compassAlphaOffset', () => {
   it('makes alpha satisfy heading = 360 - alpha', () => {
-    // iOS: alpha starts wherever the page loaded; compass says 30° true.
+    // iOS: alpha starts wherever the page loaded; compass says 30° magnetic.
     const offset = compassAlphaOffset({ alpha: 100, webkitCompassHeading: 30 } as never);
     expect(offset).toBe(230);
     expect(360 - ((100 + (offset as number)) % 360)).toBe(30);
@@ -124,38 +134,54 @@ describe('createSensorController', () => {
     controller.stop();
   });
 
-  it('passes an absolute attitude through on every event, not per sample', () => {
-    installGeolocation();
+  it('turns an absolute attitude to true north on every event, not per sample', () => {
+    const geo = installGeolocation();
     const controller = createSensorController(() => undefined);
     controller.start();
+    geo.emit(20);
     expect(controller.getAttitude()).toBeNull();
 
     dispatchHeading(315);
     dispatchHeading(300, 16);
-    expect(controller.getAttitude()).toEqual({ alpha: 300, beta: 80, gamma: 0 });
+    const attitude = controller.getAttitude();
+    expect(attitude?.alpha).toBeCloseTo(wrap(300 - AUSTIN_DECLINATION), 9);
+    expect(attitude?.beta).toBe(80);
+    expect(attitude?.gamma).toBe(0);
     controller.stop();
   });
 
-  it('references the iOS relative alpha to north through the compass', () => {
+  it('withholds attitude until a fix gives the declination', () => {
     installGeolocation();
+    const controller = createSensorController(() => undefined);
+    controller.start();
+
+    dispatchHeading(300);
+    expect(controller.getAttitude()).toBeNull();
+    controller.stop();
+  });
+
+  it('references the iOS relative alpha to true north through the compass', () => {
+    const geo = installGeolocation();
     delete (window as { ondeviceorientationabsolute?: unknown }).ondeviceorientationabsolute;
     const controller = createSensorController(() => undefined);
     controller.start();
+    geo.emit(20);
 
     const event = new Event('deviceorientation');
     Object.assign(event, { alpha: 100, beta: 90, gamma: 0, absolute: false, webkitCompassHeading: 30 });
     window.dispatchEvent(event);
 
-    // Facing 30° true, so north-referenced alpha is 330.
-    expect(controller.getAttitude()?.alpha).toBeCloseTo(330, 9);
+    // Facing 30° magnetic = 30° + declination true, so alpha is 330 - declination.
+    expect(controller.getAttitude()?.alpha).toBeCloseTo(330 - AUSTIN_DECLINATION, 9);
     controller.stop();
   });
 
   it('withholds attitude when the event has no north reference', () => {
-    installGeolocation();
+    const geo = installGeolocation();
     delete (window as { ondeviceorientationabsolute?: unknown }).ondeviceorientationabsolute;
     const controller = createSensorController(() => undefined);
     controller.start();
+    geo.emit(20);
 
     const event = new Event('deviceorientation');
     Object.assign(event, { alpha: 100, beta: 90, gamma: 0, absolute: false });
@@ -177,20 +203,39 @@ describe('createSensorController', () => {
     controller.stop();
   });
 
-  it('accepts a heading once enough steady samples arrive', () => {
-    installGeolocation();
+  it('accepts a true-north heading once enough steady samples arrive', () => {
+    const geo = installGeolocation();
     const seen: SensorState[] = [];
     const controller = createSensorController((s) => seen.push(s));
     controller.start();
+    geo.emit(20);
 
-    // alpha 315/314/316 -> bearings 45/46/44, a steady hold within the gate.
+    // alpha 315/314/316 -> bearings 45/46/44 magnetic, a steady hold within the gate.
     dispatchHeading(315);
     dispatchHeading(314);
     dispatchHeading(316);
 
     const last = seen[seen.length - 1];
-    expect(last.heading).toBeCloseTo(45, 6);
+    expect(last.declination).toBeCloseTo(AUSTIN_DECLINATION, 9);
+    expect(last.heading).toBeCloseTo(45 + AUSTIN_DECLINATION, 6);
     expect(last.headingReason).toBeNull();
+    controller.stop();
+  });
+
+  it('holds a settled compass heading until the fix arrives, then turns it true', () => {
+    const geo = installGeolocation();
+    const seen: SensorState[] = [];
+    const controller = createSensorController((s) => seen.push(s));
+    controller.start();
+
+    dispatchHeading(315);
+    dispatchHeading(314);
+    dispatchHeading(316);
+    expect(seen[seen.length - 1].heading).toBeNull();
+    expect(seen[seen.length - 1].headingReason).toBe('awaiting_position');
+
+    geo.emit(20);
+    expect(seen[seen.length - 1].heading).toBeCloseTo(45 + AUSTIN_DECLINATION, 6);
     controller.stop();
   });
 
@@ -229,10 +274,11 @@ describe('createSensorController', () => {
   });
 
   it('keeps only the most recent window, so an old turn stops blocking a hold', () => {
-    installGeolocation();
+    const geo = installGeolocation();
     const seen: SensorState[] = [];
     const controller = createSensorController((s) => seen.push(s));
     controller.start();
+    geo.emit(20);
 
     // A turn first — these must not hold the gate open once it settles.
     dispatchHeading(0);
@@ -243,7 +289,7 @@ describe('createSensorController', () => {
     dispatchHeading(315);
     dispatchHeading(314);
     dispatchHeading(316);
-    expect(seen[seen.length - 1].heading).toBeCloseTo(45, 6);
+    expect(seen[seen.length - 1].heading).toBeCloseTo(45 + AUSTIN_DECLINATION, 6);
     controller.stop();
   });
 

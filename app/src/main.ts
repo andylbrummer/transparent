@@ -46,8 +46,13 @@ function formatFix(state: SensorState): string {
 }
 
 function formatHeading(state: SensorState): string {
-  if (state.heading !== null) return `heading ${state.heading.toFixed(0)}°`;
+  if (state.heading !== null && state.declination !== null) {
+    const side = state.declination >= 0 ? 'E' : 'W';
+    return `heading ${state.heading.toFixed(0)}° true (declination ${Math.abs(state.declination).toFixed(1)}° ${side})`;
+  }
   switch (state.headingReason) {
+    case 'awaiting_position':
+      return 'compass ready, waiting for location…';
     case 'device_moving':
       return 'hold still…';
     case 'high_variance':
@@ -142,6 +147,7 @@ export function init(): App | null {
     position: null,
     heading: null,
     headingReason: 'insufficient_samples',
+    declination: null,
     fix: { phase: 'acquiring', accuracy: null },
   };
 

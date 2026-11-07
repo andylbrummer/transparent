@@ -3,6 +3,12 @@
  * Bridges heading gate logic (packages/core/src/heading) with browser APIs:
  * - Geolocation API for position fix
  * - DeviceOrientation (absolute) / iOS webkitCompassHeading for heading
+ *
+ * Both compass sources are magnetic: iOS fills webkitCompassHeading from
+ * CLHeading.magneticHeading, and Chrome's absolute stream comes from
+ * Android's rotation-vector sensor. Everything this module hands out is
+ * turned to true north with the WMM declination at the latest GPS fix, so
+ * nothing north-referenced is available before the first fix.
  */
 
 import {
@@ -13,6 +19,7 @@ import {
   type FixStatus,
   type RejectReason,
 } from '@transparent-earth/core/heading';
+import { decimalYear, magneticDeclination } from '@transparent-earth/core/magnetic';
 
 /** Where the user stands, from the latest geolocation reading at any accuracy. */
 export interface SurfacePosition {
@@ -22,7 +29,7 @@ export interface SurfacePosition {
 
 /**
  * Device attitude as W3C DeviceOrientation Euler angles in degrees, with
- * alpha referenced to north: the device frame is Rz(alpha)·Rx(beta)·Ry(gamma)
+ * alpha referenced to true north: the device frame is Rz(alpha)·Rx(beta)·Ry(gamma)
  * in East-North-Up.
  */
 export interface DeviceAttitude {
@@ -39,10 +46,18 @@ export interface SensorState {
   readonly position: SurfacePosition | null;
   /** Accepted heading in degrees clockwise from true north, or null while ungated. */
   readonly heading: number | null;
-  /** Why a heading is unavailable — drives the retry guidance shown to the user. */
-  readonly headingReason: RejectReason | null;
+  /**
+   * Why a heading is unavailable — drives the retry guidance shown to the
+   * user. `awaiting_position`: the compass has settled, but true north needs
+   * the declination at a GPS fix.
+   */
+  readonly headingReason: HeadingUnavailableReason | null;
+  /** Magnetic declination at `position`, degrees east of true north; null before a fix. */
+  readonly declination: number | null;
   readonly fix: FixStatus;
 }
+
+export type HeadingUnavailableReason = RejectReason | 'awaiting_position';
 
 export type SensorCallback = (state: SensorState) => void;
 
@@ -75,12 +90,12 @@ type PermissionCapableEvent = {
 
 /**
  * Convert an orientation event to a compass heading in degrees clockwise
- * from north, or null when the event carries no absolute reference.
+ * from magnetic north, or null when the event carries no absolute reference.
  *
- * iOS reports a true-north heading directly. Elsewhere `alpha` is a
- * counter-clockwise rotation about the vertical axis, so it inverts.
+ * iOS reports the heading directly. Elsewhere `alpha` is a counter-clockwise
+ * rotation about the vertical axis, so it inverts.
  */
-export function headingFromOrientation(event: CompassEvent): number | null {
+export function magneticHeadingFromOrientation(event: CompassEvent): number | null {
   if (typeof event.webkitCompassHeading === 'number' && !Number.isNaN(event.webkitCompassHeading)) {
     return normalizeDegrees(event.webkitCompassHeading);
   }
@@ -95,7 +110,7 @@ function normalizeDegrees(deg: number): number {
 }
 
 /**
- * Offset that turns iOS's arbitrary-origin alpha into a north-referenced
+ * Offset that turns iOS's arbitrary-origin alpha into a magnetic-north-referenced
  * one, or null when the event carries no compass heading. A north-referenced
  * alpha satisfies heading = 360 - alpha for both a flat and an upright phone.
  */
@@ -126,9 +141,13 @@ export function createSensorController(callback: SensorCallback): SensorControll
     position: null,
     heading: null,
     headingReason: 'insufficient_samples',
+    declination: null,
     fix: { phase: 'acquiring', accuracy: null },
   };
   let running = false;
+  // The gate's latest verdict, still magnetic; state.heading is its true-north view.
+  let magneticHeading: number | null = null;
+  let headingReject: RejectReason = 'insufficient_samples';
   let watchId: number | null = null;
   let orientationTarget: string | null = null;
   let attitude: DeviceAttitude | null = null;
@@ -138,26 +157,36 @@ export function createSensorController(callback: SensorCallback): SensorControll
     callback(state);
   }
 
+  /** Heading fields of the state, turned to true north once a fix gives the declination. */
+  function trueHeadingState(): Pick<SensorState, 'heading' | 'headingReason'> {
+    if (magneticHeading === null) return { heading: null, headingReason: headingReject };
+    if (state.declination === null) return { heading: null, headingReason: 'awaiting_position' };
+    return { heading: normalizeDegrees(magneticHeading + state.declination), headingReason: null };
+  }
+
   function trackAttitude(event: CompassEvent): void {
     if (typeof event.alpha !== 'number' || typeof event.beta !== 'number' || typeof event.gamma !== 'number') return;
-    let alpha: number;
+    let magneticAlpha: number;
     if (event.absolute) {
-      alpha = event.alpha;
+      magneticAlpha = event.alpha;
     } else {
       // iOS: smooth the offset, since single compass readings jitter by
       // several degrees while the gyro-integrated alpha does not.
       const offset = compassAlphaOffset(event);
       if (offset === null) return;
       compassOffset = compassOffset === null ? offset : blendDegrees(compassOffset, offset, COMPASS_OFFSET_WEIGHT);
-      alpha = event.alpha + compassOffset;
+      magneticAlpha = event.alpha + compassOffset;
     }
-    attitude = { alpha: normalizeDegrees(alpha), beta: event.beta, gamma: event.gamma };
+    if (state.declination === null) return;
+    // Heading = 360 - alpha, so turning heading east by the declination
+    // turns alpha the other way.
+    attitude = { alpha: normalizeDegrees(magneticAlpha - state.declination), beta: event.beta, gamma: event.gamma };
   }
 
   function onOrientation(event: Event): void {
     if (!running) return;
     trackAttitude(event as CompassEvent);
-    const heading = headingFromOrientation(event as CompassEvent);
+    const heading = magneticHeadingFromOrientation(event as CompassEvent);
     if (heading === null) return;
 
     // Orientation fires at display rate. Spacing samples by the configured
@@ -173,20 +202,28 @@ export function createSensorController(callback: SensorCallback): SensorControll
     while (samples.length > DEFAULT_HEADING_CONFIG.sampleCount) samples.shift();
 
     const result = evaluateHeadingSamples(samples);
-    state =
-      result.status === 'ok'
-        ? { ...state, heading: result.heading, headingReason: null }
-        : { ...state, heading: null, headingReason: result.reason };
+    if (result.status === 'ok') {
+      magneticHeading = result.heading;
+    } else {
+      magneticHeading = null;
+      headingReject = result.reason;
+    }
+    state = { ...state, ...trueHeadingState() };
     emit();
   }
 
   function onPosition(position: GeolocationPosition): void {
     if (!running) return;
+    const { latitude, longitude, accuracy } = position.coords;
     state = {
       ...state,
-      position: { lat: position.coords.latitude, lon: position.coords.longitude },
-      fix: nextFixState(state.fix, { accuracy: position.coords.accuracy }, false),
+      position: { lat: latitude, lon: longitude },
+      // Height is taken as the ellipsoid surface: a kilometre of altitude
+      // moves declination by thousandths of a degree.
+      declination: magneticDeclination(latitude, longitude, 0, decimalYear(new Date(position.timestamp))),
+      fix: nextFixState(state.fix, { accuracy }, false),
     };
+    state = { ...state, ...trueHeadingState() };
     emit();
   }
 
@@ -208,6 +245,8 @@ export function createSensorController(callback: SensorCallback): SensorControll
       samples.length = 0;
       attitude = null;
       compassOffset = null;
+      magneticHeading = null;
+      headingReject = 'insufficient_samples';
 
       if (typeof navigator !== 'undefined' && navigator.geolocation) {
         watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
@@ -219,7 +258,7 @@ export function createSensorController(callback: SensorCallback): SensorControll
       }
 
       if (typeof window !== 'undefined') {
-        // `deviceorientationabsolute` is the true-north stream on Chrome/Android;
+        // `deviceorientationabsolute` is the magnetic-north stream on Chrome/Android;
         // iOS carries the same information on `deviceorientation`.
         orientationTarget =
           'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
