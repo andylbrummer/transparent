@@ -64,6 +64,16 @@ function formatHeading(state: SensorState): string {
   }
 }
 
+/**
+ * Screen rotation and viewport as the camera uses them, so a phone test can
+ * see the view follow a rotation. "angle n/a": no Screen Orientation API.
+ */
+function formatScreen(): string {
+  const angle = screen.orientation?.angle;
+  const rotation = angle === undefined ? 'angle n/a' : `${angle}°`;
+  return `screen ${rotation} ${window.innerWidth}×${window.innerHeight}`;
+}
+
 export function init(): App | null {
   const container = document.getElementById('canvas-container');
   if (!container) return null;
@@ -155,7 +165,7 @@ export function init(): App | null {
     const modes = availableModes.length > 0 ? availableModes.join('/') : 'probing…';
     const imagery = imageryStatus === 'ready' ? '' : ` · surface imagery ${imageryStatus}`;
     const geo = geoStatus === 'ready' ? '' : ` · outlines ${geoStatus}`;
-    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${appState.mode} · ${modes}${imagery}${geo}`;
+    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${formatScreen()} · ${appState.mode} · ${modes}${imagery}${geo}`;
   }
 
   const sensors = createSensorController((next) => {
@@ -170,8 +180,11 @@ export function init(): App | null {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     outlines?.setResolution(w, h);
+    renderHud();
   };
   window.addEventListener('resize', onResize);
+  // A 180° turn between the two landscapes changes the angle but not the size.
+  screen.orientation?.addEventListener('change', renderHud);
 
   // iOS only grants orientation events from inside a user gesture, so the
   // first touch asks; everywhere else this resolves without a prompt.
@@ -245,6 +258,7 @@ export function init(): App | null {
       cancelAnimationFrame(rafId);
       sensors.stop();
       window.removeEventListener('resize', onResize);
+      screen.orientation?.removeEventListener('change', renderHud);
       window.removeEventListener('keydown', onKeyDown);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
