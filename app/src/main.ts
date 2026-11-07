@@ -1,14 +1,15 @@
 /**
  * Transparent Earth — application entry point.
  *
- * Phase 1 gyro/desktop mode: the raymarched PREM globe viewed from orbit,
- * driven by touch, mouse, and keyboard, with live sensor state on a HUD.
+ * Phase 1 gyro mode: the user stands at their geolocation and sees through
+ * the raymarched PREM Earth wherever the phone points. Touch nudges heading
+ * and zooms; without a compass, drag and keys aim. Sensor state on a HUD.
  * AR and VR attach to the same globe once a session starts.
  */
 
 import * as THREE from 'three';
 import { GlobeRenderer, BLUE_MARBLE_URL } from './render/globe';
-import { createOrbitController, type OrbitController } from './input/orbit';
+import { createLookController, type LookController } from './input/look';
 import { createSensorController, type SensorState } from './sensors';
 import { probeCapabilities, DEFAULT_STATE, type AppState, type RenderMode } from './ui/state';
 
@@ -17,7 +18,7 @@ export interface App {
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGLRenderer;
   readonly globe: GlobeRenderer;
-  readonly orbit: OrbitController;
+  readonly look: LookController;
   getSensorState(): SensorState;
   getAppState(): AppState;
   getAvailableModes(): readonly RenderMode[];
@@ -91,7 +92,7 @@ export function init(): App | null {
     }
   );
 
-  const orbit = createOrbitController();
+  const look = createLookController();
 
   const hud = document.createElement('div');
   hud.id = 'hud';
@@ -130,22 +131,20 @@ export function init(): App | null {
   // first touch asks; everywhere else this resolves without a prompt.
   let orientationPermissionAsked = false;
 
-  // Pointer events cover mouse and touch alike; the orbit controller's
-  // touch API takes the pointer count, so a single pointer rotates.
+  // Pointer events cover mouse and touch alike; the look controller tracks
+  // each pointer id, so one finger turns and two pinch.
   const onPointerDown = (e: PointerEvent): void => {
     if (!orientationPermissionAsked) {
       orientationPermissionAsked = true;
       void sensors.requestPermission();
     }
     renderer.domElement.setPointerCapture(e.pointerId);
-    orbit.onTouchStart(e.clientX, e.clientY, 1);
+    look.onPointerDown(e.pointerId, e.clientX, e.clientY);
   };
-  const onPointerMove = (e: PointerEvent): void => {
-    if (e.buttons === 0) return;
-    orbit.onTouchMove(e.clientX, e.clientY, 1);
-  };
-  const onPointerUp = (): void => orbit.onTouchEnd();
-  const onKeyDown = (e: KeyboardEvent): void => orbit.onKeyDown(e.key);
+  const onPointerMove = (e: PointerEvent): void =>
+    look.onPointerMove(e.pointerId, e.clientX, e.clientY, renderer.domElement.clientHeight);
+  const onPointerUp = (e: PointerEvent): void => look.onPointerUp(e.pointerId);
+  const onKeyDown = (e: KeyboardEvent): void => look.onKeyDown(e.key);
 
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointermove', onPointerMove);
@@ -160,8 +159,13 @@ export function init(): App | null {
 
   function animate(): void {
     rafId = requestAnimationFrame(animate);
-    orbit.updateCamera(camera);
-    globe.update(camera);
+    // No position, no view: anywhere else would show the wrong planet.
+    const position = sensorState.position;
+    globe.getMesh().visible = position !== null;
+    if (position) {
+      look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
+      globe.update(camera);
+    }
     renderer.render(scene, camera);
     frameCount++;
   }
@@ -182,7 +186,7 @@ export function init(): App | null {
     camera,
     renderer,
     globe,
-    orbit,
+    look,
     getSensorState: () => sensorState,
     getAppState: () => appState,
     getAvailableModes: () => availableModes,
