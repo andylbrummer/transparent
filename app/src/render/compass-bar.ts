@@ -1,10 +1,11 @@
 /**
  * Compass tape across the top of the screen: which way the view faces.
  *
- * The tape is drawn at the view's own scale - one degree of bearing spans
- * as many pixels as one degree of the horizontal field of view - so a tick
- * stands above the direction it names in the scene. It follows the camera,
- * not the raw compass, so drag nudges and manual aim move it too.
+ * The tape spans a fixed TAPE_SPAN_DEG across the screen, wider than any
+ * phone's field of view (a portrait phone sees ~30°), so cardinal points
+ * are always on it. A bracket marks the slice the camera actually sees. It
+ * follows the camera, not the raw compass, so drag nudges and manual aim
+ * move it too.
  */
 
 import * as THREE from 'three';
@@ -22,8 +23,10 @@ const CARDINALS: Readonly<Record<number, string>> = {
   270: 'W',
   315: 'NW',
 };
-const TICK_STEP_DEG = 5;
-const LABEL_STEP_DEG = 15;
+/** Bearing span across the full screen width: N/E/S/W are 90° apart, so one always shows. */
+export const TAPE_SPAN_DEG = 180;
+const TICK_STEP_DEG = 15;
+const LABEL_STEP_DEG = 30;
 const DEG = Math.PI / 180;
 
 /**
@@ -76,6 +79,7 @@ interface Tick {
 export class CompassBar {
   private readonly root: HTMLElement;
   private readonly readout: HTMLElement;
+  private readonly fovBracket: HTMLElement;
   private readonly ticks: Tick[] = [];
   private readonly forward = new THREE.Vector3();
   private readonly cameraUp = new THREE.Vector3();
@@ -93,7 +97,7 @@ export class CompassBar {
     for (let bearing = 0; bearing < 360; bearing += TICK_STEP_DEG) {
       const element = document.createElement('div');
       const cardinal = CARDINALS[bearing];
-      const labelled = bearing % LABEL_STEP_DEG === 0;
+      const labelled = cardinal !== undefined || bearing % LABEL_STEP_DEG === 0;
       element.className = `compass-tick${cardinal ? ' compass-tick--cardinal' : labelled ? ' compass-tick--major' : ''}`;
       if (labelled) {
         const text = document.createElement('span');
@@ -105,11 +109,13 @@ export class CompassBar {
       tape.appendChild(element);
       this.ticks.push({ bearing, element, visible: false });
     }
+    this.fovBracket = document.createElement('div');
+    this.fovBracket.className = 'compass-bar__fov';
     const caret = document.createElement('div');
     caret.className = 'compass-bar__caret';
     this.readout = document.createElement('div');
     this.readout.className = 'compass-bar__readout';
-    this.root.append(tape, caret, this.readout);
+    this.root.append(this.fovBracket, tape, caret, this.readout);
     parent.appendChild(this.root);
   }
 
@@ -133,13 +139,16 @@ export class CompassBar {
     const bearing = viewBearingDeg(this.forward, this.cameraUp, this.east, this.north, this.up);
     this.bearing = bearing;
 
-    const pxPerDeg = width / horizontalFovDeg(camera.fov, camera.aspect);
+    const pxPerDeg = width / TAPE_SPAN_DEG;
+    const fovPx = Math.min(width, horizontalFovDeg(camera.fov, camera.aspect) * pxPerDeg);
     // The phone never holds perfectly still: skip DOM writes for sub-pixel change.
-    const layoutKey = `${(bearing * pxPerDeg).toFixed(0)}|${pxPerDeg.toFixed(2)}|${width}`;
+    const layoutKey = `${(bearing * pxPerDeg).toFixed(0)}|${fovPx.toFixed(0)}|${width}`;
     if (layoutKey === this.lastLayoutKey) return;
     this.lastLayoutKey = layoutKey;
 
     const half = width / 2;
+    this.fovBracket.style.width = `${fovPx.toFixed(1)}px`;
+    this.fovBracket.style.transform = `translateX(${(half - fovPx / 2).toFixed(1)}px)`;
     for (const tick of this.ticks) {
       const x = half + bearingOffsetDeg(tick.bearing, bearing) * pxPerDeg;
       const show = x > -40 && x < width + 40;

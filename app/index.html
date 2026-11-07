@@ -147,6 +147,17 @@
       .compass-tick--north span {
         color: #ff7a6b;
       }
+      /* The slice of the compressed tape the camera actually sees. */
+      .compass-bar__fov {
+        position: absolute;
+        left: 0;
+        top: env(safe-area-inset-top);
+        height: 28px;
+        box-sizing: border-box;
+        background: rgba(159, 220, 255, 0.12);
+        border-left: 1px solid rgba(159, 220, 255, 0.55);
+        border-right: 1px solid rgba(159, 220, 255, 0.55);
+      }
       .compass-bar__caret {
         position: absolute;
         left: 50%;

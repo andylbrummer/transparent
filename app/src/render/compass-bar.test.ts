@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { createLookController } from '../input/look';
-import { CompassBar, bearingOffsetDeg, compassPoint, horizontalFovDeg } from './compass-bar';
+import { CompassBar, TAPE_SPAN_DEG, bearingOffsetDeg, compassPoint, horizontalFovDeg } from './compass-bar';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
 const WIDTH = 400;
@@ -44,19 +44,41 @@ describe('CompassBar', () => {
     expect(bar.getBearing()).toBeCloseTo(90, 6);
   });
 
-  it('centres the faced bearing and spaces ticks at the view scale', () => {
+  it('centres the faced bearing on a tape compressed to the fixed span', () => {
+    const parent = document.createElement('div');
+    const bar = new CompassBar(parent);
+    bar.update(cameraFor(90, 90), AUSTIN, WIDTH);
+
+    const pxPerDeg = WIDTH / TAPE_SPAN_DEG;
+    const ticks = visibleTicks(parent);
+    expect(ticks.find((t) => t.text === 'W')?.x).toBeCloseTo(WIDTH / 2, 1);
+    expect(ticks.find((t) => t.text === '300')?.x).toBeCloseTo(WIDTH / 2 + 30 * pxPerDeg, 1);
+    expect(parent.querySelector('.compass-bar__readout')?.textContent).toBe('270° W');
+  });
+
+  it('keeps cardinals on the tape at a narrow portrait field of view', () => {
+    const parent = document.createElement('div');
+    const bar = new CompassBar(parent);
+    // Headings halfway between the 8 points: the worst case for seeing one.
+    for (const alpha of [22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5]) {
+      bar.update(cameraFor(alpha, 90), AUSTIN, WIDTH);
+      const texts = visibleTicks(parent)
+        .filter((t) => t.x >= 0 && t.x <= WIDTH)
+        .map((t) => t.text);
+      expect(texts.filter((t) => ['N', 'E', 'S', 'W'].includes(t)).length).toBeGreaterThanOrEqual(1);
+      expect(texts.filter((t) => /^[NESW]{1,2}$/.test(t)).length).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('brackets the slice of the tape the camera sees', () => {
     const parent = document.createElement('div');
     const bar = new CompassBar(parent);
     const camera = cameraFor(90, 90);
     bar.update(camera, AUSTIN, WIDTH);
-
-    const pxPerDeg = WIDTH / horizontalFovDeg(camera.fov, camera.aspect);
-    const ticks = visibleTicks(parent);
-    const west = ticks.find((t) => t.text === 'W');
-    expect(west?.x).toBeCloseTo(WIDTH / 2, 1);
-    const nextLabel = ticks.find((t) => t.text === '285');
-    expect(nextLabel?.x).toBeCloseTo(WIDTH / 2 + 15 * pxPerDeg, 1);
-    expect(parent.querySelector('.compass-bar__readout')?.textContent).toBe('270° W');
+    const fovPx = (horizontalFovDeg(camera.fov, camera.aspect) * WIDTH) / TAPE_SPAN_DEG;
+    const bracket = parent.querySelector<HTMLElement>('.compass-bar__fov')!;
+    expect(parseFloat(bracket.style.width)).toBeCloseTo(fovPx, 1);
+    expect(bracket.style.transform).toBe(`translateX(${(WIDTH / 2 - fovPx / 2).toFixed(1)}px)`);
   });
 
   it('wraps the tape across north', () => {
@@ -66,7 +88,7 @@ describe('CompassBar', () => {
     bar.update(cameraFor(5, 90), AUSTIN, WIDTH);
     const texts = visibleTicks(parent).map((t) => t.text);
     expect(texts).toContain('N');
-    expect(texts).toContain('345');
+    expect(texts).toContain('330');
     const north = visibleTicks(parent).find((t) => t.text === 'N');
     expect(north!.x).toBeGreaterThan(WIDTH / 2);
   });
