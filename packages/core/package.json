@@ -13,6 +13,10 @@
       "import": "./dist/heading/index.js",
       "types": "./dist/heading/index.d.ts"
     },
+    "./magnetic": {
+      "import": "./dist/magnetic/index.js",
+      "types": "./dist/magnetic/index.d.ts"
+    },
     "./geodesy": {
       "import": "./dist/geodesy/index.js",
       "types": "./dist/geodesy/index.d.ts"

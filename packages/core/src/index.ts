@@ -3,6 +3,7 @@
 
 export * from './geodesy';
 export * from './heading';
+export * from './magnetic';
 export * from './seismic';
 export * from './tiles';
 export * from './gfs';
