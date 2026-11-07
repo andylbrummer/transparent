@@ -164,7 +164,7 @@ export function init(): App | null {
     globe.getMesh().visible = position !== null;
     if (position) {
       look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
-      globe.update(camera);
+      globe.update(camera, renderer.domElement.height);
     }
     renderer.render(scene, camera);
     frameCount++;

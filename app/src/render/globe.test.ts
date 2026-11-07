@@ -16,7 +16,7 @@ describe('GlobeRenderer', () => {
     camera.lookAt(0, 0, 0);
     camera.rotateZ(0.3);
 
-    globe.update(camera);
+    globe.update(camera, 800);
 
     const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
     expect(uniforms.uCameraPos.value.z).toBe(40_000_000);
@@ -25,6 +25,8 @@ describe('GlobeRenderer', () => {
     );
     expect(uniforms.uCameraRot.value.elements).toEqual(expected.elements);
     expect(uniforms.uAspect.value).toBe(2);
+    // One pixel of an 800 px tall, 45° view: keeps the horizon a pixel wide.
+    expect(uniforms.uPixelAngle.value).toBeCloseTo((2 * Math.tan((22.5 * Math.PI) / 180)) / 800, 12);
   });
 
   it('precomputes each shell term in double precision for a camera at the surface', () => {
@@ -33,12 +35,15 @@ describe('GlobeRenderer', () => {
     // 1.5 m above the crust: in float32, |p|^2 - r^2 would cancel to noise.
     camera.position.set(EARTH_RADIUS_M + 1.5, 0, 0);
 
-    globe.update(camera);
+    globe.update(camera, 800);
 
     const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
     const layerC = uniforms.uLayerC.value as Float32Array;
     const crust = layerC[PREM_LAYERS.length - 1];
     expect(crust).toBeCloseTo(2 * EARTH_RADIUS_M * 1.5 + 1.5 * 1.5, -1);
+    // Horizon dips by sqrt(2h/R) ~ 0.04° at 1.5 m: below float32's 1 - x resolution.
+    expect(uniforms.uHorizonSin.value).toBeCloseTo(-Math.sqrt((2 * 1.5) / EARTH_RADIUS_M), 7);
+    expect(uniforms.uHorizonSin.value).toBeLessThan(0);
     const innerCoreRadius = PREM_LAYERS[0].radiusKm * 1000;
     expect(layerC[0]).toBeCloseTo((EARTH_RADIUS_M + 1.5) ** 2 - innerCoreRadius ** 2, -7);
   });

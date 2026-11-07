@@ -51,9 +51,16 @@ const FRAGMENT_SHADER = `
   uniform float uLayerAlphas[LAYERS];
   uniform sampler2D uSurface;
   uniform float uSurfaceReady;
+  // Sine of the horizon's elevation (negative: a dip below level), from the
+  // CPU - in float32, 1 - (R / |camera|)^2 at eye height rounds to zero.
+  uniform float uHorizonSin;
+  // Angle one pixel subtends, so the horizon line stays a pixel wide at any zoom.
+  uniform float uPixelAngle;
 
   const vec3 SPACE = vec3(0.01, 0.012, 0.03);
   const float SURFACE_GAIN = 1.4;
+  const vec3 HORIZON_COLOR = vec3(0.75, 0.85, 1.0);
+  const float HORIZON_ALPHA = 0.55;
 
   // Ray/sphere roots for a sphere at the origin, given b = dot(ro, rd) and
   // c = |ro|^2 - r^2. Uses the cancellation-free form: one root from
@@ -76,8 +83,7 @@ const FRAGMENT_SHADER = `
   }
 
   // Composite one boundary crossing into the running colour/transmittance.
-  // exiting: the ray leaves this sphere (seen from inside).
-  void shadeBoundary(int i, vec3 p, vec3 rd, bool exiting, inout vec3 color, inout float trans) {
+  void shadeBoundary(int i, vec3 p, vec3 rd, inout vec3 color, inout float trans) {
     vec3 n = normalize(p);
     float rim = pow(1.0 - abs(dot(n, rd)), 3.0);
     vec3 tint;
@@ -87,9 +93,9 @@ const FRAGMENT_SHADER = `
       // Unlit and boosted: this is a geology view, not a photo, so land
       // masses must read clearly through the shells.
       tint = min(albedo * SURFACE_GAIN, vec3(1.0));
-      // Near side: glass underfoot, solid toward the horizon. Far side: the
-      // destination of the view, shown nearly opaque.
-      a = exiting ? 0.9 : mix(0.06, 0.95, rim);
+      // Only ever reached on exit: the far side, the destination of the
+      // view, shown nearly opaque.
+      a = 0.9;
     } else {
       // Glass shells: clear face-on - eight face-on crossings of even a few
       // percent each stack into a haze over the far side - so only the rim,
@@ -113,19 +119,28 @@ const FRAGMENT_SHADER = `
 
     // Concentric spheres: every entry precedes every exit, entries run
     // outer to inner and exits inner to outer, so no sort is needed.
-    for (int k = 0; k < LAYERS; k++) {
+    // The surface entry is skipped: the ground underfoot is glass. Every ray
+    // below the horizon enters within ~4 km of the user, so shading it would
+    // tint the whole view with one local texel and hide nearby continents.
+    for (int k = 1; k < LAYERS; k++) {
       int i = LAYERS - 1 - k;
       if (intersect(b, uLayerC[i], tEnter, tExit) && tEnter > 0.0) {
-        shadeBoundary(i, ro + rd * tEnter, rd, false, color, trans);
+        shadeBoundary(i, ro + rd * tEnter, rd, color, trans);
       }
     }
     for (int i = 0; i < LAYERS; i++) {
       if (intersect(b, uLayerC[i], tEnter, tExit) && tExit > 0.0) {
-        shadeBoundary(i, ro + rd * tExit, rd, true, color, trans);
+        shadeBoundary(i, ro + rd * tExit, rd, color, trans);
       }
     }
+    color += trans * SPACE;
 
-    gl_FragColor = vec4(color + trans * SPACE, 1.0);
+    // With the ground clear, a drawn horizon is what keeps "level" legible.
+    float elevationSin = dot(rd, normalize(ro));
+    float horizon = 1.0 - smoothstep(0.5 * uPixelAngle, 1.5 * uPixelAngle, abs(elevationSin - uHorizonSin));
+    color = mix(color, HORIZON_COLOR, horizon * HORIZON_ALPHA);
+
+    gl_FragColor = vec4(color, 1.0);
   }
 `;
 
@@ -146,6 +161,8 @@ export class GlobeRenderer {
       uLayerAlphas: { value: premAlphas() },
       uSurface: { value: null as THREE.Texture | null },
       uSurfaceReady: { value: 0 },
+      uHorizonSin: { value: 0 },
+      uPixelAngle: { value: 0.002 },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -185,15 +202,16 @@ export class GlobeRenderer {
     this.material.uniforms.uSurfaceReady.value = 1;
   }
 
-  update(camera: THREE.Camera): void {
+  /** viewportHeightPx: drawing-buffer height, which sets the horizon line's width. */
+  update(camera: THREE.Camera, viewportHeightPx: number): void {
     // Track the camera's own framing so the raymarch matches what a
     // rasterised scene through the same camera would show.
     if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
       const perspective = camera as THREE.PerspectiveCamera;
+      const tanHalfFov = Math.tan((perspective.fov * Math.PI) / 180 / 2);
       this.material.uniforms.uAspect.value = perspective.aspect;
-      this.material.uniforms.uTanHalfFov.value = Math.tan(
-        (perspective.fov * Math.PI) / 180 / 2
-      );
+      this.material.uniforms.uTanHalfFov.value = tanHalfFov;
+      this.material.uniforms.uPixelAngle.value = (2 * tanHalfFov) / viewportHeightPx;
     }
 
     this.material.uniforms.uCameraPos.value.copy(camera.position);
@@ -204,6 +222,9 @@ export class GlobeRenderer {
     for (let i = 0; i < LAYER_COUNT; i++) {
       layerC[i] = distanceSq - this.layerRadii[i] * this.layerRadii[i];
     }
+    const surfaceRadius = this.layerRadii[LAYER_COUNT - 1];
+    const tangentSq = Math.max(0, 1 - (surfaceRadius * surfaceRadius) / distanceSq);
+    this.material.uniforms.uHorizonSin.value = -Math.sqrt(tangentSq);
 
     // Runs every frame: reuse the scratch matrix rather than allocating.
     this.rotation.makeRotationFromQuaternion(camera.quaternion);
