@@ -55,6 +55,29 @@ python3 tools/pipeline/test_geo.py
 These outputs are committed: the Pages deploy runs no pipeline step, so an
 uncommitted asset would never ship.
 
+## Tectonics and Geology
+
+`generate_geology.py` downloads plate boundaries, active faults, hotspots and
+volcanoes, adds a short curated list of deep-Earth structures, and writes:
+
+- `app/public/geo/tectonics.json` — PB2002 plate boundaries split into
+  `subduction`, `ridge` (spreading ridges and rifts), `transform` and
+  `collision`, plus GEM active faults by mechanism (`fault-normal`,
+  `fault-reverse`, `fault-strike-slip`), simplified to 0.02°. Same encoding
+  as `outlines.json`.
+- `app/public/geo/geology.json` — labels for plates, deep structures (with a
+  `depthKm`), hotspots, subduction zones and volcanoes, sorted by kind and
+  then priority.
+
+Faults are drawn but not named (GEM's names are local segment names), and
+deep-structure positions are approximate centres from the cited papers.
+Licences differ per source; `app/public/geo/ATTRIBUTION.md` carries them.
+
+```bash
+python3 tools/pipeline/generate_geology.py
+python3 tools/pipeline/test_geology.py
+```
+
 ## Assets
 
 Imagery (Blue Marble) is fetched by the app at runtime from NASA GIBS, not
