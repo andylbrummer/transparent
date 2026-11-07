@@ -1,7 +1,8 @@
 /**
  * Names through the see-through Earth, the way a sky map names stars:
  * places on the far-side surface, and geology - plates, hotspots,
- * subduction zones, volcanoes, and deep structures at their depth.
+ * subduction zones, volcanoes, and deep structures and great earthquakes
+ * at their depth.
  *
  * Labels are screen-aligned DOM text, so they stay readable however
  * foreshortened the land beneath them is. Each frame they are placed in
@@ -13,7 +14,16 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 
-export type LabelKind = 'country' | 'state' | 'city' | 'plate' | 'deep' | 'hotspot' | 'subduction' | 'volcano';
+export type LabelKind =
+  | 'country'
+  | 'state'
+  | 'city'
+  | 'plate'
+  | 'deep'
+  | 'hotspot'
+  | 'quake'
+  | 'subduction'
+  | 'volcano';
 
 /**
  * Declutter rank by kind: earlier kinds win overlaps. Geology outranks
@@ -25,6 +35,7 @@ export const LABEL_KIND_ORDER: readonly LabelKind[] = [
   'plate',
   'deep',
   'hotspot',
+  'quake',
   'subduction',
   'state',
   'volcano',
@@ -42,7 +53,7 @@ export interface PlaceLabel {
   readonly depthKm?: number;
 }
 
-/** The shape of app/public/geo/labels.json and geology.json. */
+/** The labels of app/public/geo/labels.json, geology.json and quakes.json. */
 export interface LabelData {
   readonly labels: readonly PlaceLabel[];
 }
@@ -55,6 +66,7 @@ const FONT_PX: Readonly<Record<LabelKind, number>> = {
   plate: 12,
   deep: 11,
   hotspot: 11,
+  quake: 10,
   subduction: 10,
   volcano: 10,
 };
@@ -87,6 +99,7 @@ export function labelText(label: PlaceLabel): string {
     case 'hotspot':
       return `◉ ${label.name}`;
     case 'deep':
+    case 'quake':
       return label.depthKm === undefined ? label.name : `${label.name} · ${label.depthKm} km`;
     default:
       return label.name;
@@ -111,6 +124,7 @@ export class LabelLayer {
   private readonly placed: PlacedLabel[];
   private readonly view = new THREE.Vector3();
   private readonly boxes: number[] = [];
+  private readonly hiddenKinds = new Set<LabelKind>();
 
   /** Takes every label source at once; ranks them together by LABEL_KIND_ORDER. */
   constructor(parent: HTMLElement, sources: readonly LabelData[]) {
@@ -140,6 +154,14 @@ export class LabelLayer {
     this.container.style.display = visible ? '' : 'none';
   }
 
+  /** Show or hide every label of these kinds; takes effect at the next update. */
+  setKindsVisible(kinds: readonly LabelKind[], visible: boolean): void {
+    for (const kind of kinds) {
+      if (visible) this.hiddenKinds.delete(kind);
+      else this.hiddenKinds.add(kind);
+    }
+  }
+
   /** Names currently shown, in placement order. Instrumentation for tests and the harness. */
   visibleNames(): string[] {
     return this.placed.filter((p) => p.visible).map((p) => p.label.name);
@@ -155,7 +177,7 @@ export class LabelLayer {
       let show = false;
       let x = 0;
       let y = 0;
-      if (shown < MAX_VISIBLE_LABELS) {
+      if (shown < MAX_VISIBLE_LABELS && !this.hiddenKinds.has(placed.label.kind)) {
         this.view.copy(placed.position).applyMatrix4(camera.matrixWorldInverse);
         // Camera looks down -Z: anything at z >= 0 is behind the viewer.
         if (this.view.z < 0) {

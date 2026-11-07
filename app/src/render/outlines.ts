@@ -34,14 +34,14 @@ export interface OutlineData {
   readonly layers: Readonly<Partial<Record<OutlineLayerName, readonly (readonly number[])[]>>>;
 }
 
-interface OutlineStyle {
+export interface OutlineStyle {
   readonly color: number;
   /** CSS pixels. */
   readonly width: number;
   readonly opacity: number;
 }
 
-const OUTLINE_STYLES: Readonly<Record<OutlineLayerName, OutlineStyle>> = {
+export const OUTLINE_STYLES: Readonly<Record<OutlineLayerName, OutlineStyle>> = {
   coastline: { color: 0x9fdcff, width: 1.6, opacity: 0.95 },
   borders: { color: 0xffd27a, width: 1.3, opacity: 0.9 },
   states: { color: 0xffffff, width: 1.0, opacity: 0.45 },
@@ -153,6 +153,13 @@ export class OutlineLayer {
 
   getObject(): THREE.Object3D {
     return this.group;
+  }
+
+  /** Show or hide the named layers; names this data does not carry are ignored. */
+  setLayersVisible(names: readonly OutlineLayerName[], visible: boolean): void {
+    for (const child of this.group.children) {
+      if ((names as readonly string[]).includes(child.name)) child.visible = visible;
+    }
   }
 
   /** Line widths are in CSS pixels, so the material needs the CSS viewport size. */

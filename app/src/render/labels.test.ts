@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
 import { createLookController } from '../input/look';
-import { LabelLayer, MAX_VISIBLE_LABELS, estimateLabelSize, rankLabels, type PlaceLabel } from './labels';
+import { LabelLayer, MAX_VISIBLE_LABELS, estimateLabelSize, labelText, rankLabels, type PlaceLabel } from './labels';
 
 const WIDTH = 400;
 const HEIGHT = 800;
@@ -23,6 +23,21 @@ function label(name: string, lon: number, lat: number, priority: number, kind: P
 }
 
 describe('LabelLayer', () => {
+  it('hides whole kinds while they are switched off', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, [
+      { labels: [label('California', -119.5, 37.0, 1), label('Lassen Peak', -121.5, 40.5, 1, 'volcano')] },
+    ]);
+    const camera = cameraAimedAt(-120.5, 38.5);
+    layer.setKindsVisible(['volcano'], false);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['California']);
+    layer.setKindsVisible(['volcano'], true);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['California', 'Lassen Peak']);
+    layer.dispose();
+  });
+
   it('shows a place the camera points at and hides one behind it', () => {
     const parent = document.createElement('div');
     const layer = new LabelLayer(parent, [
@@ -123,5 +138,13 @@ describe('estimateLabelSize', () => {
     const country = estimateLabelSize(label('Mexico', 0, 0, 1, 'country'));
     const state = estimateLabelSize(label('Mexico', 0, 0, 1, 'state'));
     expect(country.width).toBeGreaterThan(state.width);
+  });
+});
+
+describe('labelText', () => {
+  it('gives great quakes their hypocentre depth', () => {
+    expect(labelText({ kind: 'quake', name: 'M9.1 Japan 2011', lon: 142.4, lat: 38.3, priority: 0.9, depthKm: 29 })).toBe(
+      'M9.1 Japan 2011 · 29 km'
+    );
   });
 });

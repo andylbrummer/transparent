@@ -59,4 +59,19 @@ describe('OutlineLayer', () => {
     expect(layer.getObject().children.map((c) => c.name)).toEqual(['fault-normal', 'ridge', 'subduction']);
     layer.dispose();
   });
+
+  it('hides and shows named layers, ignoring names it does not carry', () => {
+    const layer = new OutlineLayer({
+      encoding: 'delta',
+      quantumPerDegree: 100,
+      layers: { subduction: [[0, 0, 10, 10]], 'fault-normal': [[0, 0, 10, 10]] },
+    });
+    const visible = (): Record<string, boolean> =>
+      Object.fromEntries(layer.getObject().children.map((c) => [c.name, c.visible]));
+    layer.setLayersVisible(['fault-normal', 'fault-reverse'], false);
+    expect(visible()).toEqual({ 'fault-normal': false, subduction: true });
+    layer.setLayersVisible(['fault-normal'], true);
+    expect(visible()).toEqual({ 'fault-normal': true, subduction: true });
+    layer.dispose();
+  });
 });
