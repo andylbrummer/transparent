@@ -6,7 +6,8 @@
  * through the planet; lines therefore project straight onto the far side
  * and need no depth test against the raymarched globe. Data comes from
  * tools/pipeline/generate_geo.py (outlines.json, Natural Earth) and
- * generate_geology.py (tectonics.json, PB2002 and GEM faults).
+ * generate_geology.py (tectonics.json, PB2002 and GEM faults) and
+ * generate_plate_motion.py (plate-motion.json, NNR-MORVEL56 arrows).
  */
 
 import * as THREE from 'three';
@@ -25,7 +26,8 @@ export type OutlineLayerName =
   | 'subduction'
   | 'fault-normal'
   | 'fault-reverse'
-  | 'fault-strike-slip';
+  | 'fault-strike-slip'
+  | 'plate-motion';
 
 /** The shape of app/public/geo/outlines.json and tectonics.json; each carries some of the layers. */
 export interface OutlineData {
@@ -54,9 +56,11 @@ export const OUTLINE_STYLES: Readonly<Record<OutlineLayerName, OutlineStyle>> = 
   'fault-normal': { color: 0x00d2d3, width: 1.0, opacity: 0.75 },
   'fault-reverse': { color: 0xff6bcb, width: 1.0, opacity: 0.75 },
   'fault-strike-slip': { color: 0x5f8bff, width: 1.0, opacity: 0.75 },
+  // Arrows: white, so they read as motion over every coloured line.
+  'plate-motion': { color: 0xffffff, width: 1.4, opacity: 0.85 },
 };
 
-/** Draw order within a layer set: faults, then political lines, then plate boundaries on top. */
+/** Draw order within a layer set: faults, then political lines, then plate boundaries, then motion arrows on top. */
 const LAYER_ORDER: readonly OutlineLayerName[] = [
   'fault-normal',
   'fault-reverse',
@@ -68,6 +72,7 @@ const LAYER_ORDER: readonly OutlineLayerName[] = [
   'transform',
   'collision',
   'subduction',
+  'plate-motion',
 ];
 
 /** Place the outlines after the globe quad, which renders at order 0. */

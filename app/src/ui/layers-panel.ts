@@ -91,6 +91,14 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     caption: 'normal · reverse · strike-slip',
   },
   {
+    id: 'plate-motion',
+    label: 'Plate motion',
+    section: 'Surface lines',
+    target: { lines: ['plate-motion'] },
+    legend: hex(OUTLINE_STYLES['plate-motion'].color),
+    caption: 'NNR-MORVEL56 · arrow = 3 Myr of travel',
+  },
+  {
     id: 'political',
     label: 'Coastlines and borders',
     section: 'Surface lines',

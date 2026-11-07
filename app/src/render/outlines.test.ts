@@ -60,6 +60,16 @@ describe('OutlineLayer', () => {
     layer.dispose();
   });
 
+  it('draws plate motion arrows over the plate boundaries', () => {
+    const layer = new OutlineLayer({
+      encoding: 'delta',
+      quantumPerDegree: 100,
+      layers: { 'plate-motion': [[0, 0, 10, 10]], subduction: [[0, 0, 10, 10]] },
+    });
+    expect(layer.getObject().children.map((c) => c.name)).toEqual(['subduction', 'plate-motion']);
+    layer.dispose();
+  });
+
   it('hides and shows named layers, ignoring names it does not carry', () => {
     const layer = new OutlineLayer({
       encoding: 'delta',
