@@ -1,11 +1,12 @@
 /**
- * Coastlines, country borders and state/province lines on the surface,
- * drawn as screen-width lines over the see-through globe.
+ * Surface lines - coastlines, borders, state lines, plate boundaries and
+ * active faults - drawn as screen-width lines over the see-through globe.
  *
  * The camera stands at the surface, so every other surface point is seen
  * through the planet; lines therefore project straight onto the far side
  * and need no depth test against the raymarched globe. Data comes from
- * tools/pipeline/generate_geo.py (Natural Earth, public domain).
+ * tools/pipeline/generate_geo.py (outlines.json, Natural Earth) and
+ * generate_geology.py (tectonics.json, PB2002 and GEM faults).
  */
 
 import * as THREE from 'three';
@@ -14,13 +15,23 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 
-export type OutlineLayerName = 'coastline' | 'borders' | 'states';
+export type OutlineLayerName =
+  | 'coastline'
+  | 'borders'
+  | 'states'
+  | 'ridge'
+  | 'transform'
+  | 'collision'
+  | 'subduction'
+  | 'fault-normal'
+  | 'fault-reverse'
+  | 'fault-strike-slip';
 
-/** The shape of app/public/geo/outlines.json. */
+/** The shape of app/public/geo/outlines.json and tectonics.json; each carries some of the layers. */
 export interface OutlineData {
   readonly encoding: 'delta';
   readonly quantumPerDegree: number;
-  readonly layers: Readonly<Record<OutlineLayerName, readonly (readonly number[])[]>>;
+  readonly layers: Readonly<Partial<Record<OutlineLayerName, readonly (readonly number[])[]>>>;
 }
 
 interface OutlineStyle {
@@ -34,10 +45,30 @@ const OUTLINE_STYLES: Readonly<Record<OutlineLayerName, OutlineStyle>> = {
   coastline: { color: 0x9fdcff, width: 1.6, opacity: 0.95 },
   borders: { color: 0xffd27a, width: 1.3, opacity: 0.9 },
   states: { color: 0xffffff, width: 1.0, opacity: 0.45 },
+  // Plate boundaries: bold, one hue per kind.
+  ridge: { color: 0xff9f1a, width: 1.8, opacity: 0.9 },
+  transform: { color: 0x2ed573, width: 1.5, opacity: 0.9 },
+  collision: { color: 0xb05cff, width: 2.0, opacity: 0.9 },
+  subduction: { color: 0xff3b3b, width: 2.4, opacity: 0.95 },
+  // Active faults: thin, so they read as texture under the boundaries.
+  'fault-normal': { color: 0x00d2d3, width: 1.0, opacity: 0.75 },
+  'fault-reverse': { color: 0xff6bcb, width: 1.0, opacity: 0.75 },
+  'fault-strike-slip': { color: 0x5f8bff, width: 1.0, opacity: 0.75 },
 };
 
-/** Draw order: states under borders under coastline. */
-const LAYER_ORDER: readonly OutlineLayerName[] = ['states', 'borders', 'coastline'];
+/** Draw order within a layer set: faults, then political lines, then plate boundaries on top. */
+const LAYER_ORDER: readonly OutlineLayerName[] = [
+  'fault-normal',
+  'fault-reverse',
+  'fault-strike-slip',
+  'states',
+  'borders',
+  'coastline',
+  'ridge',
+  'transform',
+  'collision',
+  'subduction',
+];
 
 /** Place the outlines after the globe quad, which renders at order 0. */
 const OUTLINE_RENDER_ORDER = 1;
@@ -97,9 +128,11 @@ export class OutlineLayer {
 
   constructor(data: OutlineData) {
     for (const name of LAYER_ORDER) {
+      const polylines = data.layers[name];
+      if (!polylines) continue;
       const style = OUTLINE_STYLES[name];
       const geometry = new LineSegmentsGeometry();
-      geometry.setPositions(outlineSegmentPositions(data.layers[name], data.quantumPerDegree));
+      geometry.setPositions(outlineSegmentPositions(polylines, data.quantumPerDegree));
       const material = new LineMaterial({
         color: style.color,
         linewidth: style.width,

@@ -49,4 +49,14 @@ describe('OutlineLayer', () => {
     }
     layer.dispose();
   });
+
+  it('draws only the layers its data carries, plate boundaries over faults', () => {
+    const layer = new OutlineLayer({
+      encoding: 'delta',
+      quantumPerDegree: 100,
+      layers: { subduction: [[0, 0, 10, 10]], 'fault-normal': [[0, 0, 10, 10]], ridge: [[0, 0, 10, 10]] },
+    });
+    expect(layer.getObject().children.map((c) => c.name)).toEqual(['fault-normal', 'ridge', 'subduction']);
+    layer.dispose();
+  });
 });
