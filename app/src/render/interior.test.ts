@@ -2,7 +2,19 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
-import { DEPTH_RAMP, PlumeLayer, SlabLayer, depthColor, depthRampGradient, ecefAtDepth } from './interior';
+import {
+  DEPTH_RAMP,
+  FLOW_LEVEL_COLOR,
+  FLOW_RISING_COLOR,
+  FLOW_SINKING_COLOR,
+  MantleFlowLayer,
+  PlumeLayer,
+  SlabLayer,
+  depthColor,
+  depthRampGradient,
+  ecefAtDepth,
+  flowColor,
+} from './interior';
 
 /** Segment endpoints of a fat-line object, as [start, end] vectors. */
 function segments(lines: THREE.Object3D): [THREE.Vector3, THREE.Vector3][] {
@@ -103,5 +115,46 @@ describe('PlumeLayer', () => {
     expect(bottom.distanceTo(ecefAtDepth(-162, 20, 2891, new THREE.Vector3()))).toBeLessThan(1);
     expect(layer.getObject().children).toHaveLength(1);
     layer.dispose();
+  });
+});
+
+describe('MantleFlowLayer', () => {
+  const shell = (east10: number, north10: number, up10: number) => ({
+    depthKm: 1450,
+    lon: [0],
+    lat: [0],
+    east10: [east10],
+    north10: [north10],
+    up10: [up10],
+  });
+
+  it('draws an arrow from its point at depth along the flow, as far as arrowMyr carries it', () => {
+    // 20 mm/yr east for 5 Myr: 100 km along +y at (0, 0).
+    const layer = new MantleFlowLayer({ quantumPerDegree: 100, arrowMyr: 5, shells: [shell(200, 0, 0)] });
+    const [shaft, ...barbs] = segments(layer.getObject().children[0]);
+    const r = EARTH_RADIUS_M - 1450e3;
+    expect(shaft[0].x).toBeCloseTo(r, 0);
+    expect(shaft[1].clone().sub(shaft[0]).y).toBeCloseTo(100e3, 0);
+    expect(barbs).toHaveLength(2);
+    for (const [from, to] of barbs) {
+      expect(from.distanceTo(shaft[1])).toBeCloseTo(0, 0);
+      // Barbs point back toward the base.
+      expect(to.y).toBeLessThan(shaft[1].y);
+    }
+    layer.dispose();
+  });
+
+  it('tilts a rising arrow outward', () => {
+    const layer = new MantleFlowLayer({ quantumPerDegree: 100, arrowMyr: 5, shells: [shell(0, 0, 100)] });
+    const [shaft] = segments(layer.getObject().children[0]);
+    expect(shaft[1].x - shaft[0].x).toBeCloseTo(50e3, 0);
+    layer.dispose();
+  });
+
+  it('colours by vertical motion, saturating at 10 mm/yr', () => {
+    const c = new THREE.Color();
+    expect(flowColor(0, c).getHex()).toBe(FLOW_LEVEL_COLOR);
+    expect(flowColor(25, c).getHex()).toBe(FLOW_RISING_COLOR);
+    expect(flowColor(-10, c).getHex()).toBe(FLOW_SINKING_COLOR);
   });
 });

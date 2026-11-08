@@ -9,9 +9,9 @@
 
 import { OUTLINE_STYLES, type OutlineLayerName } from '../render/outlines';
 import type { LabelKind } from '../render/labels';
-import { PLUME_COLOR, depthRampGradient } from '../render/interior';
+import { PLUME_COLOR, depthRampGradient, flowGradient } from '../render/interior';
 
-export type InteriorLayerName = 'quakes' | 'slabs' | 'plumes';
+export type InteriorLayerName = 'quakes' | 'slabs' | 'plumes' | 'mantle-flow';
 
 export type LayerTarget =
   | { readonly lines: readonly OutlineLayerName[] }
@@ -73,6 +73,14 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     target: { interior: 'plumes' },
     legend: hex(PLUME_COLOR),
     caption: 'faint: may reach the core',
+  },
+  {
+    id: 'mantle-flow',
+    label: 'Mantle flow (model)',
+    section: 'Inside the Earth',
+    target: { interior: 'mantle-flow' },
+    legend: flowGradient(),
+    caption: 'sinking · level · rising · 300, 1450, 2750 km · arrow = 5 Myr',
   },
   {
     id: 'boundaries',

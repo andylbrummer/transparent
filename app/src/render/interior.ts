@@ -6,8 +6,9 @@
  * depth test - the globe is see-through - so depth reads from colour:
  * slabs and quakes share one ramp (DEPTH_RAMP), so a quake sitting on a
  * slab is the slab's colour. Data comes from tools/pipeline/
- * generate_seismicity.py (slabs.json, quakes.json) and generate_geology.py
- * (the plumes of geology.json).
+ * generate_seismicity.py (slabs.json, quakes.json), generate_geology.py
+ * (the plumes of geology.json) and generate_mantle_flow.py
+ * (mantle-flow.json).
  */
 
 import * as THREE from 'three';
@@ -192,5 +193,118 @@ export class PlumeLayer extends InteriorLines {
         fatLines(new Float32Array(possible), null, lineMaterial({ color: PLUME_COLOR, width: 2, opacity: 0.3 }), 'plumes-possible')
       );
     }
+  }
+}
+
+/** The shape of app/public/geo/mantle-flow.json: per shell, columns of flow velocity. */
+export interface MantleFlowData {
+  readonly quantumPerDegree: number;
+  /** Arrows show this many Myr of travel. */
+  readonly arrowMyr: number;
+  readonly shells: readonly {
+    readonly depthKm: number;
+    readonly lon: readonly number[];
+    readonly lat: readonly number[];
+    /** Velocity in tenths of mm/yr (0.1 km/Myr). */
+    readonly east10: readonly number[];
+    readonly north10: readonly number[];
+    readonly up10: readonly number[];
+  }[];
+}
+
+/** Arrow colours by vertical motion: away from the depth ramp's reds and blues. */
+export const FLOW_RISING_COLOR = 0xff8c42;
+export const FLOW_LEVEL_COLOR = 0xd8d8d8;
+export const FLOW_SINKING_COLOR = 0x40c8ff;
+/** Vertical speed (mm/yr) at which an arrow takes the full rising or sinking colour. */
+export const FLOW_FULL_COLOR_MM_YR = 10;
+const FLOW_HEAD_FRACTION = 0.3;
+const FLOW_HEAD_ANGLE_RAD = (28 * Math.PI) / 180;
+
+const flowColors = {
+  rising: new THREE.Color(FLOW_RISING_COLOR),
+  level: new THREE.Color(FLOW_LEVEL_COLOR),
+  sinking: new THREE.Color(FLOW_SINKING_COLOR),
+};
+
+/** Arrow colour for a vertical speed in mm/yr, written into `target`. */
+export function flowColor(upMmYr: number, target: THREE.Color): THREE.Color {
+  const t = Math.min(Math.abs(upMmYr) / FLOW_FULL_COLOR_MM_YR, 1);
+  return target.copy(flowColors.level).lerp(upMmYr >= 0 ? flowColors.rising : flowColors.sinking, t);
+}
+
+/** CSS legend for the flow colours, sinking on the left. */
+export function flowGradient(): string {
+  const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+  return `linear-gradient(to right, ${hex(FLOW_SINKING_COLOR)}, ${hex(FLOW_LEVEL_COLOR)}, ${hex(FLOW_RISING_COLOR)})`;
+}
+
+/**
+ * Segment endpoints of one 3D arrow from `base` along `displacement`, its
+ * head's barbs in the plane of the arrow and the local horizontal
+ * perpendicular to it, so a rising arrow's head reads from above.
+ */
+export function flowArrowSegments(base: THREE.Vector3, displacement: THREE.Vector3, out: number[]): void {
+  const length = displacement.length();
+  if (length === 0) return;
+  const tip = base.clone().add(displacement);
+  const dir = displacement.clone().divideScalar(length);
+  const side = new THREE.Vector3().crossVectors(dir, base).normalize();
+  if (side.lengthSq() === 0) side.set(-base.y, base.x, 0).normalize();
+  const head = length * FLOW_HEAD_FRACTION;
+  out.push(base.x, base.y, base.z, tip.x, tip.y, tip.z);
+  for (const s of [-1, 1]) {
+    const barb = tip
+      .clone()
+      .addScaledVector(dir, -head * Math.cos(FLOW_HEAD_ANGLE_RAD))
+      .addScaledVector(side, s * head * Math.sin(FLOW_HEAD_ANGLE_RAD));
+    out.push(tip.x, tip.y, tip.z, barb.x, barb.y, barb.z);
+  }
+}
+
+/**
+ * Modelled mantle flow: on each depth shell an arrow per point, the path a
+ * parcel takes in `arrowMyr`, coloured by whether it rises or sinks.
+ */
+export class MantleFlowLayer extends InteriorLines {
+  constructor(data: MantleFlowData) {
+    super();
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const base = new THREE.Vector3();
+    const displacement = new THREE.Vector3();
+    const east = new THREE.Vector3();
+    const north = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    const color = new THREE.Color();
+    // 0.1 mm/yr = 0.1 km/Myr = 100 m/Myr.
+    const metresPerUnit = 100 * data.arrowMyr;
+    for (const shell of data.shells) {
+      for (let i = 0; i < shell.lon.length; i++) {
+        const lon = ((shell.lon[i] / data.quantumPerDegree) * Math.PI) / 180;
+        const lat = ((shell.lat[i] / data.quantumPerDegree) * Math.PI) / 180;
+        ecefAtDepth(shell.lon[i] / data.quantumPerDegree, shell.lat[i] / data.quantumPerDegree, shell.depthKm, base);
+        east.set(-Math.sin(lon), Math.cos(lon), 0);
+        north.set(-Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat));
+        up.set(Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat));
+        displacement
+          .set(0, 0, 0)
+          .addScaledVector(east, shell.east10[i] * metresPerUnit)
+          .addScaledVector(north, shell.north10[i] * metresPerUnit)
+          .addScaledVector(up, shell.up10[i] * metresPerUnit);
+        const before = positions.length;
+        flowArrowSegments(base, displacement, positions);
+        flowColor(shell.up10[i] / 10, color);
+        for (let v = before; v < positions.length; v += 3) colors.push(color.r, color.g, color.b);
+      }
+    }
+    this.add(
+      fatLines(
+        new Float32Array(positions),
+        new Float32Array(colors),
+        lineMaterial({ vertexColors: true, width: 1.3, opacity: 0.85 }),
+        'mantle-flow'
+      )
+    );
   }
 }
