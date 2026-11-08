@@ -117,6 +117,31 @@ python3 tools/pipeline/generate_plate_motion.py
 python3 tools/pipeline/test_plate_motion.py
 ```
 
+## Mantle Flow
+
+`generate_mantle_flow.py` writes `app/public/geo/mantle-flow.json`: flow
+velocity (east, north, up) on ~1100 points at each of 300, 1450 and 2750 km
+depth. It is an instantaneous flow model, not data: the `hc` solver
+(Hager & O'Connell 1981) driven by SEMUCB-WM1 tomography, with the
+Steinberger & Holme (2008) viscosity profile and density scaling, and the
+NNR-MORVEL56 plates moving the surface. The flow follows those choices;
+change them in the script's constants.
+
+`hc` is GPL-2.0 and runs only here, as a tool; none of it ships. Build it
+once at the pinned commit (`HC_COMMIT`), plus `sh_ana`, which the no-GMT
+target leaves out although it needs no GMT:
+
+```bash
+git clone https://github.com/geodynamics/hc /path/to/hc
+git -C /path/to/hc checkout 7bb6d0385d88e25510f5e4646e835d8b018f2073
+make -C /path/to/hc all_no_gmt ADD_FLAGS=-DNO_GMT
+cc -DNO_GMT -DNO_RICK_FORTRAN -I/path/to/hc/src -c /path/to/hc/src/sh_ana.c -o /path/to/hc/objects/sh_ana.o
+cc -L/path/to/hc/objects /path/to/hc/objects/sh_ana.o -o /path/to/hc/bin/sh_ana -lhc -lrick /path/to/hc/objects/prem_util.o -lm
+
+python3 tools/pipeline/generate_mantle_flow.py --hc-dir /path/to/hc
+python3 tools/pipeline/test_mantle_flow.py
+```
+
 ## Assets
 
 Imagery (Blue Marble) is fetched by the app at runtime from NASA GIBS, not
