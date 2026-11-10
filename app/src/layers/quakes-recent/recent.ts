@@ -186,7 +186,8 @@ export async function loadRecent(io: RecentIo, held: RecentData | null = null): 
   return candidates[0] ?? { source: 'none', events: [], generatedMs: null };
 }
 
-function browserIo(context: LayerContext): RecentIo {
+/** The loader's IO in the browser. Exported for the seismic wave playback, which offers the latest large event from the same feeds and cache. */
+export function browserIo(context: Pick<LayerContext, 'fetchJson' | 'assetUrl'>): RecentIo {
   return {
     fetchFeed: (feed) => context.fetchJson<unknown>(usgsFeedUrl(feed), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }),
     fetchSnapshot: () => context.fetchJson<unknown>(context.assetUrl(SNAPSHOT_PATH)),
