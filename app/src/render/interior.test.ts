@@ -4,6 +4,7 @@ import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import {
   DEPTH_RAMP,
+  DEPTH_RAMP_GLSL,
   FLOW_LEVEL_COLOR,
   FLOW_RISING_COLOR,
   FLOW_SINKING_COLOR,
@@ -34,13 +35,38 @@ function segments(lines: THREE.Object3D): [THREE.Vector3, THREE.Vector3][] {
 const lonOf = (v: THREE.Vector3): number => (Math.atan2(v.y, v.x) * 180) / Math.PI;
 const depthKmOf = (v: THREE.Vector3): number => (EARTH_RADIUS_M - v.length()) / 1000;
 
+/** The colour a CSS linear-gradient through DEPTH_RAMP shows at a depth: display channels blended between stops. */
+function legendColor(depthKm: number): [number, number, number] {
+  const last = DEPTH_RAMP.length - 1;
+  const clamped = Math.min(Math.max(depthKm, DEPTH_RAMP[0].depthKm), DEPTH_RAMP[last].depthKm);
+  let i = 1;
+  while (i < last && DEPTH_RAMP[i].depthKm < clamped) i++;
+  const t = (clamped - DEPTH_RAMP[i - 1].depthKm) / (DEPTH_RAMP[i].depthKm - DEPTH_RAMP[i - 1].depthKm);
+  const channel = (shift: number): number => {
+    const a = (DEPTH_RAMP[i - 1].color >> shift) & 0xff;
+    const b = (DEPTH_RAMP[i].color >> shift) & 0xff;
+    return a + (b - a) * t;
+  };
+  return [channel(16), channel(8), channel(0)];
+}
+
+/** Run DEPTH_RAMP_GLSL's body by hand: a chain of `color = mix(color, vec3(..), clamp((depthKm - a) / b, 0.0, 1.0));`. */
+function glslRampColor(depthKm: number): [number, number, number] {
+  const first = /vec3 color = vec3\(([^)]+)\);/.exec(DEPTH_RAMP_GLSL);
+  if (!first) throw new Error('no starting colour in DEPTH_RAMP_GLSL');
+  let color = first[1].split(',').map(Number);
+  const steps = [...DEPTH_RAMP_GLSL.matchAll(/color = mix\(color, vec3\(([^)]+)\), clamp\(\(depthKm - ([\d.]+)\) \/ ([\d.]+), 0\.0, 1\.0\)\);/g)];
+  for (const [, rgb, from, span] of steps) {
+    const t = Math.min(Math.max((depthKm - Number(from)) / Number(span), 0), 1);
+    color = color.map((c, k) => c + (Number(rgb.split(',')[k]) - c) * t);
+  }
+  return [color[0] * 255, color[1] * 255, color[2] * 255];
+}
+
 describe('depthColor', () => {
-  it('hits each ramp stop and blends between them', () => {
+  it('hits each ramp stop', () => {
     const color = new THREE.Color();
     for (const stop of DEPTH_RAMP) expect(depthColor(stop.depthKm, color).getHex()).toBe(stop.color);
-    const red = new THREE.Color(DEPTH_RAMP[0].color);
-    const orange = new THREE.Color(DEPTH_RAMP[1].color);
-    expect(depthColor(35, color).g).toBeCloseTo((red.g + orange.g) / 2, 6);
   });
 
   it('clamps above and below the ramp', () => {
@@ -53,6 +79,40 @@ describe('depthColor', () => {
     expect(depthRampGradient(700)).toBe(
       'linear-gradient(to right, #ff453a 0.0%, #ff9f0a 10.0%, #ffd60a 21.4%, #32d74b 42.9%, #0a84ff 71.4%, #bf5af2 100.0%)'
     );
+  });
+
+  it('shows, at every depth, the colour the legend bar shows there', () => {
+    const color = new THREE.Color();
+    const shown = new THREE.Color();
+    let worst = 0;
+    for (let depthKm = -10; depthKm <= 720; depthKm += 1) {
+      const legend = legendColor(depthKm);
+      // What reaches the screen: THREE.Color is linear, the canvas is sRGB.
+      depthColor(depthKm, color).getRGB(shown, THREE.SRGBColorSpace);
+      const drawn = [shown.r * 255, shown.g * 255, shown.b * 255];
+      for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(drawn[k] - legend[k]));
+    }
+    // Under half a step of an 8-bit channel: the same pixel value.
+    expect(worst).toBeLessThan(0.5);
+  });
+
+  it('is brighter between stops than a blend of linear light would be dark', () => {
+    // 35 km, half way from red #ff453a to orange #ff9f0a: the legend shows green 0x72.
+    const shown = depthColor(35, new THREE.Color()).getRGB(new THREE.Color(), THREE.SRGBColorSpace);
+    expect(Math.round(shown.g * 255)).toBe(0x72);
+  });
+});
+
+describe('DEPTH_RAMP_GLSL', () => {
+  it('gives a shader the legend colours too, as display values', () => {
+    expect([...DEPTH_RAMP_GLSL.matchAll(/color = mix\(/g)]).toHaveLength(DEPTH_RAMP.length - 1);
+    let worst = 0;
+    for (let depthKm = -10; depthKm <= 720; depthKm += 1) {
+      const legend = legendColor(depthKm);
+      const glsl = glslRampColor(depthKm);
+      for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(glsl[k] - legend[k]));
+    }
+    expect(worst).toBeLessThan(0.5);
   });
 });
 

@@ -28,18 +28,50 @@ export const DEPTH_RAMP: readonly { readonly depthKm: number; readonly color: nu
   { depthKm: 700, color: 0xbf5af2 },
 ];
 
-const rampColors = DEPTH_RAMP.map((stop) => new THREE.Color(stop.color));
+/** DEPTH_RAMP's stops as display (sRGB) channels, 0..1. */
+const rampSrgb: readonly (readonly [number, number, number])[] = DEPTH_RAMP.map((stop) => [
+  ((stop.color >> 16) & 0xff) / 255,
+  ((stop.color >> 8) & 0xff) / 255,
+  (stop.color & 0xff) / 255,
+]);
 
-/** Colour for a depth on DEPTH_RAMP, written into `target`. Clamps past either end. */
+/**
+ * Colour for a depth on DEPTH_RAMP, written into `target`. Clamps past either end.
+ *
+ * Between stops it blends the display values, as the CSS gradient of the
+ * legend does (depthRampGradient): a quake, a slab and the legend bar show
+ * one colour for one depth. Blending THREE.Color's linear-light channels
+ * instead would match at the stops only, and be up to 28/255 brighter between.
+ */
 export function depthColor(depthKm: number, target: THREE.Color): THREE.Color {
   const last = DEPTH_RAMP.length - 1;
-  if (depthKm <= DEPTH_RAMP[0].depthKm) return target.copy(rampColors[0]);
-  if (depthKm >= DEPTH_RAMP[last].depthKm) return target.copy(rampColors[last]);
   let i = 1;
-  while (DEPTH_RAMP[i].depthKm < depthKm) i++;
-  const t = (depthKm - DEPTH_RAMP[i - 1].depthKm) / (DEPTH_RAMP[i].depthKm - DEPTH_RAMP[i - 1].depthKm);
-  return target.copy(rampColors[i - 1]).lerp(rampColors[i], t);
+  while (i < last && DEPTH_RAMP[i].depthKm < depthKm) i++;
+  const span = DEPTH_RAMP[i].depthKm - DEPTH_RAMP[i - 1].depthKm;
+  const t = Math.min(Math.max((depthKm - DEPTH_RAMP[i - 1].depthKm) / span, 0), 1);
+  const a = rampSrgb[i - 1];
+  const b = rampSrgb[i];
+  return target.setRGB(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, THREE.SRGBColorSpace);
 }
+
+/**
+ * GLSL `vec3 depthRampSrgb(float depthKm)`: DEPTH_RAMP as display values,
+ * for a shader that writes its colour to the screen as it is (no
+ * colorspace_fragment). The same blend as depthColor and the legend.
+ */
+export const DEPTH_RAMP_GLSL = `
+  vec3 depthRampSrgb(float depthKm) {
+    vec3 color = vec3(${rampSrgb[0].map((c) => c.toFixed(5)).join(', ')});
+${DEPTH_RAMP.slice(1)
+  .map(
+    (stop, i) =>
+      `    color = mix(color, vec3(${rampSrgb[i + 1].map((c) => c.toFixed(5)).join(', ')}), ` +
+      `clamp((depthKm - ${DEPTH_RAMP[i].depthKm.toFixed(1)}) / ${(stop.depthKm - DEPTH_RAMP[i].depthKm).toFixed(1)}, 0.0, 1.0));`
+  )
+  .join('\n')}
+    return color;
+  }
+`;
 
 /** CSS linear-gradient of DEPTH_RAMP, left = surface, for a legend 0..maxKm wide. */
 export function depthRampGradient(maxKm: number): string {
