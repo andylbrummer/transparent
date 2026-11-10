@@ -246,6 +246,25 @@ function fatLines(name: string, linewidth: number, opacity: number, renderOrder:
   return lines;
 }
 
+/**
+ * The faint web of sub-hurricane legs is most of the archive: as hairlines it costs a fraction of
+ * what screen-space quads do, and on top of the default layers that is the difference between
+ * holding the frame rate and missing it.
+ */
+function thinLines(name: string, opacity: number, renderOrder: number): THREE.LineSegments {
+  const material = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity, depthTest: false, depthWrite: false });
+  const lines = new THREE.LineSegments(new THREE.BufferGeometry(), material);
+  lines.name = name;
+  lines.frustumCulled = false;
+  lines.renderOrder = renderOrder;
+  return lines;
+}
+
+function setThinSegments(lines: THREE.LineSegments, buffers: SegmentBuffers): void {
+  lines.geometry.setAttribute('position', new THREE.BufferAttribute(buffers.positions, 3));
+  lines.geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 3));
+}
+
 function setSegments(lines: LineSegments2, buffers: SegmentBuffers): void {
   lines.geometry.dispose();
   const geometry = new LineSegmentsGeometry();
@@ -267,8 +286,8 @@ export async function createCycloneTracksLayer(context: LayerContext): Promise<L
 
   // A storm spends most of its life below hurricane strength: drawn as heavy as the rest, those legs
   // bury the basins in the blue of depressions. They stay as a faint web under the hurricane legs.
-  const weak = fatLines('cyclone-tracks-weak', 1, 0.3, RENDER_ORDER.outlines + 0.28);
-  setSegments(weak, trackSegments(tracks, tracks.storms, Infinity, (kt) => kt < HURRICANE_KT));
+  const weak = thinLines('cyclone-tracks-weak', 0.45, RENDER_ORDER.outlines + 0.28);
+  setThinSegments(weak, trackSegments(tracks, tracks.storms, Infinity, (kt) => kt < HURRICANE_KT));
   const all = fatLines('cyclone-tracks', 1.3, 0.8, RENDER_ORDER.outlines + 0.3);
   setSegments(all, trackSegments(tracks, tracks.storms, Infinity, (kt) => kt >= HURRICANE_KT));
   const current = fatLines('cyclone-tracks-under-way', 3.2, 1, RENDER_ORDER.outlines + 0.35);
@@ -336,13 +355,15 @@ export async function createCycloneTracksLayer(context: LayerContext): Promise<L
       symbols.advance(frame.deltaMs);
     },
     setResolution(widthCss, heightCss) {
-      for (const lines of [weak, all, current]) (lines.material as LineMaterial).resolution.set(widthCss, heightCss);
+      for (const lines of [all, current]) (lines.material as LineMaterial).resolution.set(widthCss, heightCss);
     },
     dispose() {
       for (const labels of groups) labels.remove();
       underWayLabels?.remove();
       group.removeFromParent();
-      for (const lines of [weak, all, current]) {
+      weak.geometry.dispose();
+      (weak.material as THREE.Material).dispose();
+      for (const lines of [all, current]) {
         lines.geometry.dispose();
         (lines.material as LineMaterial).dispose();
       }
