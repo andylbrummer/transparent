@@ -8,12 +8,24 @@ active in the Holocene (the last ~12,000 years) with the year of their
 last known eruption, and those of the Pleistocene - and every Holocene
 eruption of Volcanic Explosivity Index 6 or more.
 
-    Global Volcanism Program (2025), Volcanoes of the World (v. 5),
-    Smithsonian Institution, compiled by Venzke, E.,
-    doi:10.5479/si.GVP.VOTW5-2024.5.2 - read from the Program's public
-    WFS (webservices.volcano.si.edu/geoserver/GVP-VOTW), layers
-    Smithsonian_VOTW_Holocene_Volcanoes, _Pleistocene_Volcanoes and
-    _Holocene_Eruptions.
+    Global Volcanism Program (2026), [Database] Volcanoes of the World
+    (v. 5.4.0; 7 Aug 2026), distributed by Smithsonian Institution,
+    compiled by Venzke, E., doi:10.5479/si.GVP.VOTW5-2026.5.4
+
+read from the Program's public WFS
+(webservices.volcano.si.edu/geoserver/GVP-VOTW), layers
+Smithsonian_VOTW_Holocene_Volcanoes, _Pleistocene_Volcanoes and
+_Holocene_Eruptions. The WFS serves the current database and carries no
+version: SOURCE below is the version the Program's database page
+(volcano.si.edu/gvp_votw.cfm) gave as current on 30 Oct 2026, ten days
+before the download cached here. The Program asks that any use cite the
+version and its date; bring SOURCE up to date with that page whenever
+the download is refreshed.
+
+Terms (volcano.si.edu/gvp_termsofuse.cfm): the Smithsonian's - free for
+"personal, educational and other non-commercial purposes" with citation
+and a link; commercial use needs written permission. The file this
+writes carries that restriction.
 
 The app already names volcanoes (geology.json, NOAA NCEI); this adds what
 they are: type, height and how recently each erupted. "Last eruption" is
@@ -41,6 +53,9 @@ import sys
 
 from fetch_cache import CACHE_DIR, cached_fetch
 from generate_geo import OUTPUT_DIR, write_json
+
+SOURCE = ("Global Volcanism Program (2026), [Database] Volcanoes of the World (v. 5.4.0; 7 Aug 2026), distributed by "
+          "Smithsonian Institution, compiled by Venzke, E., doi:10.5479/si.GVP.VOTW5-2026.5.4")
 
 WFS = ("https://webservices.volcano.si.edu/geoserver/GVP-VOTW/ows?service=WFS&version=1.0.0&request=GetFeature"
        "&outputFormat=application/json&typeName=GVP-VOTW:")
@@ -100,7 +115,7 @@ def main() -> None:
     # The day the database was read: the cached download's, not today's.
     cache_day = datetime.date.fromtimestamp((CACHE_DIR / "gvp" / "holocene.json").stat().st_mtime)
     data = {
-        "source": "Global Volcanism Program, Volcanoes of the World v. 5, Smithsonian Institution (doi:10.5479/si.GVP.VOTW5-2024.5.2)",
+        "source": SOURCE,
         "asOf": cache_day.isoformat(),
         "quantumPerDegree": QUANTUM_PER_DEG,
         "missingYear": MISSING_YEAR,

@@ -4,9 +4,9 @@ import { GREAT_ERUPTION_COLOR, RECENCY_CLASSES, recencyLegend } from './classes'
 const GVP: Credit = {
   what: 'Volcanoes (type, height, last eruption) and Holocene eruptions of VEI 6 and above',
   source:
-    'Global Volcanism Program (2025), Volcanoes of the World v. 5, Smithsonian Institution, compiled by Venzke, E., doi:10.5479/si.GVP.VOTW5-2024.5.2',
-  licence: 'free to use with citation (Smithsonian terms of use: non-commercial)',
-  url: 'https://volcano.si.edu/',
+    'Global Volcanism Program (2026), [Database] Volcanoes of the World (v. 5.4.0; 7 Aug 2026), distributed by Smithsonian Institution, compiled by Venzke, E., doi:10.5479/si.GVP.VOTW5-2026.5.4',
+  licence: 'non-commercial use with citation (Smithsonian terms of use)',
+  url: 'https://volcano.si.edu/gvp_votw.cfm',
 };
 
 const volcanoes: readonly LayerDefinition[] = [
