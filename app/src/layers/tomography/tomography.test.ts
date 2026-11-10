@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { raySphere } from '../../render/deep-shell';
 import { rampColor } from '../weather/ramps';
-import tomography from './layer';
+import layers from './layer';
 import { DVS_CLEAR_BELOW, DVS_FULL_FROM, DVS_RAMP, TOMOGRAPHY_SHELLS, signedPercent, tomographyId } from './shells';
 import { TOMOGRAPHY_SHADE_GLSL, shellLabelText } from './tomography';
 
@@ -32,6 +32,9 @@ describe('raySphere', () => {
     expect(hit![1]).toBeLessThan(0);
   });
 });
+
+/** The depth slices; the 3-D bodies of the same file have their own test (bodies.test.ts). */
+const tomography = layers.filter((layer) => layer.exclusiveGroup === 'tomography');
 
 describe('the tomography layers', () => {
   it('are one switch per depth, exclusive, inside the Earth, off until asked for', () => {

@@ -1,6 +1,16 @@
 import type { Credit, LayerDefinition } from '../types';
 import { rampGradient } from '../weather/ramps';
-import { DVS_RAMP, TOMOGRAPHY_SHELLS, signedPercent, tomographyId } from './shells';
+import {
+  BODY_BASE_KM,
+  BODY_COLORS,
+  BODY_THRESHOLD_PERCENT,
+  BODY_TOP_KM,
+  DVS_RAMP,
+  TOMOGRAPHY_BODIES_ID,
+  TOMOGRAPHY_SHELLS,
+  signedPercent,
+  tomographyId,
+} from './shells';
 
 const CREDITS: readonly Credit[] = [
   {
@@ -18,8 +28,27 @@ const CREDITS: readonly Credit[] = [
   },
 ];
 
+const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
+
+/** The lower mantle's slow provinces as solids: the same model, contoured in three dimensions. */
+const bodies: LayerDefinition = {
+  id: TOMOGRAPHY_BODIES_ID,
+  label: 'Deep mantle in 3-D: slow provinces (LLSVPs)',
+  section: 'Inside the Earth',
+  order: 59,
+  legend: `linear-gradient(to right, ${hex(BODY_COLORS.top)}, ${hex(BODY_COLORS.base)})`,
+  caption:
+    `where shear waves run ${signedPercent(-BODY_THRESHOLD_PERCENT)} or more slow, ` +
+    `from ${BODY_TOP_KM.toLocaleString('en-US')} km (light, cut off there) down to the core at ${BODY_BASE_KM.toLocaleString('en-US')} km (dark) · ` +
+    'the two great slow provinces standing on the core under Africa and the Pacific, and the columns rising off them · ' +
+    `a line every 250 km of depth · dimmed where seen through the core · ` +
+    'a contour of a smoothed model (SEMUCB-WM1), not a body with edges: another threshold draws another shape',
+  credits: CREDITS.slice(0, 1),
+  load: async (context) => (await import('./bodies')).createTomographyBodiesLayer(context),
+};
+
 /** One switch per depth slice, one at a time: each is a fullscreen pass. */
-const tomography: readonly LayerDefinition[] = TOMOGRAPHY_SHELLS.map((shell, index) => ({
+const slices: readonly LayerDefinition[] = TOMOGRAPHY_SHELLS.map((shell, index) => ({
   id: tomographyId(shell.depthKm),
   label: `Mantle at ${shell.depthKm.toLocaleString('en-US')} km (tomography)`,
   section: 'Inside the Earth',
@@ -32,5 +61,7 @@ const tomography: readonly LayerDefinition[] = TOMOGRAPHY_SHELLS.map((shell, ind
   credits: CREDITS,
   load: async (context) => (await import('./tomography')).createTomographyLayer(context, shell),
 }));
+
+const tomography: readonly LayerDefinition[] = [bodies, ...slices];
 
 export default tomography;

@@ -40,6 +40,19 @@ export const DVS_RAMP: readonly RampStop[] = [
   [1, 0x1546b0],
 ];
 
+/**
+ * The 3-D body: the surface at −BODY_THRESHOLD_PERCENT, from BODY_TOP_KM
+ * down to the core; tools/pipeline/generate_tomography_bodies.py's
+ * THRESHOLD_PERCENT, TOP_KM and CMB_KM. It is coloured by depth, from
+ * BODY_COLORS.top where it is cut off to .base on the core: the slices'
+ * own slow red, lightening upward.
+ */
+export const BODY_THRESHOLD_PERCENT = 0.8;
+export const BODY_TOP_KM = 1050;
+export const BODY_BASE_KM = 2891;
+export const BODY_COLORS = { top: 0xffc46b, base: 0xc8102e } as const;
+export const TOMOGRAPHY_BODIES_ID = 'tomography-slow-bodies';
+
 /** Anomalies smaller than this fraction of the range are not drawn; full strength from DVS_FULL_FROM. */
 export const DVS_CLEAR_BELOW = 0.06;
 export const DVS_FULL_FROM = 0.45;
