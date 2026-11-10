@@ -87,6 +87,13 @@ interface Shown {
   readonly detail: string;
 }
 
+/**
+ * How often the status chip is worked out again, wall-clock ms. Its text
+ * changes with a new reading or a new minute, and building it formats
+ * dates through Intl: not something to do sixty times a second.
+ */
+const STATUS_INTERVAL_MS = 1000;
+
 export async function createAuroraLayer(context: LayerContext): Promise<LayerInstance> {
   const shell = new SurfaceShell(context.skyUniforms, {
     name: 'aurora',
@@ -146,8 +153,15 @@ export async function createAuroraLayer(context: LayerContext): Promise<LayerIns
     }
   }
 
-  await refresh();
-  if (shown === null) throw new Error('no aurora nowcast, live or baked');
+  try {
+    await refresh();
+    if (shown === null) throw new Error('no aurora nowcast, live or baked');
+  } catch (error) {
+    // The shell is already in the scene: a failed load must not leave one behind for each retry.
+    shell.dispose();
+    throw error;
+  }
+  let lastStatusWall = -Infinity;
 
   return {
     setVisible(visible) {
@@ -159,7 +173,8 @@ export async function createAuroraLayer(context: LayerContext): Promise<LayerIns
         lastFetch = wall;
         void refresh();
       }
-      if (shown) {
+      if (shown && wall - lastStatusWall > STATUS_INTERVAL_MS) {
+        lastStatusWall = wall;
         const next = readingStatus('forecast', shown.forecastMs, shown.fromNetwork, frame.date.getTime(), shown.detail);
         if (next.text !== status) {
           status = next.text;

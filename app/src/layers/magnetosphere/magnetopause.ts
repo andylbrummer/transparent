@@ -44,6 +44,13 @@ export function windText(wind: SolarWind): string {
   return `nose ${model.r0.toFixed(1)} R⊕ · wind ${Math.round(wind.speedKmS)} km/s, ${wind.densityCm3.toFixed(1)} /cm³, Bz ${bz} nT`;
 }
 
+/**
+ * How often the status chip is worked out again, wall-clock ms. Its text
+ * changes with a new reading or a new minute, and building it formats
+ * dates through Intl: not something to do sixty times a second.
+ */
+const STATUS_INTERVAL_MS = 1000;
+
 export async function createMagnetopauseLayer(context: LayerContext): Promise<LayerInstance> {
   const segments = MERIDIANS * STEPS + RINGS * RING_SEGMENTS;
   const positions = new Float32Array(segments * 6);
@@ -127,8 +134,16 @@ export async function createMagnetopauseLayer(context: LayerContext): Promise<La
   }
 
   lastFetch = performance.now();
-  await refresh();
-  if (shown === null) throw new Error('no solar wind, live or baked');
+  try {
+    await refresh();
+    if (shown === null) throw new Error('no solar wind, live or baked');
+  } catch (error) {
+    // The lines are already in the scene: a failed load must not leave a set behind for each retry.
+    lines.dispose();
+    label.dispose();
+    throw error;
+  }
+  let lastStatusWall = -Infinity;
 
   return {
     setVisible(visible) {
@@ -148,7 +163,8 @@ export async function createMagnetopauseLayer(context: LayerContext): Promise<La
         sunDir.set(sun[0], sun[1], sun[2]).normalize();
         lines.object.quaternion.setFromUnitVectors(X, sunDir);
       }
-      if (shown) {
+      if (shown && wall - lastStatusWall > STATUS_INTERVAL_MS) {
+        lastStatusWall = wall;
         const next = readingStatus('solar wind', shown.wind.timeMs, shown.fromNetwork, dateMs, `nose ${noseRadii.toFixed(1)} R⊕`);
         if (next.text !== status) {
           status = next.text;
