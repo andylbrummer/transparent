@@ -269,6 +269,10 @@ export interface PlanetEphemeris {
   readonly illuminatedFraction: number;
   /** Apparent visual magnitude. */
   readonly magnitude: number;
+  /** Sun to planet, au, ICRS axes, when the light left. */
+  readonly heliocentricAu: Vec3Tuple;
+  /** Days the light took to reach the Earth. */
+  readonly lightTimeDays: number;
 }
 
 /** Ring plane of Saturn on the ecliptic of date: inclination and ascending node, degrees (Meeus 45.1). */
@@ -347,6 +351,8 @@ export function planetEphemeris(planet: PlanetName, utc: Date): PlanetEphemeris 
     phaseAngleDeg,
     illuminatedFraction: (1 + Math.cos(phaseAngleDeg * DEG)) / 2,
     magnitude: planetMagnitude(planet, sunDistanceAu, distanceAu, phaseAngleDeg, ringTiltSin, ringDeltaU),
+    heliocentricAu: heliocentric,
+    lightTimeDays: distanceAu * LIGHT_DAYS_PER_AU,
   };
 }
 

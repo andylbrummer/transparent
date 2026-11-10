@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""
+Content pipeline for Transparent Earth: how the planets are shaped and turned.
+
+Writes packages/core/src/astro/planet-rotation-data.ts: for Mercury to
+Neptune the radii, the direction of the north pole and the rotation W(t)
+of the prime meridian, and the radii of the moons the app draws.
+
+Source: NAIF's planetary constants kernel pck00011.tpc (N. Bachman, JPL,
+2022), which transcribes the "Report of the IAU Working Group on
+Cartographic Coordinates and Rotational Elements: 2015" (Archinal et al.
+2018, Celest. Mech. Dyn. Astron. 130:22) with its 2019 erratum. NAIF
+kernels are free to use (https://naif.jpl.nasa.gov/naif/rules.html).
+
+The kernel's own convention, kept here (T Julian centuries and d days of
+TDB from J2000, angles in degrees, theta_i = sum_k angles[i][k] T^k):
+
+    alpha0 = poleRa[0]  + poleRa[1] T  + sum_i raTerms[i]  sin(theta_i)
+    delta0 = poleDec[0] + poleDec[1] T + sum_i decTerms[i] cos(theta_i)
+    W      = pm[0]      + pm[1] d      + sum_i pmTerms[i]  sin(theta_i)
+
+Usage:
+    python3 tools/pipeline/generate_planet_constants.py
+
+The kernel is cached in tools/pipeline/.cache/. Standard library only.
+"""
+
+import json
+import re
+from pathlib import Path
+
+from fetch_cache import cached_fetch
+
+KERNEL_URL = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc"
+
+PLANETS = {
+    "mercury": 1,
+    "venus": 2,
+    "mars": 4,
+    "jupiter": 5,
+    "saturn": 6,
+    "uranus": 7,
+    "neptune": 8,
+}
+
+# NAIF ids of the moons the app draws.
+MOONS = {
+    "io": 501,
+    "europa": 502,
+    "ganymede": 503,
+    "callisto": 504,
+    "tethys": 603,
+    "dione": 604,
+    "rhea": 605,
+    "titan": 606,
+    "iapetus": 608,
+    "triton": 801,
+}
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT = REPO_ROOT / "packages" / "core" / "src" / "astro" / "planet-rotation-data.ts"
+
+
+def parse_kernel(text: str) -> dict[str, list[float]]:
+    """Every `NAME = ( numbers )` assignment inside the kernel's data blocks."""
+    data: list[str] = []
+    in_data = False
+    for line in text.splitlines():
+        token = line.strip()
+        # The real markers start their line; the indented ones are examples in the commentary.
+        if line.startswith("\\begindata"):
+            in_data = True
+        elif line.startswith("\\begintext"):
+            in_data = False
+        elif in_data and token:
+            data.append(line)
+    values: dict[str, list[float]] = {}
+    for name, body in re.findall(r"(BODY\w+)\s*=\s*\(([^)]*)\)", "\n".join(data)):
+        values[name] = [float(cell.replace("D", "E")) for cell in body.replace(",", " ").split()]
+    for name, value in re.findall(r"(BODY\w+)\s*=\s*([-+0-9.]+)\s*$", "\n".join(data), flags=re.M):
+        values.setdefault(name, [float(value)])
+    return values
+
+
+def trimmed(values: list[float]) -> list[float]:
+    """Without the trailing zeros the kernel pads its term lists with."""
+    end = len(values)
+    while end > 0 and values[end - 1] == 0:
+        end -= 1
+    return values[:end]
+
+
+def planet_entry(kernel: dict[str, list[float]], system: int) -> dict[str, object]:
+    body = f"BODY{system}99"
+    ra_terms = trimmed(kernel.get(f"{body}_NUT_PREC_RA", []))
+    dec_terms = trimmed(kernel.get(f"{body}_NUT_PREC_DEC", []))
+    pm_terms = trimmed(kernel.get(f"{body}_NUT_PREC_PM", []))
+    used = max(len(ra_terms), len(dec_terms), len(pm_terms))
+    degree = int(kernel.get(f"BODY{system}_MAX_PHASE_DEGREE", [1])[0])
+    flat = kernel.get(f"BODY{system}_NUT_PREC_ANGLES", [])
+    width = degree + 1
+    angles = [trimmed(flat[i * width : (i + 1) * width]) for i in range(used)]
+    assert all(len(angle) > 0 for angle in angles), f"{body}: a term without its angle"
+    radii = kernel[f"{body}_RADII"]
+    assert radii[0] == radii[1], f"{body}: not a spheroid"
+    return {
+        "equatorialRadiusKm": radii[0],
+        "polarRadiusKm": radii[2],
+        "poleRa": kernel[f"{body}_POLE_RA"][:2],
+        "poleDec": kernel[f"{body}_POLE_DEC"][:2],
+        "pm": kernel[f"{body}_PM"][:2],
+        "angles": angles,
+        "raTerms": ra_terms,
+        "decTerms": dec_terms,
+        "pmTerms": pm_terms,
+    }
+
+
+def main() -> None:
+    kernel = parse_kernel(cached_fetch(KERNEL_URL, "pck00011.tpc").read_text())
+    planets = {name: planet_entry(kernel, system) for name, system in PLANETS.items()}
+    for name in planets:
+        assert kernel[f"BODY{PLANETS[name]}99_POLE_RA"][2] == 0, f"{name}: quadratic pole term"
+        assert kernel[f"BODY{PLANETS[name]}99_PM"][2] == 0, f"{name}: quadratic rotation term"
+    # A moon's mean radius: the cube root of its three semi-axes' product.
+    moons = {
+        name: round((kernel[f"BODY{code}_RADII"][0] * kernel[f"BODY{code}_RADII"][1] * kernel[f"BODY{code}_RADII"][2]) ** (1 / 3), 1)
+        for name, code in MOONS.items()
+    }
+    OUTPUT.write_text(
+        "/**\n"
+        " * Shapes and rotations of the planets, and the moons' radii. GENERATED by\n"
+        " * tools/pipeline/generate_planet_constants.py - do not edit.\n"
+        " *\n"
+        " * From NAIF's pck00011.tpc: the IAU WGCCRE 2015 report (Archinal et al.\n"
+        " * 2018, Celest. Mech. Dyn. Astron. 130:22). Degrees, km; T in Julian\n"
+        " * centuries and d in days of TDB from J2000; theta_i = sum_k angles[i][k] T^k:\n"
+        " *   alpha0 = poleRa[0] + poleRa[1] T + sum raTerms[i] sin(theta_i)\n"
+        " *   delta0 = poleDec[0] + poleDec[1] T + sum decTerms[i] cos(theta_i)\n"
+        " *   W = pm[0] + pm[1] d + sum pmTerms[i] sin(theta_i)\n"
+        " */\n"
+        f"export const PLANET_ROTATION = {json.dumps(planets, indent=1)} as const;\n\n"
+        "/** Mean radii, km. */\n"
+        f"export const MOON_RADII_KM = {json.dumps(moons, indent=1)} as const;\n"
+    )
+    print(f"wrote {OUTPUT.relative_to(REPO_ROOT)} ({OUTPUT.stat().st_size / 1024:.1f} KB)")
+    for name, entry in planets.items():
+        print(f"  {name}: R {entry['equatorialRadiusKm']} / {entry['polarRadiusKm']} km, {len(entry['angles'])} periodic angles")
+
+
+if __name__ == "__main__":
+    main()
