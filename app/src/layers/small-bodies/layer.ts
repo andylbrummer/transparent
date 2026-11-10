@@ -80,6 +80,30 @@ const LAYERS: readonly LayerDefinition[] = [
     ],
     load: async (context) => (await import('./cloud')).createCloudLayer(context),
   },
+  {
+    id: 'neo-approaches',
+    label: 'Asteroids passing the Earth',
+    section: 'Sky',
+    order: 59,
+    legend: '#ff8052',
+    caption:
+      '□ asteroids within 10 lunar distances (LD, 384,399 km), for two days either side of closest approach, where they stand in your sky · distance now, closest distance and date · sizes with “~” are the range the brightness allows · list of 10 Sep 2026 – 9 Nov 2027 as known on 9 Nov 2026: most small ones are found days before they pass',
+    credits: [
+      {
+        what: 'Close approaches of near-Earth objects: times, distances, speeds, sizes',
+        source: 'NASA/JPL Center for Near-Earth Object Studies (CNEOS), Close-Approach Data API',
+        licence: PUBLIC_DOMAIN,
+        url: 'https://cneos.jpl.nasa.gov/ca/',
+      },
+      {
+        what: 'Positions of the passing asteroids round closest approach',
+        source: 'NASA/JPL Horizons On-Line Ephemeris System (Giorgini et al.), Solar System Dynamics group, Jet Propulsion Laboratory',
+        licence: PUBLIC_DOMAIN,
+        url: 'https://ssd.jpl.nasa.gov/horizons/',
+      },
+    ],
+    load: async (context) => (await import('./neo')).createApproachLayer(context),
+  },
 ];
 
 export default LAYERS;
