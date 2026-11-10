@@ -16,13 +16,18 @@
  *
  * Options:
  *   --url URL        default http://127.0.0.1:5173/
- *   --uncapped       run the browser without vsync, so frameMs shows the
- *                    headroom under the 16.7 ms a capped run reports
+ *   --uncapped       run the browser without vsync
  *   --no-shots       measure only
+ *   --windows N      time N one-second windows per case (default 1) and
+ *                    report the fastest and the median: use 3 or more when
+ *                    something else is using the GPU
  *   --defaults JSON  settings applied to every case, e.g. '{"w":412,"h":892,"dpr":2}'
  *
- * Writes outDir/<name>.png and outDir/results.json (frame time, status
- * chips, labels, console problems per case) and prints one line per case.
+ * Writes outDir/<name>.png and outDir/results.json and prints one line per
+ * case: frameMs, the interval between frames (16.7 at best on a 60 Hz
+ * display); renderMs, the time a frame's draw calls take through to the
+ * GPU finishing them - the figure that shows headroom and what a layer
+ * costs; texture count, labels, status chips, console problems.
  * Needs playwright-core and a Chromium; see shot.mjs.
  */
 import { chromium } from 'playwright-core';
@@ -147,15 +152,44 @@ for (const c of cases) {
     .catch(() => problems.push('still loading after 20 s'));
   await page.waitForTimeout(500);
 
-  const info = await page.evaluate(async () => {
+  const info = await page.evaluate(async (windows) => {
     const app = window.__transparentEarth;
-    const startFrames = app.getFrameCount();
-    const start = performance.now();
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const frames = app.getFrameCount() - startFrames;
+    // Time each render through to the GPU finishing it: the frame interval
+    // stops at the display's 16.7 ms however little of it a frame uses.
+    if (!window.__renderTimer) {
+      const timer = (window.__renderTimer = { ms: 0 });
+      const gl = app.renderer.getContext();
+      const render = app.renderer.render.bind(app.renderer);
+      const pixel = new Uint8Array(4);
+      app.renderer.render = (scene, camera) => {
+        const start = performance.now();
+        render(scene, camera);
+        // Reading a pixel back waits for the GPU; gl.finish() in a browser does not.
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        timer.ms += performance.now() - start;
+      };
+    }
+    // Other work on the machine's GPU shows up as slow windows: take several and keep the best and the middle one.
+    const times = [];
+    const renders = [];
+    for (let i = 0; i < windows; i++) {
+      const startFrames = app.getFrameCount();
+      const startRender = window.__renderTimer.ms;
+      const start = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const frames = app.getFrameCount() - startFrames;
+      if (frames === 0) continue;
+      times.push(Math.round(((performance.now() - start) / frames) * 100) / 100);
+      renders.push(Math.round(((window.__renderTimer.ms - startRender) / frames) * 100) / 100);
+    }
+    times.sort((a, b) => a - b);
+    renders.sort((a, b) => a - b);
     const memory = app.renderer.info.memory;
     return {
-      frameMs: frames > 0 ? Math.round(((performance.now() - start) / frames) * 100) / 100 : null,
+      frameMs: times[0] ?? null,
+      frameMsMedian: times[Math.floor(times.length / 2)] ?? null,
+      renderMs: renders[0] ?? null,
+      renderMsMedian: renders[Math.floor(renders.length / 2)] ?? null,
       labels: app.getVisibleLabels(),
       hud: document.getElementById('hud')?.textContent,
       textures: memory.textures,
@@ -167,12 +201,12 @@ for (const c of cases) {
           .map((chip) => [chip.closest('label').querySelector('input').dataset.layer, chip.textContent])
       ),
     };
-  });
+  }, Number(opt('windows', 1)));
   if (!has('no-shots')) await page.screenshot({ path: join(outDir, `${c.name}.png`) });
   const result = { name: c.name, ...info, problems: [...problems] };
   results.push(result);
   console.log(
-    `${c.name}\t${info.frameMs} ms\ttex ${info.textures}\t${info.labels.length} labels\t${JSON.stringify(info.status)}` +
+    `${c.name}\t${info.frameMs} ms (median ${info.frameMsMedian})\trender ${info.renderMs} (${info.renderMsMedian})\ttex ${info.textures}\t${info.labels.length} labels\t${JSON.stringify(info.status)}` +
       (problems.length > 0 ? `\n  ${problems.slice(0, 6).join('\n  ')}` : '')
   );
 }
