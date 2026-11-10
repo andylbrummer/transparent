@@ -7,6 +7,7 @@ import {
   gfsFieldSource,
   nearestTime,
   parseWmsTimes,
+  PRECIPITATION_TILES,
   precipitationSource,
   type WeatherSnapshot,
 } from './sources';
@@ -132,6 +133,10 @@ describe('precipitationSource', () => {
 
   it('fails for a time before the record', async () => {
     await expect(source.latest(at('2020-01-01T00:00:00Z'))).rejects.toThrow('nothing at or before');
+  });
+
+  it('asks for tiles in the set and file type GIBS lists for the product', () => {
+    expect(PRECIPITATION_TILES).toEqual({ layer: 'IMERG_Precipitation_Rate_30min', matrixSet: '2km', ext: 'png' });
   });
 });
 

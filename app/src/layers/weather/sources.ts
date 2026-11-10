@@ -4,7 +4,8 @@
  * providers and not others.
  */
 
-import { GIBS_WMS, gibsDomainUrl, gibsTime, latestInDomain, parseTimeDomain, wmsGlobeUrl } from './gibs';
+import { gibsDomainUrl, gibsTime, latestInDomain, parseTimeDomain, wmsGlobeUrl } from './gibs';
+import { canvasBlob, composeGlobe, type TiledProduct } from './gibs-tiles';
 import { assertGfsGrid, decodeSnapshotGrids, gfsSource, type GfsGrid, type GfsSnapshotMeta } from './gfs';
 import { decodeImage, fetchOk, type FetchLike, type ProductSource } from './live';
 
@@ -109,6 +110,8 @@ export function cloudSource(context: SourceContext): ProductSource<HTMLImageElem
 // --- precipitation -------------------------------------------------------------
 
 export const PRECIPITATION_LAYER = 'IMERG_Precipitation_Rate_30min';
+/** As GIBS's WMTS capabilities list it (2026-11-10). */
+export const PRECIPITATION_TILES: TiledProduct = { layer: PRECIPITATION_LAYER, matrixSet: '2km', ext: 'png' };
 
 /**
  * NASA GPM IMERG: rain and snow rate over the whole globe every half hour,
@@ -126,8 +129,8 @@ export function precipitationSource(context: SourceContext): ProductSource<HTMLI
       return { tag: gibsTime(latest.time, latest.daily), validTime: latest.time };
     },
     async download(tag) {
-      const url = wmsGlobeUrl(GIBS_WMS, PRECIPITATION_LAYER, { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, format: 'png', time: tag });
-      return (await fetchOk(url, {}, undefined, context.fetchImpl)).blob();
+      // From map tiles, not GIBS's WMS, which has been seen to hang; kept lossless so the colours match the legend.
+      return canvasBlob(await composeGlobe(PRECIPITATION_TILES, tag, IMAGE_WIDTH, context.fetchImpl), 'image/png');
     },
     decode: decodeImage,
     async snapshot() {
