@@ -11,7 +11,7 @@
  *   --only a,b      switch exactly these on and everything else off
  *   --yaw DEG       look direction, degrees counter-clockwise from north (west = 90)
  *   --pitch DEG     elevation; -90 (default) is straight down through the Earth
- *   --fov DEG       field of view (5..100), default 60
+ *   --fov DEG       field of view (1..100), default 60
  *   --lat --lon     where the user stands (default Austin, 30.27 -97.74)
  *   --time ISO      pin the app clock (?time=), e.g. 2026-11-09T06:00:00Z
  *   --wait MS       settle time before the shot, default 4000
