@@ -10,19 +10,26 @@
 import { OUTLINE_STYLES, type OutlineLayerName } from '../render/outlines';
 import type { LabelKind } from '../render/labels';
 import { PLUME_COLOR, depthRampGradient, flowGradient } from '../render/interior';
+import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
 
 export type InteriorLayerName = 'quakes' | 'slabs' | 'plumes' | 'mantle-flow';
 
 export type LayerTarget =
   | { readonly lines: readonly OutlineLayerName[] }
   | { readonly labels: readonly LabelKind[] }
-  | { readonly interior: InteriorLayerName };
+  | { readonly interior: InteriorLayerName }
+  /** A lazy layer from src/layers, by id. */
+  | { readonly lazy: string };
 
 export interface LayerSwitch {
   readonly id: string;
   readonly label: string;
-  readonly section: 'Inside the Earth' | 'Surface lines' | 'Labels';
+  readonly section: LayerSection;
   readonly target: LayerTarget;
+  /** Off until the user turns it on; the always-loaded layers start on. */
+  readonly defaultOff?: boolean;
+  /** Switches sharing a group are exclusive. */
+  readonly exclusiveGroup?: string;
   /** CSS background for the legend bar; absent for labels. */
   readonly legend?: string;
   /** Text under the legend bar, e.g. its depth scale. */
@@ -122,9 +129,28 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
   { id: 'volcano-labels', label: 'Volcanoes', section: 'Labels', target: { labels: ['volcano'] } },
 ];
 
-/** Everything on, overlaid with what was saved; unknown or non-boolean entries are ignored. */
-export function loadLayerVisibility(saved: string | null): LayerVisibility {
-  const visibility: LayerVisibility = Object.fromEntries(LAYER_SWITCHES.map((s) => [s.id, true]));
+/** The panel's switches for the lazy layers, after the always-loaded ones of their section. */
+export function switchesWithLazyLayers(definitions: readonly LayerDefinition[]): LayerSwitch[] {
+  const lazy = definitions.map(
+    (d): LayerSwitch => ({
+      id: d.id,
+      label: d.label,
+      section: d.section,
+      target: { lazy: d.id },
+      legend: d.legend,
+      caption: d.caption,
+      defaultOff: !d.defaultOn,
+      exclusiveGroup: d.exclusiveGroup,
+    })
+  );
+  const all = [...LAYER_SWITCHES, ...lazy];
+  // Stable: within a section the given order holds.
+  return all.sort((a, b) => LAYER_SECTIONS.indexOf(a.section) - LAYER_SECTIONS.indexOf(b.section));
+}
+
+/** Each switch's default, overlaid with what was saved; unknown or non-boolean entries are ignored. */
+export function loadLayerVisibility(saved: string | null, switches: readonly LayerSwitch[] = LAYER_SWITCHES): LayerVisibility {
+  const visibility: LayerVisibility = Object.fromEntries(switches.map((s) => [s.id, !s.defaultOff]));
   if (saved === null) return visibility;
   let parsed: unknown;
   try {
@@ -140,18 +166,30 @@ export function loadLayerVisibility(saved: string | null): LayerVisibility {
   return visibility;
 }
 
+export interface LayersPanelOptions {
+  /** Defaults to the always-loaded LAYER_SWITCHES. */
+  readonly switches?: readonly LayerSwitch[];
+  /** Listed under "Data credits" at the foot of the panel. */
+  readonly credits?: readonly Credit[];
+}
+
 export class LayersPanel {
   private readonly button: HTMLButtonElement;
   private readonly panel: HTMLElement;
+  private readonly switches: readonly LayerSwitch[];
+  private readonly inputs = new Map<string, HTMLInputElement>();
+  private readonly chips = new Map<string, HTMLElement>();
   private readonly onButtonClick = (): void => this.setOpen(this.panel.hidden);
 
-  /** Calls `onChange` for each switch the user flips, after saving the new visibility. */
+  /** Calls `onChange` for each switch that flips, after saving the new visibility. */
   constructor(
     parent: HTMLElement,
     private readonly visibility: LayerVisibility,
     private readonly onChange: (layer: LayerSwitch, visible: boolean) => void,
-    private readonly storage: Pick<Storage, 'setItem'>
+    private readonly storage: Pick<Storage, 'setItem'>,
+    options: LayersPanelOptions = {}
   ) {
+    this.switches = options.switches ?? LAYER_SWITCHES;
     this.button = document.createElement('button');
     this.button.id = 'layers-toggle';
     this.button.type = 'button';
@@ -164,16 +202,24 @@ export class LayersPanel {
     this.panel.id = 'layers-panel';
     this.panel.className = 'layers-panel';
     this.panel.hidden = true;
+    // One collapsible block per section; a section opens if anything in it is on.
     let section = '';
-    for (const layer of LAYER_SWITCHES) {
+    let body: HTMLElement = this.panel;
+    for (const layer of this.switches) {
       if (layer.section !== section) {
         section = layer.section;
-        const heading = document.createElement('h2');
+        const block = document.createElement('details');
+        block.className = 'layers-section';
+        block.open = this.switches.some((s) => s.section === section && this.visibility[s.id]);
+        const heading = document.createElement('summary');
         heading.textContent = section;
-        this.panel.appendChild(heading);
+        block.appendChild(heading);
+        this.panel.appendChild(block);
+        body = block;
       }
-      this.panel.appendChild(this.renderSwitch(layer));
+      body.appendChild(this.renderSwitch(layer));
     }
+    if (options.credits && options.credits.length > 0) this.panel.appendChild(renderCredits(options.credits));
     parent.append(this.button, this.panel);
   }
 
@@ -186,12 +232,31 @@ export class LayersPanel {
     input.dataset.layer = layer.id;
     input.addEventListener('change', () => {
       this.visibility[layer.id] = input.checked;
+      // Exclusive group: the others go off before this one comes on.
+      if (input.checked && layer.exclusiveGroup) {
+        for (const other of this.switches) {
+          if (other.id === layer.id || other.exclusiveGroup !== layer.exclusiveGroup || !this.visibility[other.id]) continue;
+          this.visibility[other.id] = false;
+          this.inputs.get(other.id)!.checked = false;
+          this.onChange(other, false);
+        }
+      }
       this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
       this.onChange(layer, input.checked);
     });
+    this.inputs.set(layer.id, input);
     const text = document.createElement('span');
     text.className = 'layer-switch__text';
-    text.textContent = layer.label;
+    const name = document.createElement('span');
+    name.textContent = layer.label;
+    text.appendChild(name);
+    if ('lazy' in layer.target) {
+      const chip = document.createElement('span');
+      chip.className = 'layer-switch__status';
+      chip.hidden = true;
+      name.append(' ', chip);
+      this.chips.set(layer.id, chip);
+    }
     if (layer.legend) {
       const bar = document.createElement('span');
       bar.className = 'layer-switch__legend';
@@ -208,6 +273,15 @@ export class LayersPanel {
     return row;
   }
 
+  /** Show a lazy layer's state beside its switch - loading, live, stale, unavailable - or clear it with null. */
+  setStatus(id: string, text: string | null, tone: StatusTone = 'info'): void {
+    const chip = this.chips.get(id);
+    if (!chip) return;
+    chip.hidden = text === null;
+    chip.textContent = text ?? '';
+    chip.dataset.tone = tone;
+  }
+
   setOpen(open: boolean): void {
     this.panel.hidden = !open;
     this.button.setAttribute('aria-expanded', String(open));
@@ -218,4 +292,28 @@ export class LayersPanel {
     this.button.remove();
     this.panel.remove();
   }
+}
+
+/** The credits list: what, who, licence, each linking to its source. */
+function renderCredits(credits: readonly Credit[]): HTMLElement {
+  const block = document.createElement('details');
+  block.className = 'layers-section layers-credits';
+  const heading = document.createElement('summary');
+  heading.textContent = 'Data credits';
+  block.appendChild(heading);
+  const list = document.createElement('ul');
+  for (const credit of credits) {
+    const item = document.createElement('li');
+    const what = document.createElement('strong');
+    what.textContent = credit.what;
+    const link = document.createElement('a');
+    link.href = credit.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = credit.source;
+    item.append(what, ' — ', link, ` (${credit.licence})`);
+    list.appendChild(item);
+  }
+  block.appendChild(list);
+  return block;
 }

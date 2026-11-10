@@ -66,6 +66,12 @@ export interface LookController {
    * and is kept.
    */
   resetOffset(): void;
+  /**
+   * Aim the manual view: yaw counter-clockwise from north and elevation,
+   * radians, and optionally the field of view in degrees. For scripted
+   * views (screenshots, tours); a phone's attitude still overrides it.
+   */
+  setAim(yawRad: number, pitchRad: number, fovDeg?: number): void;
 }
 
 const DEG = Math.PI / 180;
@@ -209,5 +215,14 @@ export function createLookController(): LookController {
     },
 
     resetOffset,
+
+    setAim(yawRad, pitchRad, fovDeg) {
+      state = {
+        ...state,
+        yawRad,
+        pitchRad: clamp(pitchRad, -HALF_PI, HALF_PI),
+        fovDeg: fovDeg === undefined ? state.fovDeg : clamp(fovDeg, MIN_FOV_DEG, MAX_FOV_DEG),
+      };
+    },
   };
 }

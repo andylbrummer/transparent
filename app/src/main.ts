@@ -15,6 +15,7 @@ import { LabelLayer, type LabelData } from './render/labels';
 import { SlabLayer, PlumeLayer, MantleFlowLayer, type SlabData, type Plume, type MantleFlowData } from './render/interior';
 import { QuakeLayer, type QuakeData } from './render/quakes';
 import { StereoRig } from './render/stereo';
+import { icrsToEcefMatrix } from '@transparent-earth/core';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, type SensorState } from './sensors';
 import { probeCapabilities, DEFAULT_STATE, type AppState, type RenderMode } from './ui/state';
@@ -23,10 +24,16 @@ import {
   LAYER_SWITCHES,
   LAYERS_STORAGE_KEY,
   loadLayerVisibility,
+  switchesWithLazyLayers,
   type InteriorLayerName,
   type LayerSwitch,
 } from './ui/layers-panel';
 import { CardboardToggle } from './ui/cardboard';
+import { allCredits } from './ui/credits';
+import { createClock } from './clock';
+import { LAYER_DEFINITIONS } from './layers/registry';
+import { LayerManager } from './layers/manager';
+import { SKY_RADIUS_M, type SkyUniforms } from './layers/types';
 
 /** geology.json: labels plus the plume conduits under classified hotspots. */
 interface GeologyData extends LabelData {
@@ -52,6 +59,8 @@ export interface App {
   getFrameCount(): number;
   /** Place names placed in the last frame, for the browser harness. */
   getVisibleLabels(): string[];
+  /** The app clock's current instant. */
+  getDate(): Date;
   dispose(): void;
 }
 
@@ -139,20 +148,36 @@ export function init(): App | null {
   // Everything placed on or in the Earth, hidden together until a position fix.
   const geoRoot = new THREE.Group();
   scene.add(geoRoot);
+  // The sky: both turn with the stars, about the Earth's centre and about the camera.
+  const inertialRoot = new THREE.Group();
+  const skyRoot = new THREE.Group();
+  skyRoot.scale.setScalar(SKY_RADIUS_M);
+  scene.add(inertialRoot, skyRoot);
+  const skyRotation = new THREE.Matrix4();
+  const skyUniforms: SkyUniforms = {
+    uObserverUp: { value: new THREE.Vector3(0, 0, 1) },
+    // Off until the "Sky through the Earth" layer turns it on.
+    uBelowHorizon: { value: 0 },
+    uPixelRatio: { value: renderer.getPixelRatio() },
+  };
+  const clock = createClock(window.location.search);
   // Political outlines, then tectonics, then plate motion arrows drawn over them.
   const outlineLayers: OutlineLayer[] = [];
   const fatLineLayers: FatLineLayer[] = [];
   const interiorObjects: Partial<Record<InteriorLayerName, THREE.Object3D>> = {};
   let quakes: QuakeLayer | null = null;
-  let labels: LabelLayer | null = null;
+  const labels = new LabelLayer(container, []);
   let geoStatus: 'loading' | 'ready' | 'failed' = 'loading';
-  const layerVisibility = loadLayerVisibility(localStorage.getItem(LAYERS_STORAGE_KEY));
+  const layerSwitches = switchesWithLazyLayers(LAYER_DEFINITIONS);
+  const layerVisibility = loadLayerVisibility(localStorage.getItem(LAYERS_STORAGE_KEY), layerSwitches);
   function applyLayer(layer: LayerSwitch, visible: boolean): void {
     const target = layer.target;
     if ('lines' in target) {
       for (const outline of outlineLayers) outline.setLayersVisible(target.lines, visible);
     } else if ('labels' in target) {
-      labels?.setKindsVisible(target.labels, visible);
+      labels.setKindsVisible(target.labels, visible);
+    } else if ('lazy' in target) {
+      lazyLayers.setVisible(target.lazy, visible);
     } else {
       const object = interiorObjects[target.interior];
       if (object) object.visible = visible;
@@ -200,8 +225,7 @@ export function init(): App | null {
       quakes.setPixelRatio(renderer.getPixelRatio());
       interiorObjects.quakes = quakes.getObject();
       geoRoot.add(quakes.getObject());
-      labels = new LabelLayer(container, [placeLabels, geology, quakeData]);
-      labels.setStereo(cardboard.isActive());
+      labels.addLabels([placeLabels, geology, quakeData]);
       for (const layer of LAYER_SWITCHES) applyLayer(layer, layerVisibility[layer.id]);
       geoStatus = 'ready';
       renderHud();
@@ -229,7 +253,10 @@ export function init(): App | null {
   const onResetClick = (): void => look.resetOffset();
   resetButton.addEventListener('click', onResetClick);
 
-  const layersPanel = new LayersPanel(container, layerVisibility, applyLayer, localStorage);
+  const layersPanel = new LayersPanel(container, layerVisibility, applyLayer, localStorage, {
+    switches: layerSwitches,
+    credits: allCredits(LAYER_DEFINITIONS),
+  });
 
   const appState: AppState = DEFAULT_STATE;
   let availableModes: readonly RenderMode[] = [];
@@ -240,6 +267,31 @@ export function init(): App | null {
     declination: null,
     fix: { phase: 'acquiring', accuracy: null },
   };
+
+  const lazyLayers = new LayerManager(
+    LAYER_DEFINITIONS,
+    {
+      renderer,
+      earthRoot: geoRoot,
+      inertialRoot,
+      skyRoot,
+      skyUniforms,
+      globe,
+      assetUrl: (path) => `${import.meta.env.BASE_URL}${path}`,
+      fetchJson: async <T>(url: string, init?: RequestInit): Promise<T> => {
+        const response = await fetch(url, init);
+        if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+        return (await response.json()) as T;
+      },
+      now: () => clock.now(),
+      getPosition: () => sensorState.position,
+      addLabels: (spec) => labels.addGroup(spec),
+    },
+    (id, text, tone) => layersPanel.setStatus(id, text, tone)
+  );
+  for (const layer of layerSwitches) {
+    if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
+  }
 
   function renderHud(): void {
     const modes = availableModes.length > 0 ? availableModes.join('/') : 'probing…';
@@ -262,6 +314,7 @@ export function init(): App | null {
     // Line widths are CSS px of the viewport they draw into: one eye's in stereo.
     const lineWidth = cardboard.isActive() ? Math.floor(w / 2) : w;
     for (const layer of fatLineLayers) layer.setResolution(lineWidth, h);
+    lazyLayers.setResolution(lineWidth, h);
     renderHud();
   };
   window.addEventListener('resize', onResize);
@@ -308,12 +361,14 @@ export function init(): App | null {
       void sensors.requestPermission();
     }
     layersPanel.setOpen(false);
-    labels?.setStereo(stereo);
+    labels.setStereo(stereo);
     onResize();
   });
+  lazyLayers.setResolution(window.innerWidth, window.innerHeight);
 
   let frameCount = 0;
   let rafId = 0;
+  let lastFrameMs = performance.now();
 
   function animate(): void {
     rafId = requestAnimationFrame(animate);
@@ -321,23 +376,36 @@ export function init(): App | null {
     const position = sensorState.position;
     globe.getMesh().visible = position !== null;
     geoRoot.visible = position !== null;
-    labels?.setVisible(position !== null);
+    inertialRoot.visible = position !== null;
+    skyRoot.visible = position !== null;
+    labels.setVisible(position !== null);
     compassBar.setVisible(position !== null);
     const width = window.innerWidth;
     const height = window.innerHeight;
     const stereo = position !== null && cardboard.isActive();
+    const nowMs = performance.now();
     if (position) {
       look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
+      // Turn the sky to where the Earth's rotation has it now.
+      const date = clock.now();
+      const m = icrsToEcefMatrix(date);
+      skyRotation.set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1);
+      inertialRoot.quaternion.setFromRotationMatrix(skyRotation);
+      skyRoot.quaternion.copy(inertialRoot.quaternion);
+      skyRoot.position.copy(camera.position);
+      skyUniforms.uObserverUp.value.copy(camera.position).normalize();
+      lazyLayers.update({ date, camera, position, deltaMs: nowMs - lastFrameMs });
     }
+    lastFrameMs = nowMs;
     if (stereo) {
       const eyeWidth = Math.floor(width / 2);
       stereoRig.update(camera, eyeWidth, height);
-      labels?.update(stereoRig.left, eyeWidth, height, stereoRig.right);
+      labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
       stereoRig.render(renderer, scene, width, height, (eye) => globe.update(eye, renderer.domElement.height));
     } else {
       if (position) {
         globe.update(camera, renderer.domElement.height);
-        labels?.update(camera, width, height);
+        labels.update(camera, width, height, undefined, skyRotation);
         compassBar.update(camera, position, width);
       }
       renderer.render(scene, camera);
@@ -366,7 +434,8 @@ export function init(): App | null {
     getAppState: () => appState,
     getAvailableModes: () => availableModes,
     getFrameCount: () => frameCount,
-    getVisibleLabels: () => labels?.visibleNames() ?? [],
+    getVisibleLabels: () => labels.visibleNames(),
+    getDate: () => clock.now(),
     dispose() {
       cancelAnimationFrame(rafId);
       sensors.stop();
@@ -381,7 +450,8 @@ export function init(): App | null {
       quakes?.dispose();
       layersPanel.dispose();
       cardboard.dispose();
-      labels?.dispose();
+      lazyLayers.dispose();
+      labels.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       hud.remove();
