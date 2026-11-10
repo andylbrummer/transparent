@@ -30,7 +30,9 @@ import {
   LayersPanel,
   LAYER_SWITCHES,
   LAYERS_STORAGE_KEY,
+  SECTIONS_STORAGE_KEY,
   loadLayerVisibility,
+  loadOpenSections,
   switchesWithLazyLayers,
   type InteriorLayerName,
   type LayerSwitch,
@@ -262,6 +264,7 @@ export function init(): App | null {
   const layersPanel = new LayersPanel(container, layerVisibility, applyLayer, localStorage, {
     switches: layerSwitches,
     credits: allCredits(LAYER_DEFINITIONS),
+    openSections: loadOpenSections(localStorage.getItem(SECTIONS_STORAGE_KEY)),
   });
 
   const appState: AppState = DEFAULT_STATE;

@@ -44,6 +44,8 @@ export interface LayerSwitch {
 export type LayerVisibility = Record<string, boolean>;
 
 export const LAYERS_STORAGE_KEY = 'transparent-earth.layers';
+/** Which sections of the panel the user left open. */
+export const SECTIONS_STORAGE_KEY = 'transparent-earth.layer-sections';
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
 
@@ -177,19 +179,63 @@ export function loadLayerVisibility(saved: string | null, switches: readonly Lay
   return visibility;
 }
 
+/** The saved open/closed state of the panel's sections; anything unreadable is no state. */
+export function loadOpenSections(saved: string | null): Record<string, boolean> {
+  if (saved === null) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(saved);
+  } catch (error) {
+    console.error(`ignoring unreadable ${SECTIONS_STORAGE_KEY}`, error);
+    return {};
+  }
+  if (typeof parsed !== 'object' || parsed === null) return {};
+  return Object.fromEntries(Object.entries(parsed).filter(([, open]) => typeof open === 'boolean')) as Record<string, boolean>;
+}
+
+/** Whether a switch answers a filter: every word typed is in its name, caption or section. */
+export function matchesFilter(layer: Pick<LayerSwitch, 'label' | 'caption' | 'section'>, filter: string): boolean {
+  const text = `${layer.label} ${layer.caption ?? ''} ${layer.section}`.toLowerCase();
+  return filter
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => text.includes(word));
+}
+
 export interface LayersPanelOptions {
   /** Defaults to the always-loaded LAYER_SWITCHES. */
   readonly switches?: readonly LayerSwitch[];
   /** Listed under "Data credits" at the foot of the panel. */
   readonly credits?: readonly Credit[];
+  /**
+   * Sections as the user left them (loadOpenSections). A section with no
+   * entry starts closed: with a hundred switches the panel opens as a list
+   * of its sections, each saying how much of it is on.
+   */
+  readonly openSections?: Readonly<Record<string, boolean>>;
+}
+
+interface SectionParts {
+  readonly block: HTMLDetailsElement;
+  readonly count: HTMLElement;
+  readonly allOff: HTMLButtonElement;
+  readonly layers: LayerSwitch[];
+  readonly rows: HTMLElement[];
 }
 
 export class LayersPanel {
   private readonly button: HTMLButtonElement;
   private readonly panel: HTMLElement;
+  private readonly filter: HTMLInputElement;
+  private readonly noMatches: HTMLElement;
   private readonly switches: readonly LayerSwitch[];
   private readonly inputs = new Map<string, HTMLInputElement>();
   private readonly chips = new Map<string, HTMLElement>();
+  private readonly sections = new Map<string, SectionParts>();
+  /** Sections as the user has them, kept apart from what a filter forces open. */
+  private readonly openSections: Record<string, boolean>;
+  private filtering = false;
   private readonly onButtonClick = (): void => this.setOpen(this.panel.hidden);
 
   /** Calls `onChange` for each switch that flips, after saving the new visibility. */
@@ -201,6 +247,7 @@ export class LayersPanel {
     options: LayersPanelOptions = {}
   ) {
     this.switches = options.switches ?? LAYER_SWITCHES;
+    this.openSections = { ...options.openSections };
     this.button = document.createElement('button');
     this.button.id = 'layers-toggle';
     this.button.type = 'button';
@@ -213,25 +260,109 @@ export class LayersPanel {
     this.panel.id = 'layers-panel';
     this.panel.className = 'layers-panel';
     this.panel.hidden = true;
-    // One collapsible block per section; a section opens if anything in it is on.
-    let section = '';
-    let body: HTMLElement = this.panel;
+
+    // Find a layer by name: quicker than opening sections to look for it.
+    this.filter = document.createElement('input');
+    this.filter.type = 'search';
+    this.filter.className = 'layers-filter';
+    this.filter.placeholder = `Find among ${this.switches.length} layers`;
+    this.filter.setAttribute('aria-label', 'Find a layer');
+    this.filter.autocomplete = 'off';
+    this.filter.addEventListener('input', () => this.applyFilter());
+    this.panel.appendChild(this.filter);
+    this.noMatches = document.createElement('p');
+    this.noMatches.className = 'layers-no-matches';
+    this.noMatches.textContent = 'No layer of that name.';
+    this.noMatches.hidden = true;
+    this.panel.appendChild(this.noMatches);
+
+    // One collapsible block per section.
     for (const layer of this.switches) {
-      if (layer.section !== section) {
-        section = layer.section;
-        const block = document.createElement('details');
-        block.className = 'layers-section';
-        block.open = this.switches.some((s) => s.section === section && this.visibility[s.id]);
-        const heading = document.createElement('summary');
-        heading.textContent = section;
-        block.appendChild(heading);
-        this.panel.appendChild(block);
-        body = block;
+      let section = this.sections.get(layer.section);
+      if (!section) {
+        section = this.renderSection(layer.section);
+        this.sections.set(layer.section, section);
+        this.panel.appendChild(section.block);
       }
-      body.appendChild(this.renderSwitch(layer));
+      const row = this.renderSwitch(layer);
+      section.layers.push(layer);
+      section.rows.push(row);
+      section.block.appendChild(row);
     }
+    for (const name of this.sections.keys()) this.updateSection(name);
     if (options.credits && options.credits.length > 0) this.panel.appendChild(renderCredits(options.credits));
     parent.append(this.button, this.panel);
+  }
+
+  private renderSection(name: string): SectionParts {
+    const block = document.createElement('details');
+    block.className = 'layers-section';
+    block.open = this.openSections[name] ?? false;
+    const heading = document.createElement('summary');
+    const title = document.createElement('span');
+    title.textContent = name;
+    const count = document.createElement('span');
+    count.className = 'layers-section__count';
+    heading.append(title, count);
+    block.appendChild(heading);
+    // Remember what the user opens and closes - not what a filter opens to show its matches.
+    block.addEventListener('toggle', () => {
+      if (this.filtering || this.openSections[name] === block.open) return;
+      this.openSections[name] = block.open;
+      this.storage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(this.openSections));
+    });
+    const allOff = document.createElement('button');
+    allOff.type = 'button';
+    allOff.className = 'layers-section__all-off';
+    allOff.textContent = 'Turn all off';
+    allOff.setAttribute('aria-label', `Turn all ${name} layers off`);
+    allOff.addEventListener('click', () => this.turnSectionOff(name));
+    block.appendChild(allOff);
+    return { block, count, allOff, layers: [], rows: [] };
+  }
+
+  /** The section's count of what is on, and whether there is anything for "Turn all off" to do. */
+  private updateSection(name: string): void {
+    const section = this.sections.get(name);
+    if (!section) return;
+    const on = section.layers.filter((layer) => this.visibility[layer.id]).length;
+    section.count.textContent = on === 0 ? `${section.layers.length}` : `${on} of ${section.layers.length} on`;
+    section.count.classList.toggle('layers-section__count--on', on > 0);
+    // Not while filtering: it would switch off layers the filter is hiding.
+    section.allOff.hidden = on === 0 || this.filtering;
+  }
+
+  private turnSectionOff(name: string): void {
+    const section = this.sections.get(name);
+    if (!section) return;
+    for (const layer of section.layers) {
+      if (!this.visibility[layer.id]) continue;
+      this.visibility[layer.id] = false;
+      this.inputs.get(layer.id)!.checked = false;
+      this.onChange(layer, false);
+    }
+    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
+    this.updateSection(name);
+  }
+
+  /** Show only the switches that answer the filter box, in sections opened to show them. */
+  private applyFilter(): void {
+    const text = this.filter.value.trim();
+    this.filtering = text !== '';
+    let matches = 0;
+    for (const [name, section] of this.sections) {
+      let shown = 0;
+      section.layers.forEach((layer, i) => {
+        const match = !this.filtering || matchesFilter(layer, text);
+        section.rows[i].hidden = !match;
+        if (match) shown++;
+      });
+      section.block.hidden = shown === 0;
+      section.block.open = this.filtering ? shown > 0 : (this.openSections[name] ?? false);
+      this.updateSection(name);
+      matches += shown;
+    }
+    this.noMatches.hidden = matches > 0;
   }
 
   private renderSwitch(layer: LayerSwitch): HTMLElement {
@@ -254,6 +385,8 @@ export class LayersPanel {
       }
       this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
       this.onChange(layer, input.checked);
+      // An exclusive group can reach into another section.
+      for (const name of this.sections.keys()) this.updateSection(name);
     });
     this.inputs.set(layer.id, input);
     const text = document.createElement('span');
@@ -296,9 +429,12 @@ export class LayersPanel {
   setOpen(open: boolean): void {
     this.panel.hidden = !open;
     this.button.setAttribute('aria-expanded', String(open));
+    // For the stylesheet: on a narrow screen the open panel takes the place of the buttons beside it.
+    document.body.classList.toggle('layers-open', open);
   }
 
   dispose(): void {
+    document.body.classList.remove('layers-open');
     this.button.removeEventListener('click', this.onButtonClick);
     this.button.remove();
     this.panel.remove();

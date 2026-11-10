@@ -3,7 +3,10 @@ import {
   LAYER_SWITCHES,
   LAYERS_STORAGE_KEY,
   LayersPanel,
+  SECTIONS_STORAGE_KEY,
   loadLayerVisibility,
+  loadOpenSections,
+  matchesFilter,
   switchesWithLazyLayers,
   type LayerSwitch,
 } from './layers-panel';
@@ -102,22 +105,31 @@ describe('LayersPanel with lazy layers', () => {
     lazy('clouds', { section: 'Weather', defaultOn: true }),
   ];
 
-  function setup(saved: string | null = null) {
+  function setup(saved: string | null = null, openSections?: Record<string, boolean>) {
     const parent = document.createElement('div');
     const switches = switchesWithLazyLayers(definitions);
     const changes: [string, boolean][] = [];
+    const stored = new Map<string, string>();
     const panel = new LayersPanel(
       parent,
       loadLayerVisibility(saved, switches),
       (layer: LayerSwitch, visible: boolean) => changes.push([layer.id, visible]),
-      { setItem: () => {} },
+      { setItem: (key, value) => stored.set(key, value) },
       {
         switches,
         credits: [{ what: 'Clouds', source: 'A Source', licence: 'public domain', url: 'https://example.org/' }],
+        openSections,
       }
     );
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { parent, panel, changes, input, switches };
+    const sections = (): HTMLDetailsElement[] => [...parent.querySelectorAll<HTMLDetailsElement>('details.layers-section:not(.layers-credits)')];
+    const section = (name: string): HTMLDetailsElement => sections().find((d) => d.querySelector('summary span')!.textContent === name)!;
+    const filter = (text: string): void => {
+      const box = parent.querySelector<HTMLInputElement>('.layers-filter')!;
+      box.value = text;
+      box.dispatchEvent(new Event('input'));
+    };
+    return { parent, panel, changes, input, switches, stored, sections, section, filter };
   }
 
   it('starts lazy layers off unless they ask to be on, and orders sections as the panel lists them', () => {
@@ -130,12 +142,118 @@ describe('LayersPanel with lazy layers', () => {
     expect(sections).toEqual(['Weather', 'Surface lines', 'Inside the Earth', 'Sky maps', 'Labels']);
   });
 
-  it('opens only the sections that have something switched on', () => {
-    const { parent } = setup();
-    const open = [...parent.querySelectorAll<HTMLDetailsElement>('details.layers-section')]
-      .filter((d) => d.open)
-      .map((d) => d.querySelector('summary')!.textContent);
-    expect(open).toEqual(['Weather', 'Surface lines', 'Inside the Earth', 'Labels']);
+  it('starts as a list of closed sections, each saying how much of it is on', () => {
+    const { sections, section } = setup();
+    expect(sections().every((d) => !d.open)).toBe(true);
+    const count = (name: string): string => section(name).querySelector('.layers-section__count')!.textContent!;
+    expect(count('Weather')).toBe('1 of 1 on');
+    expect(count('Sky maps')).toBe('2');
+    const linesOn = LAYER_SWITCHES.filter((l) => l.section === 'Surface lines' && !l.defaultOff).length;
+    const lines = LAYER_SWITCHES.filter((l) => l.section === 'Surface lines').length;
+    expect(count('Surface lines')).toBe(`${linesOn} of ${lines} on`);
+  });
+
+  it('opens the sections the user left open, and remembers the ones they open and close', () => {
+    const { section, stored } = setup(null, { 'Sky maps': true, Weather: false });
+    expect(section('Sky maps').open).toBe(true);
+    expect(section('Weather').open).toBe(false);
+    section('Labels').open = true;
+    section('Labels').dispatchEvent(new Event('toggle'));
+    section('Sky maps').open = false;
+    section('Sky maps').dispatchEvent(new Event('toggle'));
+    expect(JSON.parse(stored.get(SECTIONS_STORAGE_KEY)!)).toEqual({ 'Sky maps': false, Weather: false, Labels: true });
+  });
+
+  it('reads back saved sections, ignoring anything that is not a section left open or closed', () => {
+    expect(loadOpenSections(null)).toEqual({});
+    expect(loadOpenSections(JSON.stringify({ Sky: true, Weather: false, Labels: 'yes' }))).toEqual({ Sky: true, Weather: false });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(loadOpenSections('{not json')).toEqual({});
+    expect(loadOpenSections('[1]')).toEqual({});
+    error.mockRestore();
+  });
+
+  it('keeps the count in step with the switches, across an exclusive group', () => {
+    const { input, section } = setup();
+    const count = (): string => section('Sky maps').querySelector('.layers-section__count')!.textContent!;
+    input('cmb').checked = true;
+    input('cmb').dispatchEvent(new Event('change'));
+    expect(count()).toBe('1 of 2 on');
+    input('x-ray').checked = true;
+    input('x-ray').dispatchEvent(new Event('change'));
+    expect(count()).toBe('1 of 2 on');
+    input('x-ray').checked = false;
+    input('x-ray').dispatchEvent(new Event('change'));
+    expect(count()).toBe('2');
+  });
+
+  it('turns a whole section off from its button, which is there only when something is on', () => {
+    const { section, changes, stored, input } = setup();
+    const lines = section('Surface lines');
+    const button = lines.querySelector<HTMLButtonElement>('.layers-section__all-off')!;
+    expect(button.hidden).toBe(false);
+    expect(button.getAttribute('aria-label')).toBe('Turn all Surface lines layers off');
+    expect(section('Sky maps').querySelector<HTMLButtonElement>('.layers-section__all-off')!.hidden).toBe(true);
+    button.click();
+    const wereOn = LAYER_SWITCHES.filter((l) => l.section === 'Surface lines' && !l.defaultOff).map((l) => l.id);
+    expect(changes).toEqual(wereOn.map((id) => [id, false]));
+    expect(input('boundaries').checked).toBe(false);
+    expect(button.hidden).toBe(true);
+    expect(JSON.parse(stored.get(LAYERS_STORAGE_KEY)!)).toMatchObject({ boundaries: false, political: false, quakes: true });
+  });
+
+  it('filters to the switches that match, opening their sections, and puts everything back when cleared', () => {
+    const { parent, section, sections, filter, input, stored } = setup(null, { Labels: true });
+    filter('plate');
+    const shown = [...parent.querySelectorAll<HTMLElement>('.layer-switch')].filter((row) => !row.hidden).map((row) => row.querySelector('input')!.dataset.layer);
+    // "Seafloor spreading" answers too: its caption speaks of the plates parting.
+    expect(shown).toEqual(['boundaries', 'spreading', 'plate-motion', 'plate-labels']);
+    expect(sections().filter((d) => !d.hidden).map((d) => d.querySelector('summary span')!.textContent)).toEqual(['Surface lines', 'Labels']);
+    expect(section('Surface lines').open).toBe(true);
+    // A hidden switch is still a switch: the screenshot tool and saved choices reach it by data-layer.
+    expect(input('clouds')).not.toBeNull();
+    // Opening sections to show matches is not the user opening them.
+    section('Surface lines').dispatchEvent(new Event('toggle'));
+    expect(stored.has(SECTIONS_STORAGE_KEY)).toBe(false);
+
+    // "Turn all off" would reach the switches the filter hides: it waits until the filter is cleared.
+    expect(section('Surface lines').querySelector<HTMLButtonElement>('.layers-section__all-off')!.hidden).toBe(true);
+
+    filter('zzz');
+    expect(parent.querySelector<HTMLElement>('.layers-no-matches')!.hidden).toBe(false);
+
+    filter('');
+    expect(parent.querySelector<HTMLElement>('.layers-no-matches')!.hidden).toBe(true);
+    expect([...parent.querySelectorAll<HTMLElement>('.layer-switch')].every((row) => !row.hidden)).toBe(true);
+    expect(sections().every((d) => !d.hidden)).toBe(true);
+    expect(section('Surface lines').open).toBe(false);
+    expect(section('Labels').open).toBe(true);
+    expect(section('Surface lines').querySelector<HTMLButtonElement>('.layers-section__all-off')!.hidden).toBe(false);
+  });
+
+  it('marks the page while it is open, so the stylesheet can clear the buttons it covers', () => {
+    const { panel } = setup();
+    panel.setOpen(true);
+    expect(document.body.classList.contains('layers-open')).toBe(true);
+    panel.setOpen(false);
+    expect(document.body.classList.contains('layers-open')).toBe(false);
+  });
+
+  it('matches every word typed against name, caption and section', () => {
+    const layer = { label: 'Radio, 408 MHz', caption: 'cosmic-ray electrons', section: 'Sky maps' as const };
+    expect(matchesFilter(layer, 'radio')).toBe(true);
+    expect(matchesFilter(layer, 'SKY electrons')).toBe(true);
+    expect(matchesFilter(layer, 'radio x-ray')).toBe(false);
+    expect(matchesFilter(layer, '  ')).toBe(true);
+  });
+
+  it('labels the filter box and keeps it and the section headings reachable', () => {
+    const { parent, sections } = setup();
+    const box = parent.querySelector<HTMLInputElement>('.layers-filter')!;
+    expect(box.type).toBe('search');
+    expect(box.getAttribute('aria-label')).toBe('Find a layer');
+    // The count is part of the heading's text, so a screen reader hears "Weather 1 of 1 on".
+    expect(sections()[0].querySelector('summary')!.textContent).toBe('Weather1 of 1 on');
   });
 
   it('turns the rest of an exclusive group off when one comes on', () => {
