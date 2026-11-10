@@ -17,7 +17,7 @@ const DOCS = fileURLToPath(new URL('../../docs/', import.meta.url));
 const OUTPUT = `${DOCS}DATA-SOURCES.md`;
 
 /** Licence wording that restricts reuse beyond attribution; such sources get their own list. */
-const RESTRICTIVE = /share-?alike|BY-SA|BY-NC|ODbL|GPL|non-commercial|scientific purposes|no stated licence|personal/i;
+const RESTRICTIVE = /share-?alike|BY-SA|BY-NC|ODbL|GPL|non-commercial|scientific purposes|no stated licence|personal|copyright of/i;
 
 const cell = (text: string): string => text.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 const link = (credit: Credit): string => `[${cell(credit.source)}](${credit.url})`;

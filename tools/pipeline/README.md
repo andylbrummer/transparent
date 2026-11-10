@@ -291,6 +291,8 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_planet_maps.py` | Faces of Mars, Jupiter, Saturn and Neptune | `app/public/sky/planets/*.jpg` | `test_planet_maps.py` |
 | `fetch_planet_disc_fixture.py` | Horizons' values for the planets' discs (test fixture) | `packages/core/src/astro/planet-discs.fixture.ts` | — |
 | `fetch_planet_moon_fixture.py` | Horizons' values for the moons (test fixture) | `packages/core/src/astro/planet-moons.fixture.ts` | — |
+| `fetch_healpix_fixture.py` | healpy's HEALPix values (test fixture) | `packages/core/src/astro/healpix.fixture.ts` | core `healpix.test.ts` |
+| — | Which way up a live HiPS tile is, by the star catalogue | — | `test_hips_orientation.py` |
 | `generate_neo_approaches.py` | Asteroids passing close to the Earth - every known approach within 10 lunar distances from PAST_DAYS before the bake to FUTURE_DAYS after it, each with a short table of where it is around its closest approach | `app/public/sky/neo-approaches.json` | `test_neo_approaches.py` |
 | `generate_ocean_currents.py` | Ocean surface currents | `app/public/geo/ocean-currents.bin` | `test_ocean_currents.py` |
 | `generate_overlay_snapshot.py` | Bake the one Earth overlay that never changes, for when NASA GIBS cannot be reached | `app/public/geo/overlay-lightning.png` | `test_overlay_snapshot.py` |
