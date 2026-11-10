@@ -16,6 +16,7 @@ import { ICRS_TO_GALACTIC, healpixPixelPoint, type Mat3 } from '@transparent-ear
 import { RENDER_ORDER } from '../../render/order';
 import type { LayerContext, LayerInstance } from '../types';
 import { bestSource, targetOrder, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad, type HipsTile } from './hips';
+import type { Coverage } from './coverage';
 import type { SurveySpec } from './surveys';
 
 /** Most tiles drawn at once: a screen needs a dozen or two at the order chosen for it. */
@@ -99,7 +100,8 @@ function tileGeometry(tile: HipsTile): THREE.BufferGeometry {
   return geometry;
 }
 
-export function createSurveyLayer(context: LayerContext, spec: SurveySpec): LayerInstance {
+/** `coverage`: for a survey of scattered patches, where it has anything; no tile elsewhere is asked for. */
+export function createSurveyLayer(context: LayerContext, spec: SurveySpec, coverage: Coverage | null = null): LayerInstance {
   const group = new THREE.Group();
   group.name = `sky-survey-${spec.id}`;
   // A survey kept in galactic coordinates is turned onto the ICRS sky as a whole.
@@ -218,6 +220,12 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec): Laye
     let waiting = 0;
     for (const tile of wanted) {
       const key = tileKey(tile);
+      if (coverage && !coverage.touches(tile.order, tile.ipix)) {
+        // Nothing of the survey's here: not asked for, not waited on.
+        const entry = drawn.get(key);
+        if (entry) entry.mesh.visible = false;
+        continue;
+      }
       const own = held.get(key);
       if (!own) {
         waiting++;
