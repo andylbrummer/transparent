@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
-import { createLookController, EYE_HEIGHT_M, DEFAULT_FOV_DEG } from './look';
+import { createLookController, EYE_HEIGHT_M, DEFAULT_FOV_DEG, MAX_FOV_DEG, MIN_FOV_DEG } from './look';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
 const enu = enuBasis({ ...AUSTIN, alt: 0 });
@@ -113,6 +113,15 @@ describe('createLookController', () => {
     const camera = new THREE.PerspectiveCamera();
     look.updateCamera(camera, AUSTIN, null, 0);
     expect(camera.fov).toBeCloseTo(DEFAULT_FOV_DEG / 2, 9);
+  });
+
+  it('stops zooming at a fifth of a degree in and a hundred degrees out', () => {
+    const look = createLookController();
+    for (let i = 0; i < 200; i++) look.onKeyDown('+');
+    expect(look.getState().fovDeg).toBe(MIN_FOV_DEG);
+    expect(MIN_FOV_DEG).toBe(0.2);
+    for (let i = 0; i < 200; i++) look.onKeyDown('-');
+    expect(look.getState().fovDeg).toBe(MAX_FOV_DEG);
   });
 
   it('does not turn while two fingers pinch', () => {

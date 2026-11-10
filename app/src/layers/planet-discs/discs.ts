@@ -1,7 +1,8 @@
 /**
  * The planets close up: each drawn as the disc a telescope shows, at its
  * true place but MAGNIFICATION times life size, because the largest of
- * them is 1/30 of the Moon's width and no zoom here reaches that.
+ * them is 1/30 of the Moon's width: at life size Jupiter is 50 pixels at
+ * the narrowest zoom and nothing at all in a headset, which cannot zoom.
  *
  * Size, flattening, the pole's tilt, the face turned to the Earth and the
  * phase are computed (packages/core planet-discs, held to JPL Horizons);

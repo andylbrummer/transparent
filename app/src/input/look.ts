@@ -19,9 +19,13 @@ import type { DeviceAttitude, SurfacePosition } from '../sensors';
 export const EYE_HEIGHT_M = 1.5;
 
 export const DEFAULT_FOV_DEG = 60;
-/** One degree puts the Sun or the Moon, half a degree wide, across half the view's height. */
-const MIN_FOV_DEG = 1;
-const MAX_FOV_DEG = 100;
+/**
+ * A fifth of a degree: about where the photographed sky reaches its own
+ * resolution (an arcsecond a pixel), a galaxy a few arcminutes across fills
+ * the view, and Jupiter drawn 40× life size does too.
+ */
+export const MIN_FOV_DEG = 0.2;
+export const MAX_FOV_DEG = 100;
 const KEY_STEP_RAD = 0.05;
 const KEY_ZOOM_FACTOR = 1.1;
 const HALF_PI = Math.PI / 2;
