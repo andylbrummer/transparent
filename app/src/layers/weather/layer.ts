@@ -21,7 +21,7 @@ const PRECIPITATION_LEGEND =
 const WEATHER_LAYERS: readonly LayerDefinition[] = [
   {
     id: 'clouds',
-    label: 'Clouds (infrared, live)',
+    label: 'Clouds (infrared)',
     section: 'Weather',
     order: 10,
     legend: 'linear-gradient(to right, #1b2b44, #ffffff)',
@@ -38,7 +38,7 @@ const WEATHER_LAYERS: readonly LayerDefinition[] = [
   },
   {
     id: 'precipitation',
-    label: 'Rain and snow (live)',
+    label: 'Rain and snow',
     section: 'Weather',
     order: 20,
     legend: PRECIPITATION_LEGEND,
