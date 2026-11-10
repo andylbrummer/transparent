@@ -10,6 +10,7 @@ import {
   rampColor,
   splitFeatured,
   type CatalogData,
+  displayName,
 } from './catalog';
 import { DEEP_SKY_SPECS, classLegend, specCaption, type CatalogSpec, type CloudSpec } from './specs';
 
@@ -265,5 +266,19 @@ describe('DEEP_SKY_SPECS', () => {
     // About 3° × 1°, tilted 35° east of north.
     expect(outline?.[1]).toBeGreaterThan(150);
     expect(outline?.[3]).toBe(35);
+  });
+});
+
+describe('displayName', () => {
+  it('cuts a survey designation to the minutes of its position, keeping what follows', () => {
+    expect(displayName('2MASS J12073346-3932539 · 1 planet')).toBe('2MASS J1207-3932 · 1 planet');
+    expect(displayName('2MASS J17004888-4139214')).toBe('2MASS J1700-4139');
+    expect(displayName('SDSS J103027.09+052455.0')).toBe('SDSS J1030+0524');
+  });
+
+  it('leaves every other name alone, short J-names included', () => {
+    for (const name of ['M87* · first black hole imaged', 'PSR J0437-4715', 'Cygnus X-1', '3C 273', 'SN 1987A', 'J1939+2134']) {
+      expect(displayName(name)).toBe(name);
+    }
   });
 });

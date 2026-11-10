@@ -151,10 +151,21 @@ export function buildOutlines(data: CatalogData, spec: CatalogSpec): Map<string,
   return new Map([...byColor].map(([color, segments]) => [color, new Float32Array(segments)]));
 }
 
+/**
+ * A name as a label shows it. A survey designation that spells the
+ * position out to a fraction of an arcsecond ("2MASS J12073346-3932539")
+ * is cut to the minutes, as such names are commonly quoted ("2MASS
+ * J1207-3932"): the same name, at a length a label can carry. Anything
+ * after the designation (" · 1 planet") is kept.
+ */
+export function displayName(text: string): string {
+  return text.replace(/\bJ(\d{4})\d{2,}(?:\.\d+)?([+-]\d{4})\d{2,}(?:\.\d+)?/, 'J$1$2');
+}
+
 export function catalogLabels(data: CatalogData): GroupLabel[] {
   return data.labels.map(([row, text, priority]) => {
     const [x, y, z] = direction(data, row);
-    return { text, priority, position: new THREE.Vector3(x, y, z) };
+    return { text: displayName(text), priority, position: new THREE.Vector3(x, y, z) };
   });
 }
 
