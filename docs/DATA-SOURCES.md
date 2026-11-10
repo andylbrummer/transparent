@@ -117,6 +117,7 @@ files and can be removed without touching other layers.
 | Rivers and lakes (`rivers-lakes`) | off | Rivers, lakes and sea ports | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
 | Continents through time (`continents-through-time`) | off | Plate reconstruction, 1,000 Ma to today: rotations, coastlines and continental blocks (a model) | [Merdith, A.S., Williams, S.E., Collins, A.S., Tetley, M.G., Mulder, J.A., Blades, M.L., Young, A., Armistead, S.E., Cannon, J., Zahirovic, S. & Müller, R.D. (2021), Earth-Science Reviews 214, 103477, doi:10.1016/j.earscirev.2020.103477; model files from EarthByte / GPlates](https://doi.org/10.5281/zenodo.13635864) | CC BY 4.0 |
 |  |  | Geological time scale: periods, epochs and their colours | [International Commission on Stratigraphy, International Chronostratigraphic Chart v2024/12; Cohen, K.M., Harper, D.A.T., Gibbard, P.L. & Car, N. (2025), Episodes 48, 105–115](https://stratigraphy.org/chart) | CC BY 4.0 |
+| Wandering magnetic poles (`magnetic-pole-track`) | off | Magnetic (dip) pole positions 1590–2025 and forecast 2025–2030 | [NOAA National Centers for Environmental Information, Wandering of the Geomagnetic Poles (IGRF pole locations; WMM2025 pole locations)](https://www.ncei.noaa.gov/products/wandering-geomagnetic-poles) | public domain (U.S. Government work) |
 
 ## Human world
 

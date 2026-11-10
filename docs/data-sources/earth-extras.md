@@ -289,3 +289,41 @@ rings that struck them through. Left as it is: on the tomography slices the
 near half of the shell is a veil over the far half, and where a slow patch
 on one lies over a fast patch on the other the two mix to a purple that is
 not on the legend.
+
+## Wandering magnetic poles (added 2026-11-10)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Wandering magnetic poles (`magnetic-pole-track`, lazy, off by default) | North and south magnetic (dip) pole positions, one a year 1590–2025, and forecast 2025–2030 | NOAA National Centers for Environmental Information, "Wandering of the Geomagnetic Poles": the files it labels "IGRF Pole Locations (1590–2025)" (`NP.xy`, `SP.xy`) and "WMM Pole Locations (2025–2030)" (`WMM2025_NP.txt`, `WMM2025_SP.txt`) | U.S. Government work, public domain | https://www.ncei.noaa.gov/products/wandering-geomagnetic-poles | Baked: `generate_magnetic_poles.py` → `app/public/geo/magnetic-poles.json` (20 kB, 884 positions) | NOAA NCEI |
+
+- **These are computed positions, not surveyed ones**: where a field model's
+  field is vertical. NOAA's page says the poles "are computed from all the
+  Gauss coefficients using an iterative method". The caption says "computed
+  from field models, not surveyed". The handful of surveyed positions (Ross
+  1831, Amundsen 1904, the Canadian surveys to 2007) are on NOAA's map but not
+  published as a file, so they are not drawn.
+- **Which models**: NOAA's label is "IGRF Pole Locations (1590–2025)". IGRF
+  itself begins in 1900; what NOAA used before that is not stated on the page
+  (its older page named the historical model gufm1 — from memory, not
+  re-read). The bake script's docstring says the same with the same caveat.
+- The forecast years are drawn white and labelled "(forecast)".
+- The star and its label ("North magnetic pole · 2026 · 32 km a year") are
+  the track read at the app's clock; the speed is the distance between the
+  positions a year before and a year after.
+
+Checked:
+
+- `tools/pipeline/test_magnetic_poles.py` (22): a position every year, no
+  jump over 80 km, the 2025 WMM positions equal the ones quoted on NOAA's
+  page (85.762°N 139.298°E; 63.851°S 135.078°E), north pole 4 km a year in
+  1900–1910, 54 in 2000–2010, 40 in 2020–2025; south 9.
+- `poles.test.ts` (14), including an independent check: for each forecast
+  year NOAA's position and the one the app's own World Magnetic Model code
+  finds (`magneticDipPole` in `packages/core`) are **under 3 km apart**, both
+  poles, 2025–2030.
+- Looked at from 55°N 100°W, from 45°S 140°E and from Austin on a phone-sized
+  screen (`~/review-loop/shots/magnetic-poles/`, 3 shots): the northern track
+  wanders among the Canadian Arctic islands until 1900, then runs straight
+  across the Arctic Ocean to the star.
+- Not checked: the southern track close up (my crop missed it; the full shot
+  shows the rings and labels off Adélie Land), stereo.

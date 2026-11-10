@@ -281,6 +281,7 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_hazards_snapshot.py` | Snapshot of current natural events | `app/public/geo/hazards-snapshot.json` | `test_hazards_snapshot.py` |
 | `generate_ice.py` | Bake the ice layers: where the land ice is, and where the sea ice ends | `app/public/geo/ice-mask.png`, `app/public/geo/ice.json`, `app/public/geo/sea-ice-extent.json` | `test_ice.py` |
 | `generate_landmarks.py` | Landmarks people point at | `app/public/geo/landmarks.json` | `test_landmarks.py` |
+| `generate_magnetic_poles.py` | Where the magnetic poles have been, 1590-2025, and NOAA's forecast to 2030 | `app/public/geo/magnetic-poles.json` | `test_magnetic_poles.py` |
 | `generate_lunar_series.py` | The lunar theory's periodic terms |  | — |
 | `generate_mantle_flow.py` | Mantle flow | `app/public/geo/mantle-flow.json` | `test_mantle_flow.py` |
 | `generate_meteor_showers.py` | The year's meteor showers - where each radiant is on the sky, when it is active, when it peaks and how strong it usually is | `app/public/space/meteor-showers.json` | `test_meteor_showers.py` |
