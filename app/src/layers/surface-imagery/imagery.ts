@@ -128,17 +128,30 @@ export function undatedStatus(text: string | null): { text: string | null; tone:
 let showing: string | null = null;
 
 export async function createImageryLayer(context: LayerContext, id: string, spec: ImagerySpec): Promise<LayerInstance> {
+  // The decoded image is kept; its texture - 32 MB of GPU memory for a 4096
+  // px map - only while the map is the one showing. Seven maps tried one
+  // after another would otherwise hold 128 MB between them, on a phone.
+  let source: TexImageSource | null = null;
   let texture: THREE.Texture | null = null;
   let visible = false;
   const gain = spec.gain ?? (spec.format === 'png' ? 1 : DEFAULT_SURFACE_GAIN);
+  const release = (): void => {
+    texture?.dispose();
+    texture = null;
+  };
   const apply = (): void => {
-    if (visible && texture) {
+    if (visible && source) {
+      texture ??= source instanceof HTMLCanvasElement ? new THREE.CanvasTexture(source) : new THREE.Texture(source);
       context.globe.setSurfaceOverride(texture, gain);
       showing = id;
-    } else if (showing === id) {
+      return;
+    }
+    if (showing === id) {
       context.globe.setSurfaceOverride(null);
       showing = null;
     }
+    // After the globe has let go of it.
+    release();
   };
   const watcher = new ProductWatcher(
     imagerySource(spec, id, context.assetUrl, (blob) => decodeFor(spec, blob)),
@@ -155,11 +168,11 @@ export async function createImageryLayer(context: LayerContext, id: string, spec
         else context.setStatus(undatedStatus(text).text, undatedStatus(text).tone);
       },
       onProduct(product) {
+        source = product.value;
+        // A newer image replaces the texture of the old one: the globe takes the new before the old goes.
         const previous = texture;
-        const next = product.value instanceof HTMLCanvasElement ? new THREE.CanvasTexture(product.value) : new THREE.Texture(product.value);
-        texture = next;
+        texture = null;
         apply();
-        // After the globe has let go of it.
         previous?.dispose();
       },
     }
@@ -177,7 +190,6 @@ export async function createImageryLayer(context: LayerContext, id: string, spec
       watcher.stop();
       visible = false;
       apply();
-      texture?.dispose();
     },
   };
 }
