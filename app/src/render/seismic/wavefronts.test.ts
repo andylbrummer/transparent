@@ -107,6 +107,15 @@ describe('NOTABLE_EVENTS', () => {
     expect(event?.mag).toBe(9.1);
   });
 
+  it('carries the catalogue origin of each preset', () => {
+    // USGS ComCat, read 2026-11-10.
+    expect(NOTABLE_EVENTS.map((e) => [e.id, e.time, e.lon, e.lat, e.depthKm, e.mag])).toEqual([
+      ['tohoku2011', '2011-03-11T05:46:24Z', 142.373, 38.297, 29, 9.1],
+      ['sumatra2004', '2004-12-26T00:58:53Z', 95.982, 3.295, 30, 9.1],
+      ['valdivia1960', '1960-05-22T19:11:20Z', -73.407, -38.143, 25, 9.5],
+    ]);
+  });
+
   it('contains 3 events', () => {
     expect(NOTABLE_EVENTS.length).toBe(3);
   });

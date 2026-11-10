@@ -101,7 +101,9 @@ export function isInPShadowZone(
 }
 
 /**
- * Notable earthquake presets for timeline playback.
+ * Notable earthquake presets for timeline playback. Origins are ComCat's
+ * (official20110311054624120_30, official20041226005853450_30,
+ * official19600522191120_30), as in app/public/geo/quakes-notable.json.
  */
 export const NOTABLE_EVENTS: readonly EventRecord[] = [
   {
@@ -124,9 +126,9 @@ export const NOTABLE_EVENTS: readonly EventRecord[] = [
   },
   {
     id: 'valdivia1960',
-    time: '1960-05-22T19:11:14Z',
-    lat: -38.24,
-    lon: -72.63,
+    time: '1960-05-22T19:11:20Z',
+    lat: -38.143,
+    lon: -73.407,
     depthKm: 25,
     mag: 9.5,
     name: 'Valdivia 1960',
