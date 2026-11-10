@@ -26,11 +26,19 @@ import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { DEPTH_RAMP_GLSL, ecefAtDepth } from '../../render/interior';
 import { LABEL_KIND_ORDER, type GroupLabel, type LabelGroup } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
+import { SLAB_DEPTH_GLSL } from '../../render/slab-depth';
 import type { LayerContext, LayerInstance } from '../types';
 import { buildSlabMesh, parseSlabFile, slabDepthMarks, type SlabGrid } from './mesh';
 
-/** Depth contours drawn on the plates, km. */
-export const SLAB_CONTOUR_KM = { minor: 20, major: 100 } as const;
+/**
+ * Depth contours drawn on the plates, km. The two fine ones show only where
+ * they have room - on a plate close by, which has no outline or bright
+ * contour in view to give its shape.
+ */
+export const SLAB_CONTOUR_KM = { finest: 1, fine: 5, minor: 20, major: 100 } as const;
+
+/** How much of its face a plate keeps right under the user: enough to colour its lines' ground, not the far side. */
+const NEAR_FACE_ALPHA = 0.06;
 
 const VERTEX_SHADER = `
   attribute vec2 aInfo;
@@ -53,21 +61,19 @@ const VERTEX_SHADER = `
   }
 `;
 
+// The other solids in the mantle (the tomography bodies) write the same depth
+// - that is what lets them and the slabs hide each other - and take it from here.
+export { SLAB_DEPTH_GLSL };
+
 /**
- * slabDepth: logarithmic depth from 1 km to 40,000 km, 6 m apart at
- * 10,000 km in 24 bits. slabPresence: how solid a plate is drawn at a
- * distance. A slab under the user's feet would otherwise wall off
- * everything below it, so close to, the plate thins to a tint and its
- * lines carry the shape; below half presence it no longer hides the slabs
- * behind it either.
- *
- * Exported for the other solids in the mantle (the tomography bodies):
- * writing the same depth is what lets them and the slabs hide each other.
+ * slabPresence: how solid a plate is drawn at a distance. A slab under the
+ * user's feet would otherwise wall off everything below it - and even as a
+ * faint tint it muddies the whole far side, since it fills the view - so
+ * close to, the plate's faces clear and its lines carry the shape; below
+ * half presence it no longer hides the slabs behind it either.
  */
-export const SLAB_DEPTH_GLSL = `
-  float slabDepth(float viewDistance) {
-    return clamp(log2(max(viewDistance, 1.0e3) / 1.0e3) / log2(4.0e4), 0.0, 1.0);
-  }
+const SLAB_PRESENCE_GLSL = `
+  ${SLAB_DEPTH_GLSL}
   float slabPresence(float viewDistance) {
     return smoothstep(2.0e5, 1.5e6, viewDistance);
   }
@@ -75,7 +81,7 @@ export const SLAB_DEPTH_GLSL = `
 
 const DEPTH_FRAGMENT_SHADER = `
   varying float vViewDistance;
-  ${SLAB_DEPTH_GLSL}
+  ${SLAB_PRESENCE_GLSL}
   void main() {
     if (slabPresence(vViewDistance) < 0.5) discard;
     gl_FragDepth = slabDepth(vViewDistance);
@@ -91,7 +97,7 @@ const COLOR_FRAGMENT_SHADER = `
   varying float vPart;
   varying float vEdgeKm;
   varying float vViewDistance;
-  ${SLAB_DEPTH_GLSL}
+  ${SLAB_PRESENCE_GLSL}
   ${DEPTH_RAMP_GLSL}
 
   // 1 on a contour of the interval, 0 away from it; lines widthPx wide, fading out where they would crowd.
@@ -103,13 +109,19 @@ const COLOR_FRAGMENT_SHADER = `
   }
 
   void main() {
+    bool wall = vPart > 1.5;
+    bool bottom = !wall && vPart > 0.5;
+    float presence = slabPresence(vViewDistance);
+    // Close to, a plate is its upper face's lines and nothing else: the
+    // underside and the cut edges would only repeat them, and a plate
+    // underfoot covers every pixel several times over.
+    if (presence <= 0.0 && (wall || bottom)) discard;
+
     vec3 n = normalize(vNormal);
     vec3 toEye = normalize(cameraPosition - vWorld);
     vec3 up = normalize(vWorld);
     float facing = abs(dot(n, toEye));
     float level = abs(dot(n, up));
-    bool wall = vPart > 1.5;
-    bool bottom = !wall && vPart > 0.5;
 
     vec3 ramp = depthRampSrgb(vDepthKm);
     // Kept well under the ramp's own brightness: the earthquakes drawn over
@@ -122,14 +134,28 @@ const COLOR_FRAGMENT_SHADER = `
     float alpha = wall ? 0.85 : (bottom ? 0.62 : 0.68);
     // A sheet seen edge-on puts more of itself along the line of sight.
     alpha = 1.0 - pow(1.0 - alpha, 1.0 / max(facing, 0.35));
-    alpha *= mix(0.2, 1.0, slabPresence(vViewDistance));
+    alpha *= mix(wall || bottom ? 0.0 : ${NEAR_FACE_ALPHA.toFixed(2)}, 1.0, presence);
 
     if (!wall) {
       float minor = contour(vDepthKm, ${SLAB_CONTOUR_KM.minor.toFixed(1)}, 1.0);
       float major = contour(vDepthKm, ${SLAB_CONTOUR_KM.major.toFixed(1)}, 1.8);
-      color = mix(color, ramp * 0.45, minor * 0.55);
+      // The underside's lines go with its face; the upper face keeps its own however close.
+      float lines = bottom ? presence : 1.0;
+      if (!bottom) {
+        // The fine lines belong to the near view: further off the 20 km lines do their work.
+        float near = 1.0 - presence;
+        // Faint: a plate underfoot lays them across the whole view of the far side.
+        float fine = max(contour(vDepthKm, ${SLAB_CONTOUR_KM.fine.toFixed(1)}, 1.2), 0.4 * contour(vDepthKm, ${SLAB_CONTOUR_KM.finest.toFixed(1)}, 1.0)) * near;
+        color = mix(color, mix(ramp, vec3(1.0), 0.25), fine);
+        alpha = max(alpha, fine * 0.45);
+        // And the 20 km lines, dark on a lit plate, turn bright where the plate has cleared.
+        color = mix(color, mix(ramp * 0.45, mix(ramp, vec3(1.0), 0.4), near), minor * mix(0.55, 1.0, near));
+        alpha = max(alpha, minor * near * 0.7);
+      } else {
+        color = mix(color, ramp * 0.45, minor * 0.55);
+      }
       color = mix(color, mix(ramp, vec3(1.0), 0.72), major);
-      alpha = max(alpha, major * 0.95);
+      alpha = max(alpha, major * 0.95 * lines);
       // The outline: a rim two pixels wide where the distance to the edge runs
       // out. A pixel's size on the plate comes from the position, not from
       // the distance's own slope, which jumps between the slivers at the edge.
@@ -137,7 +163,7 @@ const COLOR_FRAGMENT_SHADER = `
       float kmPerPixel = max(min(length(dFdx(vWorld)), length(dFdy(vWorld))) / 1000.0, 1.0e-4);
       float rim = 1.0 - smoothstep(1.5, 2.5, vEdgeKm / kmPerPixel);
       color = mix(color, mix(ramp, vec3(1.0), 0.5), rim);
-      alpha = max(alpha, rim * 0.95);
+      alpha = max(alpha, rim * 0.95 * lines);
     }
 
     // A hair nearer than the depth pass wrote, so its own surface always passes.

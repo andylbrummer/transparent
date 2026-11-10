@@ -42,6 +42,13 @@ describe('the slab layer', () => {
     expect(slabs.caption).toContain(`every ${SLAB_CONTOUR_KM.major}`);
   });
 
+  it('draws fine contours for a plate close by, and clears its underside there', () => {
+    expect(SLAB_CONTOUR_KM.finest).toBeLessThan(SLAB_CONTOUR_KM.fine);
+    expect(SLAB_CONTOUR_KM.fine).toBeLessThan(SLAB_CONTOUR_KM.minor);
+    expect(SLAB_FRAGMENT_SHADER).toContain(`contour(vDepthKm, ${SLAB_CONTOUR_KM.finest.toFixed(1)}`);
+    expect(SLAB_FRAGMENT_SHADER).toContain('if (presence <= 0.0 && (wall || bottom)) discard;');
+  });
+
   it('colours by the shared depth ramp, written to the screen as the legend shows it', () => {
     expect(SLAB_FRAGMENT_SHADER).toContain(DEPTH_RAMP_GLSL);
     expect(SLAB_FRAGMENT_SHADER).toContain('depthRampSrgb(vDepthKm)');
