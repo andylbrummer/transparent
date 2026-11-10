@@ -11,6 +11,7 @@ export * from './terminator';
 export * from './astro';
 export * from './astro/ephemeris';
 export * from './astro/planet-discs';
+export * from './astro/healpix';
 
 export interface Vec3 {
   readonly x: number;
