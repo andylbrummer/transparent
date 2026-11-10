@@ -25,11 +25,9 @@
  *
  * Writes outDir/<name>.png and outDir/results.json and prints one line per
  * case: frameMs, the interval between frames (16.7 at best on a 60 Hz
- * display); renderMs, the time a frame's draw calls take through to the
- * GPU finishing them - the figure that shows headroom and what a layer
- * costs, though it includes the fixed cost of waiting for the GPU (run a
- * case in a tiny viewport to see it); texture count, labels, status chips,
- * console problems.
+ * display); gpuMs, the GPU time of a frame's draw calls, also by object
+ * name in results.json - the figure that shows headroom and what a layer
+ * costs; texture count, labels, status chips, console problems.
  * Needs playwright-core and a Chromium; see shot.mjs.
  */
 import { chromium } from 'playwright-core';
@@ -57,6 +55,7 @@ const browser = await chromium.launch({
   args: [
     '--use-angle=gl-egl',
     '--ignore-gpu-blocklist',
+    '--enable-webgl-draft-extensions',
     ...(has('uncapped') ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : []),
   ],
 });
@@ -156,52 +155,82 @@ for (const c of cases) {
 
   const info = await page.evaluate(async (windows) => {
     const app = window.__transparentEarth;
-    // Time each frame's rendering through to the GPU finishing it: the
-    // frame interval stops at the display's 16.7 ms however little of it a
-    // frame uses. From the frame's first render call to a pixel read back
-    // after its last (the app's frame callback runs before this one, having
-    // been registered first): reading a pixel waits for the GPU, which
-    // gl.finish() in a browser does not. Once per frame, so that a stereo
-    // frame's two renders pay for one wait like any other frame.
-    if (!window.__renderTimer) {
-      const timer = (window.__renderTimer = { ms: 0, started: 0 });
-      const gl = app.renderer.getContext();
-      const render = app.renderer.render.bind(app.renderer);
-      const pixel = new Uint8Array(4);
-      app.renderer.render = (scene, camera) => {
-        if (timer.started === 0) timer.started = performance.now();
-        render(scene, camera);
-      };
-      const afterFrame = () => {
-        requestAnimationFrame(afterFrame);
-        if (timer.started === 0) return;
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        timer.ms += performance.now() - timer.started;
-        timer.started = 0;
-      };
-      requestAnimationFrame(afterFrame);
+    // What the frame costs the GPU, from timer queries round every draw
+    // call (see gpu-time.mjs): the frame interval stops at the display's
+    // 16.7 ms however little of it a frame uses. Lazy layers add objects as
+    // they load, so the scene is gone over again before each measurement.
+    const gl = app.renderer.getContext();
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    const gpu = (window.__gpuTimer ??= { pending: [], active: null, frames: new Map() });
+    if (ext) {
+      app.scene.traverse((object) => {
+        if (object.userData.gpuTimed || (!object.isMesh && !object.isPoints && !object.isLine)) return;
+        object.userData.gpuTimed = true;
+        const name = (object.name || object.parent?.name || 'globe').replace(/-\d+$/, '');
+        const before = object.onBeforeRender;
+        const after = object.onAfterRender;
+        object.onBeforeRender = function (...rest) {
+          before.apply(this, rest);
+          if (gpu.active) return;
+          gpu.active = gl.createQuery();
+          gl.beginQuery(ext.TIME_ELAPSED_EXT, gpu.active);
+        };
+        object.onAfterRender = function (...rest) {
+          after.apply(this, rest);
+          if (!gpu.active) return;
+          gl.endQuery(ext.TIME_ELAPSED_EXT);
+          gpu.pending.push([name, app.getFrameCount(), gpu.active]);
+          gpu.active = null;
+        };
+      });
     }
-    // Other work on the machine's GPU shows up as slow windows: take several and keep the best and the middle one.
+    const collect = () => {
+      for (let i = gpu.pending.length - 1; i >= 0; i--) {
+        const [name, frame, query] = gpu.pending[i];
+        if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) continue;
+        if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) {
+          const entry = gpu.frames.get(frame) ?? {};
+          entry[name] = (entry[name] ?? 0) + gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6;
+          gpu.frames.set(frame, entry);
+        }
+        gl.deleteQuery(query);
+        gpu.pending.splice(i, 1);
+      }
+    };
+    // Other work on the machine shows up as slow windows: take several and keep the best and the middle one.
     const times = [];
-    const renders = [];
+    gpu.frames.clear();
+    const firstFrame = app.getFrameCount() + 1;
     for (let i = 0; i < windows; i++) {
       const startFrames = app.getFrameCount();
-      const startRender = window.__renderTimer.ms;
       const start = performance.now();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      while (performance.now() - start < 1000) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        if (ext) collect();
+      }
       const frames = app.getFrameCount() - startFrames;
-      if (frames === 0) continue;
-      times.push(Math.round(((performance.now() - start) / frames) * 100) / 100);
-      renders.push(Math.round(((window.__renderTimer.ms - startRender) / frames) * 100) / 100);
+      if (frames > 0) times.push(Math.round(((performance.now() - start) / frames) * 100) / 100);
     }
     times.sort((a, b) => a - b);
-    renders.sort((a, b) => a - b);
+    // Per name, the median over frames of its draws' time in a frame.
+    const perName = new Map();
+    for (const [frame, entry] of gpu.frames) {
+      if (frame < firstFrame) continue;
+      for (const [name, ms] of Object.entries(entry)) perName.set(name, [...(perName.get(name) ?? []), ms]);
+    }
+    const gpuByName = {};
+    let gpuMs = ext ? 0 : null;
+    for (const [name, list] of perName) {
+      list.sort((a, b) => a - b);
+      gpuByName[name] = Math.round(list[Math.floor(list.length / 2)] * 100) / 100;
+      gpuMs += list[Math.floor(list.length / 2)];
+    }
     const memory = app.renderer.info.memory;
     return {
       frameMs: times[0] ?? null,
       frameMsMedian: times[Math.floor(times.length / 2)] ?? null,
-      renderMs: renders[0] ?? null,
-      renderMsMedian: renders[Math.floor(renders.length / 2)] ?? null,
+      gpuMs: gpuMs === null ? null : Math.round(gpuMs * 100) / 100,
+      gpuByName,
       labels: app.getVisibleLabels(),
       hud: document.getElementById('hud')?.textContent,
       textures: memory.textures,
@@ -218,7 +247,7 @@ for (const c of cases) {
   const result = { name: c.name, ...info, problems: [...problems] };
   results.push(result);
   console.log(
-    `${c.name}\t${info.frameMs} ms (median ${info.frameMsMedian})\trender ${info.renderMs} (${info.renderMsMedian})\ttex ${info.textures}\t${info.labels.length} labels\t${JSON.stringify(info.status)}` +
+    `${c.name}\t${info.frameMs} ms (median ${info.frameMsMedian})\tgpu ${info.gpuMs}\ttex ${info.textures}\t${info.labels.length} labels\t${JSON.stringify(info.status)}` +
       (problems.length > 0 ? `\n  ${problems.slice(0, 6).join('\n  ')}` : '')
   );
 }
