@@ -26,6 +26,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { RENDER_ORDER } from './order';
+import { DETAIL_MIN_SEGMENTS, DetailSwitch, buildOutlineCells } from './outline-detail';
 
 export type OutlineLayerName =
   | 'coastline'
@@ -511,14 +512,15 @@ export class OutlineLayer {
   private readonly materials: LineMaterial[] = [];
   /** CSS-pixel viewport, shared with the ribbon's shader. */
   private readonly ribbonResolution = new THREE.Vector2(1, 1);
+  /** CSS-pixel height of the viewport, for the dense sets' choice of detail. */
+  private readonly viewportHeight = { value: 800 };
 
   constructor(data: OutlineData) {
     for (const name of LAYER_ORDER) {
       const polylines = data.layers[name];
       if (!polylines) continue;
       const style = OUTLINE_STYLES[name];
-      const geometry = new LineSegmentsGeometry();
-      geometry.setPositions(outlineSegmentPositions(polylines, data.quantumPerDegree));
+      const positions = outlineSegmentPositions(polylines, data.quantumPerDegree);
       const material = new LineMaterial({
         color: style.color,
         linewidth: style.width,
@@ -527,13 +529,31 @@ export class OutlineLayer {
         depthTest: false,
         depthWrite: false,
       });
-      const lines = new LineSegments2(geometry, material);
-      lines.name = name;
-      // Bounds of a planet-wide line set always contain the view; skip the test.
-      lines.frustumCulled = false;
-      lines.renderOrder = name === 'subduction' ? TRENCH_RENDER_ORDER : OUTLINE_RENDER_ORDER;
+      const renderOrder = name === 'subduction' ? TRENCH_RENDER_ORDER : OUTLINE_RENDER_ORDER;
+      const drawLines = (segments: Float32Array, culled: boolean): LineSegments2 => {
+        const geometry = new LineSegmentsGeometry();
+        geometry.setPositions(segments);
+        const lines = new LineSegments2(geometry, material);
+        lines.name = name;
+        lines.frustumCulled = culled;
+        lines.renderOrder = renderOrder;
+        return lines;
+      };
       this.materials.push(material);
-      this.group.add(lines);
+      if (positions.length / 6 < DETAIL_MIN_SEGMENTS) {
+        // Bounds of a planet-wide line set always contain the view; skip the test.
+        this.group.add(drawLines(positions, false));
+      } else {
+        // A dense set: by cells, each culled when out of view and simplified when far (see outline-detail.ts).
+        const cells = new THREE.Group();
+        cells.name = name;
+        for (const cell of buildOutlineCells(positions)) {
+          const detail = new DetailSwitch(drawLines(cell.fine, true), drawLines(cell.coarse, true), cell.radiusM, this.viewportHeight);
+          detail.position.set(cell.centre[0], cell.centre[1], cell.centre[2]);
+          cells.add(detail);
+        }
+        this.group.add(cells);
+      }
       if (name === 'ridge' && data.ridgeSteps) this.addSpreading(polylines, data.ridgeSteps, data.quantumPerDegree);
       if (name === 'subduction' && data.subductionOverriding) {
         this.addTeeth(polylines, data.subductionOverriding, data.quantumPerDegree);
@@ -627,14 +647,15 @@ export class OutlineLayer {
   setResolution(widthCss: number, heightCss: number): void {
     for (const material of this.materials) material.resolution.set(widthCss, heightCss);
     this.ribbonResolution.set(widthCss, heightCss);
+    this.viewportHeight.value = heightCss;
   }
 
   dispose(): void {
-    for (const child of this.group.children) {
-      const drawn = child as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
-      drawn.geometry.dispose();
-      drawn.material.dispose();
-    }
+    this.group.traverse((object) => {
+      const drawn = object as Partial<THREE.Mesh<THREE.BufferGeometry, THREE.Material>>;
+      drawn.geometry?.dispose();
+      drawn.material?.dispose();
+    });
     this.group.clear();
   }
 }
