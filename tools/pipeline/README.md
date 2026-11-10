@@ -252,3 +252,68 @@ tools/pipeline/.cache/venv/bin/python tools/pipeline/test_skymaps.py
 
 Sources, licences and what the checks pin down:
 `docs/data-sources/deep-sky.md`.
+
+## Every script
+
+One line per bake script, from its own docstring, which also gives its
+sources, licences and any extra Python packages it needs (those go in a venv
+under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
+`tools/pipeline/.cache/`. Sources and licences for everything are indexed in
+`docs/DATA-SOURCES.md`.
+
+| Script | What it bakes | Writes | Data test |
+| --- | --- | --- | --- |
+| `generate_air.py` | Airports and air routes | `app/public/geo/air-routes.json`, `app/public/geo/airports.json` | `test_air.py` |
+| `generate_antarctic_ice.py` | Bake the thickness of the Antarctic ice and the shape of the land under it, from Bedmap3 | `app/public/geo/antarctic-bed.png`, `app/public/geo/antarctic-ice-thickness.png`, `app/public/geo/antarctic-ice.json` | `test_antarctic_ice.py` |
+| `generate_base_map.py` | An offline copy of the base map | `app/public/geo/blue-marble.jpg` | `test_base_map.py` |
+| `generate_cables.py` | Undersea communication cables | `app/public/geo/cables.json` | `test_cables.py` |
+| `generate_constellations.py` | The constellations | `app/public/sky/constellations.json` | `test_constellations.py` |
+| `generate_craters.py` | Impact craters | `app/public/geo/craters.json` | `test_craters.py` |
+| `generate_cyclones.py` | Bake the tracks of the world's major tropical cyclones for the app | `app/public/geo/cyclone-live-snapshot.json`, `app/public/geo/cyclone-tracks.bin`, `app/public/geo/cyclone-tracks.json` | `test_cyclones.py` |
+| `generate_deep_time.py` | The continents through deep time | `app/public/geo/deep-time/plates.bin`, `app/public/geo/deep-time/timescale.json` | `test_deep_time.py` |
+| `generate_deepsky.py` | The faint and invisible sky | `app/public/sky/deep/` | `test_deepsky.py` |
+| `generate_depth_ladder.py` | The depth ladder | `app/public/geo/depth-ladder.json` | `test_depth_ladder.py` |
+| `generate_earth_fields.py` | Global geophysical fields | `app/public/geo/fields/` | `test_earth_fields.py` |
+| `generate_fireballs.py` | Fireballs (bolides) | `app/public/geo/fireballs.json` | `test_fireballs.py` |
+| `generate_geo.py` | Map outlines and place labels | `app/public/geo/labels.json`, `app/public/geo/outlines.json` | `test_geo.py` |
+| `generate_geology.py` | Tectonics and geology labels | `app/public/geo/ATTRIBUTION.md`, `app/public/geo/geology.json`, `app/public/geo/tectonics.json` | `test_geology.py` |
+| `generate_hazards_snapshot.py` | Snapshot of current natural events | `app/public/geo/hazards-snapshot.json` | `test_hazards_snapshot.py` |
+| `generate_ice.py` | Bake the ice layers: where the land ice is, and where the sea ice ends | `app/public/geo/ice-mask.png`, `app/public/geo/ice.json`, `app/public/geo/sea-ice-extent.json` | `test_ice.py` |
+| `generate_landmarks.py` | Landmarks people point at | `app/public/geo/landmarks.json` | `test_landmarks.py` |
+| `generate_lunar_series.py` | The lunar theory's periodic terms |  | — |
+| `generate_mantle_flow.py` | Mantle flow | `app/public/geo/mantle-flow.json` | `test_mantle_flow.py` |
+| `generate_meteor_showers.py` | The year's meteor showers - where each radiant is on the sky, when it is active, when it peaks and how strong it usually is | `app/public/space/meteor-showers.json` | `test_meteor_showers.py` |
+| `generate_meteorites.py` | Meteorites | `app/public/geo/meteorites.json` | `test_meteorites.py` |
+| `generate_milkyway.py` | The Milky Way | `app/public/sky/milkyway.jpg` | `test_milkyway.py` |
+| `generate_moon.py` | The face of the Moon | `app/public/sky/moon.jpg` | `test_moon.py` |
+| `generate_neo_approaches.py` | Asteroids passing close to the Earth - every known approach within 10 lunar distances from PAST_DAYS before the bake to FUTURE_DAYS after it, each with a short table of where it is around its closest approach | `app/public/sky/neo-approaches.json` | `test_neo_approaches.py` |
+| `generate_ocean_currents.py` | Ocean surface currents | `app/public/geo/ocean-currents.bin` | `test_ocean_currents.py` |
+| `generate_overlay_snapshot.py` | Bake the one Earth overlay that never changes, for when NASA GIBS cannot be reached | `app/public/geo/overlay-lightning.png` | `test_overlay_snapshot.py` |
+| `generate_plate_motion.py` | Plate motion arrows | `app/public/geo/ATTRIBUTION.md`, `app/public/geo/plate-motion.json` | `test_plate_motion.py` |
+| `generate_power_plants.py` | The world's large power plants | `app/public/geo/power-plants.json` | `test_power_plants.py` |
+| `generate_quake_sets.py` | Two small earthquake sets | `app/public/geo/quakes-notable.json`, `app/public/geo/quakes-recent-snapshot.json` | `test_quake_sets.py` |
+| `generate_satellite_fixture.py` | Reference values for the satellite layers' tests: where three satellites are at one instant, worked out by a second implementation | `app/public/space/gp/` | — |
+| `generate_satellites_snapshot.py` | A snapshot of satellite orbits for offline use | `app/public/space/gp/` | `test_satellites_snapshot.py` |
+| `generate_seafloor_age.py` | The age of the ocean floor | `app/public/geo/seafloor-age.png` | `test_seafloor_age.py` |
+| `generate_seismic_waves.py` | Seismic wavefronts inside the Earth | `app/public/geo/seismic-waves.bin`, `app/public/geo/seismic-waves.json` | `test_seismic_waves.py` |
+| `generate_seismicity.py` | Earthquakes at depth | `app/public/geo/ATTRIBUTION.md`, `app/public/geo/quakes.json` | `test_seismicity.py` |
+| `generate_ship_density.py` | Where the world's ships go | `app/public/geo/ship-density.jpg` | `test_ship_density.py` |
+| `generate_skymaps.py` | All-sky maps beyond visible light | `app/public/sky/maps/` | `test_skymaps.py` |
+| `generate_slabs.py` | Subducting slabs as surfaces | `app/public/geo/ATTRIBUTION.md`, `app/public/geo/slabs.bin` | `test_slabs.py` |
+| `generate_small_bodies.py` | The small bodies of the solar system - dwarf planets, the brightest asteroids, the comets predicted to be within reach of a small telescope, and a cloud of some forty thousand minor planets that draws the main belt, the Hildas, Jupiter's Trojans and the Kuiper belt | `app/public/sky/small-bodies-cloud.bin`, `app/public/sky/small-bodies-cloud.json`, `app/public/sky/small-bodies.json` | `test_small_bodies.py` |
+| `generate_space_weather_snapshot.py` | A snapshot of space weather for offline use | `app/public/space/` | `test_space_weather_snapshot.py` |
+| `generate_spacecraft.py` | Where the spacecraft beyond Earth orbit are - the observatories at the Sun-Earth L1 and L2 points and the probes in deep space - as a table of geocentric directions and distances | `app/public/space/spacecraft.json` | `test_spacecraft.py` |
+| `generate_stars.py` | The naked-eye stars | `app/public/sky/stars.json` | `test_stars.py` |
+| `generate_sun_snapshot.py` | A snapshot of the Sun for offline use | `app/public/sky/sun/` | `test_sun_snapshot.py` |
+| `generate_tomography.py` | Seismic tomography | `app/public/geo/tomography/dvs-` | `test_tomography.py` |
+| `generate_tomography_bodies.py` | The slow bodies of the lower mantle, in three dimensions | `app/public/geo/tomography-bodies-slow.bin` | `test_tomography_bodies.py` |
+| `generate_transients.py` | Bake the transient and multi-messenger sky: things that happened once, at a known time, somewhere on the celestial sphere | `app/public/sky/transients/` | `test_transients.py` |
+| `generate_tsunamis.py` | Historical tsunamis | `app/public/geo/tsunamis.json` | `test_tsunamis.py` |
+| `generate_ulvz.py` | Ultra-low velocity zones (ULVZs) on the core-mantle boundary | `app/public/geo/ulvz.json` | `test_ulvz.py` |
+| `generate_undersea.py` | The named features of the seabed | `app/public/geo/undersea.json` | `test_undersea.py` |
+| `generate_volcanoes.py` | Volcanoes as data | `app/public/geo/volcanoes.json` | `test_volcanoes.py` |
+| `generate_vsop87.py` | The planetary theory |  | — |
+| `generate_waters.py` | Rivers, lakes and sea ports | `app/public/geo/ports.json`, `app/public/geo/waters.json` | `test_waters.py` |
+| `generate_weather_snapshot.py` | The weather layers' offline snapshot | `app/public/weather/` | `test_weather_snapshot.py` |
+
+Tests without a script of the same name: .
