@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_M, WMM_VALID_FROM, WMM_VALID_UNTIL, decimalYear, geomagneticNorthPole, magneticDipPole } from '@transparent-earth/core';
 import type { LabelGroup } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
-import { SpaceLines, SpaceMarkers, skyDirectionOf } from '../../render/space-lines';
+import { SpaceLines, SpaceMarkers } from '../../render/space-lines';
 import type { LayerContext, LayerInstance } from '../types';
 import { SURFACE_KM, dipoleFootpoints, outwardSign, strengthColor, traceFieldLine, type TracedLine } from './field-lines';
 
@@ -117,7 +117,6 @@ export async function createMagneticFieldLayer(context: LayerContext): Promise<L
 
   // The poles: where the field is vertical (dip poles), and where the dipole's axis comes out (geomagnetic poles).
   const poleWorld: THREE.Vector3[] = [];
-  const poleSky: THREE.Vector3[] = [];
   let markers: SpaceMarkers;
   let labels: LabelGroup;
   {
@@ -136,7 +135,6 @@ export async function createMagneticFieldLayer(context: LayerContext): Promise<L
       surfacePoint(pole.lat, pole.lon, polePositions, i * 3);
       poleColors.set(pole.color, i * 3);
       poleWorld.push(new THREE.Vector3(polePositions[i * 3], polePositions[i * 3 + 1], polePositions[i * 3 + 2]));
-      poleSky.push(new THREE.Vector3());
     });
     markers = new SpaceMarkers(polePositions, poleColors, new Float32Array(poles.length).fill(13), context.skyUniforms, {
       name: 'magnetic-poles',
@@ -148,8 +146,9 @@ export async function createMagneticFieldLayer(context: LayerContext): Promise<L
       // Among the sky's names, ahead of the stars': there are four, and they are what the lines converge on.
       rank: 6.32,
       style: { fontPx: 11, color: '#ffe9b0', offsetYPx: 15 },
-      frame: 'sky',
-      labels: poles.map((pole, i) => ({ text: `${pole.name} · ${place(pole.lat, pole.lon)}`, priority: i, position: poleSky[i] })),
+      // Points on the ground, thinned with the sky's names: in stereo each sits on its pole.
+      frame: 'space',
+      labels: poles.map((pole, i) => ({ text: `${pole.name} · ${place(pole.lat, pole.lon)}`, priority: i, position: poleWorld[i] })),
     });
   }
   context.setStatus(
@@ -157,16 +156,11 @@ export async function createMagneticFieldLayer(context: LayerContext): Promise<L
     inRange ? 'info' : 'stale'
   );
 
-  const toInertial = new THREE.Quaternion();
   return {
     setVisible(visible) {
       lines.object.visible = visible;
       markers.object.visible = visible;
       labels.setVisible(visible);
-    },
-    update(frame) {
-      toInertial.copy(context.inertialRoot.quaternion).invert();
-      for (let i = 0; i < poleWorld.length; i++) skyDirectionOf(poleWorld[i], frame.camera, toInertial, poleSky[i]);
     },
     dispose() {
       lines.dispose();

@@ -32,7 +32,7 @@ import { EARTH_RADIUS_M, greenwichMeanSiderealTime, precessionMatrix, sunGeocent
 import type { SatRec } from 'satellite.js';
 import type { GroupLabel, LabelGroup } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
-import { SEEN_THROUGH_EARTH, SpaceLines, skyDirectionOf } from '../../render/space-lines';
+import { SEEN_THROUGH_EARTH, SpaceLines } from '../../render/space-lines';
 import type { FrameState, LayerContext, LayerInstance, StatusTone } from '../types';
 import { loadGpGroup, type GpSet } from './gp-source';
 import { LAYER_SPECS, NAMED_SIZE_FACTOR, labelText, type LayerSpec, type Naming } from './groups';
@@ -237,8 +237,6 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
   // Names. The label layer keeps a separate allowance for names on the sky, which the ground's own names cannot
   // use up: so each is given as the direction from the eye, among the stars, and moved every frame.
   const labelWorld = named.map(() => new THREE.Vector3());
-  const labelPoints = named.map(() => new THREE.Vector3());
-  const toInertial = new THREE.Quaternion();
   let labelTexts: string[] = [];
   let labels: LabelGroup[] = [];
 
@@ -346,13 +344,14 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
     const rest: GroupLabel[] = [];
     texts.forEach((text, i) => {
       const priority = satellites[named[i]].naming!.priority;
-      if (text !== '') (priority === 0 ? first : rest).push({ text, priority: priority + i / 1000, position: labelPoints[i] });
+      if (text !== '') (priority === 0 ? first : rest).push({ text, priority: priority + i / 1000, position: labelWorld[i] });
     });
     // The best-known names go ahead of the stars' names; the long tail waits its turn after them.
     const style = { fontPx: 10, color: spec.labelColor, offsetYPx: 11 };
     labels = [
-      context.addLabels({ rank: spec.labelRank, style, frame: 'sky', labels: first }),
-      context.addLabels({ rank: OTHER_NAMES_RANK, style, frame: 'sky', labels: rest }),
+      // 'space': where the satellite is, so in stereo its name sits at its distance, not on the stars.
+      context.addLabels({ rank: spec.labelRank, style, frame: 'space', labels: first }),
+      context.addLabels({ rank: OTHER_NAMES_RANK, style, frame: 'space', labels: rest }),
     ];
     for (const group of labels) group.setVisible(visible);
   }
@@ -419,11 +418,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
       const seconds = (dateMs - baseMs) / 1000;
       const c = Math.cos(gmst);
       const s = Math.sin(gmst);
-      toInertial.copy(context.inertialRoot.quaternion).invert();
-      for (let i = 0; i < named.length; i++) {
-        placeNow(named[i], seconds, c, s, labelWorld[i]);
-        skyDirectionOf(labelWorld[i], frame.camera, toInertial, labelPoints[i]);
-      }
+      for (let i = 0; i < named.length; i++) placeNow(named[i], seconds, c, s, labelWorld[i]);
       const wall = performance.now();
       if (jumped || wall - lastLabelWall > LABEL_REFRESH_MS || labels.length === 0) {
         lastLabelWall = wall;
