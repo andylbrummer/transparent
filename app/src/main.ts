@@ -394,6 +394,7 @@ export function init(): App | null {
       lazyLayers.update({ date, camera, position, deltaMs: nowMs - lastFrameMs });
     }
     lastFrameMs = nowMs;
+    labels.setSkyThroughEarth(skyUniforms.uBelowHorizon.value > 0);
     if (stereo) {
       const eyeWidth = Math.floor(width / 2);
       stereoRig.update(camera, eyeWidth, height);

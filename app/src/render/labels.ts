@@ -92,6 +92,16 @@ export const MAX_VISIBLE_LABELS = 48;
  * MAX_VISIBLE_LABELS, and the Sun or Moon behind the planet would go unnamed.
  */
 export const MAX_VISIBLE_SKY_LABELS = 32;
+/**
+ * Of those, how many may sit below the horizon, seen through the planet,
+ * in a wide view: looking down is looking at the Earth, and the sky behind
+ * it gets a handful of names - Sun, Moon, planets first - not a chart.
+ */
+export const MAX_SKY_LABELS_THROUGH_EARTH = 6;
+/** Narrower than this, the view is a study of one patch: the sky below the horizon is named in full. */
+export const SKY_ZOOMED_FOV_DEG = 30;
+/** Opacity of a sky name below the horizon, echoing the dimmed sky it names. */
+const THROUGH_EARTH_OPACITY = 0.62;
 
 /** How a group of labels added by a lazy layer is drawn. */
 export interface LabelStyle {
@@ -113,8 +123,8 @@ export interface GroupLabel {
   /** Rank within the group: lower is more important. */
   readonly priority: number;
   /**
-   * 'earth': ECEF metres. 'sky': a unit direction in ICRS, at infinity.
-   * Read every frame, so a layer may move it (a satellite, a planet).
+   * 'earth' and 'space': ECEF metres. 'sky': a unit direction in ICRS, at
+   * infinity. Read every frame, so a layer may move it (a satellite, a planet).
    */
   readonly position: THREE.Vector3;
 }
@@ -126,9 +136,26 @@ export interface LabelGroupSpec {
    */
   readonly rank: number;
   readonly style: LabelStyle;
-  readonly frame: 'earth' | 'sky';
+  /**
+   * 'earth': on or in the planet. 'sky': on the celestial sphere. 'space':
+   * a place above the ground - a satellite, the magnetopause - given like
+   * 'earth' in ECEF metres, so each eye of a stereo pair sees it where it
+   * is, but counted and thinned with the sky's names, which is what it is
+   * to someone looking up.
+   */
+  readonly frame: LabelFrame;
+  /**
+   * What happens below the horizon, where the name is seen through the
+   * planet. 'few' (default): it competes for MAX_SKY_LABELS_THROUGH_EARTH.
+   * 'zoomed': it waits until the view is narrower than SKY_ZOOMED_FOV_DEG -
+   * for a layer that is on from the start and would otherwise put star
+   * names over the default view of the Earth. Ignored for 'earth'.
+   */
+  readonly belowHorizon?: 'few' | 'zoomed';
   readonly labels: readonly GroupLabel[];
 }
+
+export type LabelFrame = 'earth' | 'sky' | 'space';
 
 /** A group added with LabelLayer.addGroup. */
 export interface LabelGroup {
@@ -137,7 +164,8 @@ export interface LabelGroup {
 }
 
 interface GroupState {
-  readonly frame: 'earth' | 'sky';
+  readonly frame: LabelFrame;
+  readonly zoomedOnlyBelowHorizon: boolean;
   visible: boolean;
 }
 
@@ -155,6 +183,8 @@ interface PlacedLabel {
   /** Added to the projected y: the text's offset from its point. */
   readonly offsetY: number;
   visible: boolean;
+  /** Drawn faint: a sky name below the horizon. */
+  dimmed: boolean;
   /** The right eye's copy, created on the first setStereo(true). */
   twin: HTMLElement | null;
   twinVisible: boolean;
@@ -198,6 +228,8 @@ export class LabelLayer {
   private placed: PlacedLabel[];
   private readonly skyRotation = new THREE.Matrix4();
   private readonly view = new THREE.Vector3();
+  private readonly up = new THREE.Vector3();
+  private skyThroughEarth = true;
   private readonly boxes: number[] = [];
   private readonly hiddenKinds = new Set<LabelKind>();
   private rightEyeContainer: HTMLElement | null = null;
@@ -247,6 +279,7 @@ export class LabelLayer {
         halfHeight: size.height / 2,
         offsetY: 0,
         visible: false,
+        dimmed: false,
         twin,
         twinVisible: false,
       };
@@ -290,11 +323,20 @@ export class LabelLayer {
   }
 
   /**
+   * Whether the sky below the horizon is being drawn through the planet.
+   * When it is not, nothing is there to name: the sky's labels stop at the
+   * horizon with it. Things in 'space' are drawn either way.
+   */
+  setSkyThroughEarth(shown: boolean): void {
+    this.skyThroughEarth = shown;
+  }
+
+  /**
    * Add a lazy layer's labels. They join the same declutter pass at the
    * group's rank, and stay until the returned handle removes them.
    */
   addGroup(spec: LabelGroupSpec): LabelGroup {
-    const state: GroupState = { frame: spec.frame, visible: true };
+    const state: GroupState = { frame: spec.frame, zoomedOnlyBelowHorizon: spec.belowHorizon === 'zoomed', visible: true };
     const style = spec.style;
     const em = style.wide ? COUNTRY_GLYPH_WIDTH_EM : GLYPH_WIDTH_EM;
     const added: PlacedLabel[] = spec.labels.map((label) => {
@@ -328,6 +370,7 @@ export class LabelLayer {
         halfHeight: (style.fontPx * 1.3 + LABEL_PADDING_PX) / 2,
         offsetY: style.offsetYPx ?? 0,
         visible: false,
+        dimmed: false,
         twin,
         twinVisible: false,
       };
@@ -384,17 +427,34 @@ export class LabelLayer {
     this.boxes.length = 0;
     let shown = 0;
     let shownSky = 0;
+    let shownThroughEarth = 0;
+    // The observer's zenith: the camera stands on the surface, the Earth's centre at the origin.
+    this.up.copy(camera.position).normalize();
+    const zoomed = camera.fov < SKY_ZOOMED_FOV_DEG;
+    const throughEarthAllowance = zoomed ? MAX_VISIBLE_SKY_LABELS : MAX_SKY_LABELS_THROUGH_EARTH;
 
     for (const placed of this.placed) {
       let show = false;
+      let below = false;
       let x = 0;
       let y = 0;
       const enabled = placed.label ? !this.hiddenKinds.has(placed.label.kind) : placed.group!.visible;
-      const sky = placed.group?.frame === 'sky';
+      const frame = placed.group?.frame ?? 'earth';
+      const sky = frame !== 'earth';
       if ((sky ? shownSky < MAX_VISIBLE_SKY_LABELS : shown < MAX_VISIBLE_LABELS) && enabled) {
-        this.worldPoint(placed, camera).applyMatrix4(camera.matrixWorldInverse);
+        this.worldPoint(placed, camera);
+        if (sky) {
+          below = this.view.dot(this.up) < camera.position.dot(this.up);
+          if (below) {
+            show =
+              (frame === 'space' || this.skyThroughEarth) &&
+              shownThroughEarth < throughEarthAllowance &&
+              (zoomed || !placed.group!.zoomedOnlyBelowHorizon);
+          }
+        }
+        this.view.applyMatrix4(camera.matrixWorldInverse);
         // Camera looks down -Z: anything at z >= 0 is behind the viewer.
-        if (this.view.z < 0) {
+        if ((!below || show) && this.view.z < 0) {
           this.view.applyMatrix4(camera.projectionMatrix);
           x = (this.view.x * 0.5 + 0.5) * width;
           y = (0.5 - this.view.y * 0.5) * height + placed.offsetY;
@@ -404,14 +464,24 @@ export class LabelLayer {
             y + placed.halfHeight > 0 &&
             y - placed.halfHeight < height &&
             !this.overlapsPlaced(x, y, placed.halfWidth, placed.halfHeight);
+        } else {
+          show = false;
         }
       }
 
       if (show) {
         this.boxes.push(x - placed.halfWidth, y - placed.halfHeight, x + placed.halfWidth, y + placed.halfHeight);
         placed.element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
-        if (sky) shownSky++;
-        else shown++;
+        if (sky) {
+          shownSky++;
+          if (below) shownThroughEarth++;
+        } else shown++;
+        if (below !== placed.dimmed) {
+          placed.dimmed = below;
+          const opacity = below ? String(THROUGH_EARTH_OPACITY) : '';
+          placed.element.style.opacity = opacity;
+          if (placed.twin) placed.twin.style.opacity = opacity;
+        }
       }
       if (show !== placed.visible) {
         placed.element.style.display = show ? '' : 'none';

@@ -78,6 +78,8 @@ export async function createStarLayer(context: LayerContext): Promise<LayerInsta
     rank: 6.4,
     style: { fontPx: 10, color: '#cfe0ff', offsetYPx: 11 },
     frame: 'sky',
+    // The stars are on from the start: looking down, their names would lie all over the Earth.
+    belowHorizon: 'zoomed',
     labels: starLabels(data),
   });
   return {

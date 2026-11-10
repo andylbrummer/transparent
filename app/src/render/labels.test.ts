@@ -3,7 +3,16 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
 import { createLookController } from '../input/look';
 import { StereoRig } from './stereo';
-import { LabelLayer, MAX_VISIBLE_LABELS, estimateLabelSize, labelText, rankLabels, type PlaceLabel } from './labels';
+import {
+  LabelLayer,
+  MAX_SKY_LABELS_THROUGH_EARTH,
+  MAX_VISIBLE_LABELS,
+  SKY_ZOOMED_FOV_DEG,
+  estimateLabelSize,
+  labelText,
+  rankLabels,
+  type PlaceLabel,
+} from './labels';
 
 const WIDTH = 400;
 const HEIGHT = 800;
@@ -275,5 +284,131 @@ describe('LabelLayer groups', () => {
     expect(names.filter((n) => n === 'g')).toHaveLength(MAX_VISIBLE_LABELS);
     expect(names).toContain('Sun');
     layer.dispose();
+  });
+
+  describe('below the horizon', () => {
+    /** Unit directions fanned round `axis`, far enough apart on a big viewport not to collide. */
+    function fan(axis: THREE.Vector3, count: number): THREE.Vector3[] {
+      const side = new THREE.Vector3(0, 0, 1).cross(axis).normalize();
+      const other = axis.clone().cross(side);
+      return Array.from({ length: count }, (_, i) => {
+        const angle = (i / count) * 2 * Math.PI;
+        return axis
+          .clone()
+          .addScaledVector(side, 0.25 * Math.cos(angle))
+          .addScaledVector(other, 0.25 * Math.sin(angle))
+          .normalize();
+      });
+    }
+    // A camera looking straight down through the planet: all the sky it sees is below the horizon.
+    function downView() {
+      const parent = document.createElement('div');
+      const layer = new LabelLayer(parent, []);
+      const camera = cameraAimedAt(-119.5, 37.0);
+      camera.up.set(0, 0, 1);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+      const down = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      return { parent, layer, camera, down };
+    }
+    const sky = new THREE.Matrix4();
+
+    it('names only a few sky objects through the Earth in a wide view, the best ranked first', () => {
+      const { layer, camera, down } = downView();
+      const stars = fan(down, 12).map((position, i) => ({ text: `star ${i}`, priority: i, position }));
+      layer.addGroup({ rank: 6.4, style, frame: 'sky', labels: stars });
+      layer.addGroup({ rank: 6.3, style, frame: 'sky', labels: [{ text: 'Sun', priority: 0, position: down.clone() }] });
+      layer.update(camera, 4000, 4000, undefined, sky);
+      const names = layer.visibleNames();
+      expect(names).toHaveLength(MAX_SKY_LABELS_THROUGH_EARTH);
+      expect(names[0]).toBe('Sun');
+      layer.dispose();
+    });
+
+    it('names them all once the view is zoomed in', () => {
+      const { layer, camera, down } = downView();
+      camera.fov = SKY_ZOOMED_FOV_DEG - 10;
+      camera.updateProjectionMatrix();
+      // Fanned more tightly, to stay inside the narrower view.
+      const stars = fan(down, 12).map((position, i) => ({ text: `star ${i}`, priority: i, position: position.lerp(down, 0.7).normalize() }));
+      layer.addGroup({ rank: 6.4, style, frame: 'sky', labels: stars });
+      layer.update(camera, 4000, 4000, undefined, sky);
+      expect(layer.visibleNames()).toHaveLength(12);
+      layer.dispose();
+    });
+
+    it('holds a zoomed-only group back in a wide view, but not above the horizon', () => {
+      const { layer, camera, down } = downView();
+      layer.addGroup({ rank: 6.4, style, frame: 'sky', belowHorizon: 'zoomed', labels: [{ text: 'Mimosa', priority: 0, position: down.clone() }] });
+      layer.update(camera, WIDTH, HEIGHT, undefined, sky);
+      expect(layer.visibleNames()).toEqual([]);
+      // Turn the sky over: the same star is now overhead, and the camera looks up at it.
+      const flipped = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0, 0, 1).cross(down).normalize(), Math.PI);
+      const up = down.clone().negate();
+      camera.lookAt(camera.position.clone().add(up));
+      camera.updateMatrixWorld();
+      layer.update(camera, WIDTH, HEIGHT, undefined, flipped);
+      expect(layer.visibleNames()).toEqual(['Mimosa']);
+      layer.dispose();
+    });
+
+    it('draws a name through the Earth faint, and at full strength again above the horizon', () => {
+      const { parent, layer, camera, down } = downView();
+      layer.addGroup({ rank: 6.3, style, frame: 'sky', labels: [{ text: 'Sun', priority: 0, position: down.clone() }] });
+      layer.update(camera, WIDTH, HEIGHT, undefined, sky);
+      const element = parent.querySelector<HTMLElement>('.place-label')!;
+      expect(Number(element.style.opacity)).toBeLessThan(1);
+      const flipped = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0, 0, 1).cross(down).normalize(), Math.PI);
+      camera.lookAt(camera.position.clone().sub(down));
+      camera.updateMatrixWorld();
+      layer.update(camera, WIDTH, HEIGHT, undefined, flipped);
+      expect(layer.visibleNames()).toEqual(['Sun']);
+      expect(element.style.opacity).toBe('');
+      layer.dispose();
+    });
+
+    it('names nothing below the horizon when the sky is not drawn through the Earth - except things in space', () => {
+      const { layer, camera, down } = downView();
+      layer.addGroup({ rank: 6.3, style, frame: 'sky', labels: [{ text: 'Sun', priority: 0, position: down.clone() }] });
+      // A satellite beyond the far side of the planet, straight down.
+      const beyond = camera.position.clone().addScaledVector(down, 3 * EARTH_RADIUS_M);
+      layer.addGroup({ rank: 6.31, style: { ...style, offsetYPx: 30 }, frame: 'space', labels: [{ text: 'ISS', priority: 0, position: beyond }] });
+      layer.setSkyThroughEarth(false);
+      layer.update(camera, WIDTH, HEIGHT, undefined, sky);
+      expect(layer.visibleNames()).toEqual(['ISS']);
+      layer.setSkyThroughEarth(true);
+      layer.update(camera, WIDTH, HEIGHT, undefined, sky);
+      expect(layer.visibleNames()).toEqual(['Sun', 'ISS']);
+      layer.dispose();
+    });
+
+    it('gives each eye its own view of a name in space, and the same view of one on the sky', () => {
+      const parent = document.createElement('div');
+      const layer = new LabelLayer(parent, []);
+      layer.setStereo(true);
+      const camera = cameraAimedAt(-119.5, 37.0);
+      camera.up.set(0, 0, 1);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+      const down = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      const right = camera.clone();
+      // A hyperstereo baseline: the right eye 40 km along the camera's x.
+      right.position.addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), 40_000);
+      right.updateMatrixWorld();
+      const near = camera.position.clone().addScaledVector(down, 1_000_000);
+      layer.addGroup({ rank: 6.3, style, frame: 'space', labels: [{ text: 'ISS', priority: 0, position: near }] });
+      layer.addGroup({ rank: 6.4, style: { ...style, offsetYPx: 40 }, frame: 'sky', labels: [{ text: 'Vega', priority: 0, position: down.clone() }] });
+      layer.update(camera, WIDTH, HEIGHT, right, sky);
+      const x = (selector: string, text: string): number => {
+        const element = [...parent.querySelectorAll<HTMLElement>(selector)].find((e) => e.textContent === text)!;
+        return Number(/translate\(([-\d.]+)px/.exec(element.style.transform)![1]);
+      };
+      const left = '.place-labels--left-eye .place-label';
+      const rightEye = '.place-labels--right-eye .place-label';
+      expect(Math.abs(x(left, 'Vega') - x(rightEye, 'Vega'))).toBeLessThan(0.2);
+      // 40 km at 1000 km is 2.3°: tens of pixels.
+      expect(x(left, 'ISS') - x(rightEye, 'ISS')).toBeGreaterThan(10);
+      layer.dispose();
+    });
   });
 });
