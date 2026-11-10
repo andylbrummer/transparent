@@ -72,7 +72,7 @@ MAX_TIME_SIGMA_MIN = 60.0
 
 def sampling(dist_ld: float) -> tuple[float, float]:
     """(spacing in hours, days either side of the approach): finer and shorter for the closest
-    passes, which the Earth's pull bends sharply - 2026 TP128 passed 900 km above the surface."""
+    passes, which the Earth's pull bends sharply - 2026 TP128 passed 1,100 km above the surface."""
     if dist_ld < 0.1:
         return 2 / 60, 0.5
     if dist_ld < 0.3:
