@@ -59,7 +59,10 @@ node serves 2MASS but did not send the cross-origin header.
 ## Loading, caching, failure
 
 - The order is chosen so a tile's 512 pixels are stretched at most 1.25×:
-  the whole sky in 12–48 tiles at a 60° field, order 7 at 1°. A screen needs
+  the whole sky in 12–48 tiles at a 60° field, order 7 at 1°, order 9 (the
+  deepest DSS and 2MASS have, about an arcsecond a pixel) at the narrowest
+  field, 0.2°. The zoom limit was 1° before these layers; it was lowered so
+  their resolution can be reached (M51 at 0.3° and M57 at 0.2° looked at). A screen needs
   5–25 tiles; at most 40 are drawn and 56 kept (about 56 MB of texture at
   the cap, a megabyte each, no mipmaps).
 - Six requests at a time, nearest the centre of view first; requests for

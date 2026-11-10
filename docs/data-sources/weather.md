@@ -159,7 +159,9 @@ How it is fetched:
   answered in 0.2–0.4 s. This layer uses tiles for that reason. **The older
   GIBS layers (satellite view of the latest full day, sea temperature,
   vegetation, rain) still depend on WMS** and fell back to their caches or
-  snapshots that day; moving them to tiles is not done.
+  snapshots that day; moving them to tiles is not done. By the end of the
+  session small WMS image requests were answering again (1.5 s), its
+  capabilities document still was not.
 
 Checked:
 
