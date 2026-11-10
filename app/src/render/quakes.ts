@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import type { LabelData } from './labels';
 import { depthColor, ecefAtDepth } from './interior';
 import { RENDER_ORDER } from './order';
+import { SLAB_DEPTH_GLSL } from './slab-depth';
 
 /** The shape of app/public/geo/quakes.json: columns, one entry per quake, oldest first. */
 export interface QuakeData extends LabelData {
@@ -58,25 +59,42 @@ export function quakePointSizePx(magnitude: number): number {
   return 1.6 * Math.pow(1.55, magnitude - 5);
 }
 
+/**
+ * How much of its strength a quake keeps when a slab lies between it and
+ * the eye. The plates are drawn about two-thirds opaque, so this is what
+ * would come through one; without it the trench earthquakes, which sit on
+ * the far face of the plate as seen through the planet, bury the plate and
+ * its contours under a solid band.
+ */
+export const QUAKE_BEHIND_SLAB_STRENGTH = 0.3;
+
 const VERTEX_SHADER = `
   attribute float aSize;
   attribute vec3 aColor;
   uniform float uPixelRatio;
   varying vec3 vColor;
+  varying float vViewDistance;
   void main() {
     vColor = aColor;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDistance = -viewPosition.z;
+    gl_Position = projectionMatrix * viewPosition;
     gl_PointSize = aSize * uPixelRatio;
   }
 `;
 
 const FRAGMENT_SHADER = `
+  uniform float uStrength;
   varying vec3 vColor;
+  varying float vViewDistance;
+  ${SLAB_DEPTH_GLSL}
   void main() {
     // Round, with a soft edge so 2 px points do not alias into squares.
     float r = length(gl_PointCoord - 0.5) * 2.0;
-    float alpha = 0.8 * (1.0 - smoothstep(0.7, 1.0, r));
+    float alpha = 0.8 * uStrength * (1.0 - smoothstep(0.7, 1.0, r));
     if (alpha <= 0.0) discard;
+    // On the slabs' own depth scale, to be tested against what they wrote.
+    gl_FragDepth = slabDepth(vViewDistance);
     gl_FragColor = vec4(vColor, alpha);
     // THREE.Color holds DEPTH_RAMP in linear light; without this the points
     // come out darker and more saturated than the legend and the slab lines.
@@ -87,9 +105,16 @@ const FRAGMENT_SHADER = `
 /** The fragment shader, for the test that it encodes its colours for the screen. */
 export const QUAKE_FRAGMENT_SHADER = FRAGMENT_SHADER;
 
+/** The two draws of the quakes: behind the slabs, then in front of them. */
+export const QUAKE_PASSES = [
+  { depthFunc: THREE.GreaterDepth, strength: QUAKE_BEHIND_SLAB_STRENGTH },
+  { depthFunc: THREE.LessEqualDepth, strength: 1 },
+] as const;
+
 export class QuakeLayer {
-  private readonly points: THREE.Points;
-  private readonly material: THREE.ShaderMaterial;
+  private readonly group = new THREE.Group();
+  private readonly geometry = new THREE.BufferGeometry();
+  private readonly materials: THREE.ShaderMaterial[];
 
   constructor(data: QuakeData) {
     const order = quakeDrawOrder(data);
@@ -106,35 +131,46 @@ export class QuakeLayer {
       depthColor(data.depthKm[i], color).toArray(colors, slot * 3);
       sizes[slot] = quakePointSizePx(data.magnitude10[i] / 10);
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-    this.material = new THREE.ShaderMaterial({
-      vertexShader: VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
-      uniforms: { uPixelRatio: { value: 1 } },
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    this.geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    const pixelRatio = { value: 1 };
+    // Drawn twice against the slabs' depth: what is behind a plate faint,
+    // then what is in front of every plate - or where there is none - in
+    // full. With the slabs off nothing has written depth and all is in front.
+    this.materials = QUAKE_PASSES.map(
+      ({ depthFunc, strength }) =>
+        new THREE.ShaderMaterial({
+          vertexShader: VERTEX_SHADER,
+          fragmentShader: FRAGMENT_SHADER,
+          uniforms: { uPixelRatio: pixelRatio, uStrength: { value: strength } },
+          transparent: true,
+          depthTest: true,
+          depthFunc,
+          depthWrite: false,
+        })
+    );
+    this.group.name = 'quakes';
+    this.materials.forEach((material, pass) => {
+      const points = new THREE.Points(this.geometry, material);
+      points.frustumCulled = false;
+      points.renderOrder = RENDER_ORDER.quakes + pass * 0.001;
+      this.group.add(points);
     });
-    this.points = new THREE.Points(geometry, this.material);
-    this.points.name = 'quakes';
-    this.points.frustumCulled = false;
-    this.points.renderOrder = RENDER_ORDER.quakes;
   }
 
   getObject(): THREE.Object3D {
-    return this.points;
+    return this.group;
   }
 
   /** Point sizes are CSS pixels; gl_PointSize is device pixels. */
   setPixelRatio(ratio: number): void {
-    this.material.uniforms.uPixelRatio.value = ratio;
+    // One uniform object, shared by both passes.
+    this.materials[0].uniforms.uPixelRatio.value = ratio;
   }
 
   dispose(): void {
-    this.points.geometry.dispose();
-    this.material.dispose();
+    this.geometry.dispose();
+    for (const material of this.materials) material.dispose();
   }
 }

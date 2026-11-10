@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { DEPTH_RAMP, depthColor, depthRampGradient, ecefAtDepth } from './interior';
 import { LABEL_KIND_ORDER, LabelLayer, type LabelData } from './labels';
-import { QUAKE_FRAGMENT_SHADER, QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
+import { QUAKE_BEHIND_SLAB_STRENGTH, QUAKE_FRAGMENT_SHADER, QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
+import { SLAB_DEPTH_GLSL } from './slab-depth';
+import { SLAB_FRAGMENT_SHADER } from '../layers/slabs/slabs';
 
 /**
  * Six real rows of app/public/geo/quakes.json (USGS ComCat), in file order,
@@ -69,7 +71,8 @@ describe('quakeDrawOrder', () => {
 
 describe('QuakeLayer', () => {
   const layer = new QuakeLayer(DATA);
-  const geometry = (layer.getObject() as THREE.Points).geometry;
+  const passes = layer.getObject().children as THREE.Points[];
+  const geometry = passes[0].geometry;
   const order = [...quakeDrawOrder(DATA)];
   const drawn = (event: number): number => order.indexOf(event);
   const positionOf = (event: number): THREE.Vector3 =>
@@ -118,13 +121,35 @@ describe('QuakeLayer', () => {
     expect(drawn(3)).toBe(EVENTS.length - 1);
   });
 
-  it('draws after everything else inside the Earth, without a depth test', () => {
-    const points = layer.getObject() as THREE.Points;
-    const material = points.material as THREE.ShaderMaterial;
-    expect(points.renderOrder).toBe(3);
-    expect(material.depthTest).toBe(false);
-    expect(material.depthWrite).toBe(false);
-    expect(points.frustumCulled).toBe(false);
+  it('draws after everything else inside the Earth, never writing depth', () => {
+    expect(passes).toHaveLength(2);
+    for (const points of passes) {
+      const material = points.material as THREE.ShaderMaterial;
+      expect(Math.floor(points.renderOrder)).toBe(3);
+      expect(material.depthWrite).toBe(false);
+      expect(points.frustumCulled).toBe(false);
+      expect(points.geometry).toBe(geometry);
+    }
+  });
+
+  it('draws what a slab hides faint and everything else in full, by the depth the slabs wrote', () => {
+    const [behind, front] = passes.map((points) => points.material as THREE.ShaderMaterial);
+    expect(behind.depthTest && front.depthTest).toBe(true);
+    expect(behind.depthFunc).toBe(THREE.GreaterDepth);
+    expect(behind.uniforms.uStrength.value).toBe(QUAKE_BEHIND_SLAB_STRENGTH);
+    // A cleared depth buffer (no slabs) is 1: every quake passes this, none the other.
+    expect(front.depthFunc).toBe(THREE.LessEqualDepth);
+    expect(front.uniforms.uStrength.value).toBe(1);
+    expect(passes[0].renderOrder).toBeLessThan(passes[1].renderOrder);
+    // The same depth scale as the slabs, or the comparison means nothing.
+    expect(QUAKE_FRAGMENT_SHADER).toContain(SLAB_DEPTH_GLSL);
+    expect(QUAKE_FRAGMENT_SHADER).toContain('gl_FragDepth = slabDepth(vViewDistance)');
+    expect(SLAB_FRAGMENT_SHADER).toContain(SLAB_DEPTH_GLSL);
+  });
+
+  it('keeps the two draws one pixel ratio', () => {
+    layer.setPixelRatio(2);
+    for (const points of passes) expect((points.material as THREE.ShaderMaterial).uniforms.uPixelRatio.value).toBe(2);
   });
 
   it('encodes its linear colours for the screen, as the slab lines and the legend do', () => {
