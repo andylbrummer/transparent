@@ -248,6 +248,9 @@ let relayoutTimer: number | null = null;
  * control a layer has put there (the seismic playback bar, say). Found by
  * looking, not by name, so neither side has to know the other.
  */
+/** How far up from the bottom edge another control may end and still be something to stack above. */
+const BOTTOM_BAND_PX = 120;
+
 function bottomObstacles(dock: HTMLElement): Obstacle[] {
   const found: Obstacle[] = [];
   const height = window.innerHeight;
@@ -261,8 +264,9 @@ function bottomObstacles(dock: HTMLElement): Obstacle[] {
     if (style.position !== 'fixed' && style.position !== 'absolute') continue;
     const rect = element.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) continue;
-    // Something on the bottom edge and no taller than a control: not a panel, not a full-screen overlay.
-    if (rect.bottom < height - 4 || rect.height > height * 0.35) continue;
+    // Something at the foot of the screen and no taller than a control: not a panel, not a full-screen
+    // overlay. "At the foot" is a band, not the very edge: the seismic playback bar stands 62 px clear of it.
+    if (rect.bottom < height - BOTTOM_BAND_PX || rect.height > height * 0.35) continue;
     // The HUD lets touches through but its text must stay readable; anything else only counts if it takes touches.
     if (element.id !== 'hud' && style.pointerEvents === 'none') continue;
     found.push({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right });
