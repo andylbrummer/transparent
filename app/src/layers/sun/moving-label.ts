@@ -21,7 +21,9 @@ export class MovingLabel {
   constructor(
     private readonly context: LayerContext,
     private readonly rank: number,
-    private readonly style: Omit<LabelStyle, 'offsetYPx'>
+    private readonly style: Omit<LabelStyle, 'offsetYPx'>,
+    /** Lower wins when labels collide. */
+    private readonly priority = 0
   ) {}
 
   /** Show `text` (empty: nothing) dropped `offsetYPx` below the point. */
@@ -36,7 +38,7 @@ export class MovingLabel {
       rank: this.rank,
       style: { ...this.style, offsetYPx },
       frame: 'sky',
-      labels: [{ text, priority: 0, position: this.position }],
+      labels: [{ text, priority: this.priority, position: this.position }],
     });
     this.group.setVisible(this.visible);
   }
