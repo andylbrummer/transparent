@@ -29,3 +29,6 @@ __pycache__/
 
 # Raw pipeline downloads (see tools/pipeline/fetch_cache.py)
 /tools/pipeline/.cache/
+
+# Agent worktrees (local)
+/.claude/worktrees/
