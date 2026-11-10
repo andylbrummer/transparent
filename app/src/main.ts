@@ -143,32 +143,44 @@ export function init(): App | null {
   let imageryStatus: ImageryStatus = 'loading';
   // What the HUD last said about it, to say so again when another map takes over or goes.
   let imageryShown = false;
-  new THREE.TextureLoader().load(
-    BLUE_MARBLE_URL,
+  // The baked 2048-wide copy first (tools/pipeline/generate_base_map.py): it is local and there at
+  // once, so the planet is never one flat colour while the sharper live map is on its way, or if it
+  // never comes. The HUD says "offline copy" only once the live map has actually failed.
+  const imageryLoader = new THREE.TextureLoader();
+  let standIn: THREE.Texture | null = null;
+  imageryLoader.load(
+    `${import.meta.env.BASE_URL}geo/blue-marble.jpg`,
     (texture) => {
+      if (imageryStatus === 'ready') {
+        texture.dispose();
+        return;
+      }
+      standIn = texture;
       globe.setSurfaceImagery(texture);
-      imageryStatus = 'ready';
+      if (imageryStatus === 'failed') imageryStatus = 'offline';
       renderHud();
-    },
-    undefined,
-    () => {
-      // Offline, or GIBS failing: the baked 2048-wide copy (tools/pipeline/
-      // generate_base_map.py) instead of a planet of one flat colour.
-      new THREE.TextureLoader().load(
-        `${import.meta.env.BASE_URL}geo/blue-marble.jpg`,
-        (texture) => {
-          globe.setSurfaceImagery(texture);
-          imageryStatus = 'offline';
-          renderHud();
-        },
-        undefined,
-        () => {
-          imageryStatus = 'failed';
-          renderHud();
-        }
-      );
     }
   );
+  const loadLiveImagery = (): void => {
+    imageryLoader.load(
+      BLUE_MARBLE_URL,
+      (texture) => {
+        globe.setSurfaceImagery(texture);
+        standIn?.dispose();
+        standIn = null;
+        imageryStatus = 'ready';
+        renderHud();
+      },
+      undefined,
+      () => {
+        imageryStatus = standIn ? 'offline' : 'failed';
+        renderHud();
+      }
+    );
+  };
+  // After the page's own load: a slow imagery server must not hold that up.
+  if (document.readyState === 'complete') loadLiveImagery();
+  else window.addEventListener('load', loadLiveImagery, { once: true });
 
   // Everything placed on or in the Earth, hidden together until a position fix.
   const geoRoot = new THREE.Group();
