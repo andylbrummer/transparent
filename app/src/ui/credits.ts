@@ -56,6 +56,12 @@ export const BUILTIN_CREDITS: readonly Credit[] = [
     url: 'https://earthquake.usgs.gov/data/comcat/',
   },
   {
+    what: 'Earthquake hypocentres, 333 early and re-located events within ComCat',
+    source: 'ISC-GEM Global Instrumental Earthquake Catalogue, International Seismological Centre',
+    licence: 'CC BY-SA 3.0',
+    url: 'https://www.isc.ac.uk/iscgem/',
+  },
+  {
     what: 'Plate motion',
     source: 'Argus, Gordon & DeMets (2011), NNR-MORVEL56',
     licence: 'facts from the literature',
