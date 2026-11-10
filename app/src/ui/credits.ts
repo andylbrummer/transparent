@@ -62,18 +62,6 @@ export const BUILTIN_CREDITS: readonly Credit[] = [
     url: 'https://www.isc.ac.uk/iscgem/',
   },
   {
-    what: 'Plate motion',
-    source: 'Argus, Gordon & DeMets (2011), NNR-MORVEL56',
-    licence: 'facts from the literature',
-    url: 'https://doi.org/10.1029/2011GC003751',
-  },
-  {
-    what: 'Mantle flow (model)',
-    source: 'hc (Hager & O’Connell 1981) driven by SEMUCB-WM1 (French & Romanowicz 2014)',
-    licence: 'model output',
-    url: 'https://github.com/geodynamics/hc',
-  },
-  {
     what: 'Magnetic declination',
     source: 'World Magnetic Model 2025, NOAA NCEI / British Geological Survey',
     licence: 'public domain',

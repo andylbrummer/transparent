@@ -24,14 +24,13 @@ describe('loadLayerVisibility', () => {
       .filter(([, visible]) => visible)
       .map(([id]) => id);
     expect(on).toEqual(expect.arrayContaining(['political', 'boundaries', 'spreading', 'quakes', 'plumes', 'place-labels']));
-    for (const busy of ['mantle-flow', 'plate-motion', 'faults']) expect(on).not.toContain(busy);
+    expect(on).not.toContain('faults');
   });
 
   it('keeps a saved choice for a layer that is now off by default', () => {
     // What a browser that used the app before the defaults changed has stored: every switch, as it was.
     const before = Object.fromEntries(LAYER_SWITCHES.map((s) => [s.id, true]));
     const visibility = loadLayerVisibility(JSON.stringify(before));
-    expect(visibility['mantle-flow']).toBe(true);
     expect(visibility.faults).toBe(true);
   });
 
@@ -207,7 +206,7 @@ describe('LayersPanel with lazy layers', () => {
     filter('plate');
     const shown = [...parent.querySelectorAll<HTMLElement>('.layer-switch')].filter((row) => !row.hidden).map((row) => row.querySelector('input')!.dataset.layer);
     // "Seafloor spreading" answers too: its caption speaks of the plates parting.
-    expect(shown).toEqual(['boundaries', 'spreading', 'plate-motion', 'plate-labels']);
+    expect(shown).toEqual(['boundaries', 'spreading', 'plate-labels']);
     expect(sections().filter((d) => !d.hidden).map((d) => d.querySelector('summary span')!.textContent)).toEqual(['Surface lines', 'Labels']);
     expect(section('Surface lines').open).toBe(true);
     // A hidden switch is still a switch: the screenshot tool and saved choices reach it by data-layer.

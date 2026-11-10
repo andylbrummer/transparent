@@ -48,8 +48,6 @@ files and can be removed without touching other layers.
 | Subducting slabs | [Hayes et al. (2018), Slab2, USGS](https://www.sciencebase.gov/catalog/item/5aa1b00ee4b0b1c392e86467) | public domain |
 | Earthquake hypocentres | [USGS ANSS Comprehensive Earthquake Catalog (ComCat)](https://earthquake.usgs.gov/data/comcat/) | public domain |
 | Earthquake hypocentres, 333 early and re-located events within ComCat | [ISC-GEM Global Instrumental Earthquake Catalogue, International Seismological Centre](https://www.isc.ac.uk/iscgem/) | CC BY-SA 3.0 |
-| Plate motion | [Argus, Gordon & DeMets (2011), NNR-MORVEL56](https://doi.org/10.1029/2011GC003751) | facts from the literature |
-| Mantle flow (model) | [hc (Hager & O’Connell 1981) driven by SEMUCB-WM1 (French & Romanowicz 2014)](https://github.com/geodynamics/hc) | model output |
 | Magnetic declination | [World Magnetic Model 2025, NOAA NCEI / British Geological Survey](https://www.ncei.noaa.gov/products/world-magnetic-model) | public domain |
 
 ## Weather
@@ -111,6 +109,7 @@ files and can be removed without touching other layers.
 
 | Layer | Default | What | Source | Licence |
 | --- | --- | --- | --- | --- |
+| Plate motion (`plate-motion`) | off | Plate motion | [Argus, Gordon & DeMets (2011), NNR-MORVEL56](https://doi.org/10.1029/2011GC003751) | facts from the literature |
 | Rivers and lakes (`rivers-lakes`) | off | Rivers, lakes and sea ports | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
 | Continents through time (`continents-through-time`) | off | Plate reconstruction, 1,000 Ma to today: rotations, coastlines and continental blocks (a model) | [Merdith, A.S., Williams, S.E., Collins, A.S., Tetley, M.G., Mulder, J.A., Blades, M.L., Young, A., Armistead, S.E., Cannon, J., Zahirovic, S. & Müller, R.D. (2021), Earth-Science Reviews 214, 103477, doi:10.1016/j.earscirev.2020.103477; model files from EarthByte / GPlates](https://doi.org/10.5281/zenodo.13635864) | CC BY 4.0 |
 |  |  | Geological time scale: periods, epochs and their colours | [International Commission on Stratigraphy, International Chronostratigraphic Chart v2024/12; Cohen, K.M., Harper, D.A.T., Gibbard, P.L. & Car, N. (2025), Episodes 48, 105–115](https://stratigraphy.org/chart) | CC BY 4.0 |
@@ -143,6 +142,7 @@ files and can be removed without touching other layers.
 | Depth ladder (`depth-ladder`) | off | Pressure and density with depth (Preliminary Reference Earth Model) | [Dziewonski, A.M. & Anderson, D.L. (1981), Phys. Earth Planet. Inter. 25, 297–356; table distributed with BurnMan](https://github.com/geodynamics/burnman) | facts from the literature |
 |  |  | Temperature with depth | [Anderson, O.L. (1982), The Earth’s core and the phase diagram of iron, Phil. Trans. R. Soc. A 306, 21–35; table distributed with BurnMan](https://github.com/geodynamics/burnman) | facts from the literature |
 |  |  | Cities, for the place nearest the antipode | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
+| Mantle flow (model) (`mantle-flow`) | off | Mantle flow (model) | [hc (Hager & O’Connell 1981) driven by SEMUCB-WM1 (French & Romanowicz 2014)](https://github.com/geodynamics/hc) | model output |
 | Recent earthquakes (live) (`quakes-recent`) | off | Recent earthquakes (live) | [USGS Earthquake Hazards Program, real-time GeoJSON feeds of the ANSS Comprehensive Catalog](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php) | public domain |
 | Subducting slabs (`slabs`) | on | Subducting slabs | [Hayes et al. (2018), Slab2, USGS](https://www.sciencebase.gov/catalog/item/5aa1b00ee4b0b1c392e86467) | public domain |
 | Notable earthquakes since 1900 (`quakes-notable`) | off | Notable earthquakes: magnitudes, and locations since 1973 | [USGS ANSS Comprehensive Earthquake Catalog (ComCat)](https://earthquake.usgs.gov/data/comcat/) | public domain |

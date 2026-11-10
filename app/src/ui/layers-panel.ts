@@ -9,10 +9,10 @@
 
 import { OUTLINE_STYLES, SPREADING_RIBBON_MYR, spreadingRampGradient, type OutlineLayerName } from '../render/outlines';
 import type { LabelKind } from '../render/labels';
-import { PLUME_COLOR, depthRampGradient, flowGradient } from '../render/interior';
+import { PLUME_COLOR, depthRampGradient } from '../render/interior';
 import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
 
-export type InteriorLayerName = 'quakes' | 'plumes' | 'mantle-flow';
+export type InteriorLayerName = 'quakes' | 'plumes';
 
 export type LayerTarget =
   | { readonly lines: readonly OutlineLayerName[] }
@@ -81,16 +81,6 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     caption: 'faint: may reach the core',
   },
   {
-    id: 'mantle-flow',
-    label: 'Mantle flow (model)',
-    section: 'Inside the Earth',
-    target: { interior: 'mantle-flow' },
-    // Thousands of arrows through the whole interior: a layer to study, not to start with.
-    defaultOff: true,
-    legend: flowGradient(),
-    caption: 'sinking · level · rising · 300, 1450, 2750 km · arrow = 5 Myr',
-  },
-  {
     id: 'boundaries',
     label: 'Plate boundaries',
     section: 'Surface lines',
@@ -115,16 +105,6 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     defaultOff: true,
     legend: swatches(lineColors(FAULTS)),
     caption: 'normal · reverse · strike-slip',
-  },
-  {
-    id: 'plate-motion',
-    label: 'Plate motion',
-    section: 'Surface lines',
-    target: { lines: ['plate-motion'] },
-    // Arrows over every ocean and continent.
-    defaultOff: true,
-    legend: hex(OUTLINE_STYLES['plate-motion'].color),
-    caption: 'NNR-MORVEL56 · arrow = 3 Myr of travel',
   },
   {
     id: 'political',
