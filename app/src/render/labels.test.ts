@@ -255,4 +255,25 @@ describe('LabelLayer groups', () => {
     expect(parent.querySelectorAll('.place-labels--right-eye .place-label')).toHaveLength(1);
     layer.dispose();
   });
+
+  it('keeps a separate allowance for sky names when the ground fills its own', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    // A grid of ground points wide enough apart not to collide, all in view.
+    const ground = [];
+    for (let i = 0; i < 24; i++) {
+      for (let j = 0; j < 24; j++) {
+        ground.push({ text: 'g', priority: i * 24 + j, position: surface(-131 + i, 26 + j) });
+      }
+    }
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: ground });
+    const camera = cameraAimedAt(-119.5, 37.0);
+    const lookDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    layer.addGroup({ rank: 9, style, frame: 'sky', labels: [{ text: 'Sun', priority: 0, position: lookDirection.clone() }] });
+    layer.update(camera, 4000, 4000, undefined, new THREE.Matrix4());
+    const names = layer.visibleNames();
+    expect(names.filter((n) => n === 'g')).toHaveLength(MAX_VISIBLE_LABELS);
+    expect(names).toContain('Sun');
+    layer.dispose();
+  });
 });

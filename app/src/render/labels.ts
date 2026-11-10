@@ -87,6 +87,11 @@ const COUNTRY_GLYPH_WIDTH_EM = 0.78;
 const LABEL_PADDING_PX = 4;
 /** Bounds per-frame DOM writes; past this the view is unreadable anyway. */
 export const MAX_VISIBLE_LABELS = 48;
+/**
+ * Sky names have their own allowance: looking down, the ground alone fills
+ * MAX_VISIBLE_LABELS, and the Sun or Moon behind the planet would go unnamed.
+ */
+export const MAX_VISIBLE_SKY_LABELS = 32;
 
 /** How a group of labels added by a lazy layer is drawn. */
 export interface LabelStyle {
@@ -378,13 +383,15 @@ export class LabelLayer {
     if (skyRotation) this.skyRotation.copy(skyRotation);
     this.boxes.length = 0;
     let shown = 0;
+    let shownSky = 0;
 
     for (const placed of this.placed) {
       let show = false;
       let x = 0;
       let y = 0;
       const enabled = placed.label ? !this.hiddenKinds.has(placed.label.kind) : placed.group!.visible;
-      if (shown < MAX_VISIBLE_LABELS && enabled) {
+      const sky = placed.group?.frame === 'sky';
+      if ((sky ? shownSky < MAX_VISIBLE_SKY_LABELS : shown < MAX_VISIBLE_LABELS) && enabled) {
         this.worldPoint(placed, camera).applyMatrix4(camera.matrixWorldInverse);
         // Camera looks down -Z: anything at z >= 0 is behind the viewer.
         if (this.view.z < 0) {
@@ -403,7 +410,8 @@ export class LabelLayer {
       if (show) {
         this.boxes.push(x - placed.halfWidth, y - placed.halfHeight, x + placed.halfWidth, y + placed.halfHeight);
         placed.element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
-        shown++;
+        if (sky) shownSky++;
+        else shown++;
       }
       if (show !== placed.visible) {
         placed.element.style.display = show ? '' : 'none';
