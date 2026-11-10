@@ -78,8 +78,14 @@ const FRAGMENT_SHADER = `
     float alpha = 0.8 * (1.0 - smoothstep(0.7, 1.0, r));
     if (alpha <= 0.0) discard;
     gl_FragColor = vec4(vColor, alpha);
+    // THREE.Color holds DEPTH_RAMP in linear light; without this the points
+    // come out darker and more saturated than the legend and the slab lines.
+    #include <colorspace_fragment>
   }
 `;
+
+/** The fragment shader, for the test that it encodes its colours for the screen. */
+export const QUAKE_FRAGMENT_SHADER = FRAGMENT_SHADER;
 
 export class QuakeLayer {
   private readonly points: THREE.Points;

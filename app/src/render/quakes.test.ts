@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { DEPTH_RAMP, depthColor, depthRampGradient, ecefAtDepth } from './interior';
 import { LABEL_KIND_ORDER, LabelLayer, type LabelData } from './labels';
-import { QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
+import { QUAKE_FRAGMENT_SHADER, QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
 
 /**
  * Six real rows of app/public/geo/quakes.json (USGS ComCat), in file order,
@@ -125,6 +125,14 @@ describe('QuakeLayer', () => {
     expect(material.depthTest).toBe(false);
     expect(material.depthWrite).toBe(false);
     expect(points.frustumCulled).toBe(false);
+  });
+
+  it('encodes its linear colours for the screen, as the slab lines and the legend do', () => {
+    // DEPTH_RAMP's red is #ff453a; held linear it is (1, 0.06, 0.04), which
+    // written out raw would show as #ff0f0b.
+    expect(depthColor(0, new THREE.Color()).g).toBeCloseTo(0.0595, 3);
+    expect(QUAKE_FRAGMENT_SHADER).toContain('#include <colorspace_fragment>');
+    expect(QUAKE_FRAGMENT_SHADER.indexOf('gl_FragColor =')).toBeLessThan(QUAKE_FRAGMENT_SHADER.indexOf('#include <colorspace_fragment>'));
   });
 
   it('puts each label on its point', () => {
