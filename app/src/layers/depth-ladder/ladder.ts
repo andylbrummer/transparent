@@ -23,7 +23,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { GeoMarkers } from '../../render/geo-markers';
-import { LABEL_KIND_ORDER, type GroupLabel, type LabelData } from '../../render/labels';
+import { LABEL_KIND_ORDER, type GroupLabel, type LabelData, type LabelGroup } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
 import type { SurfacePosition } from '../../sensors';
 import type { LayerContext, LayerInstance } from '../types';
@@ -48,6 +48,8 @@ export interface LadderData {
 export const RING_FIRST_DEG = 2.5;
 export const RING_STEP_DEG = 2.6;
 const RING_STEPS = 72;
+/** How far a ring's texts stand off its line, CSS px: a little over half a line of 11 px text. */
+const LABEL_CLEARANCE_PX = 9;
 const DEG = Math.PI / 180;
 
 /** Radius, km, of the ring `distanceKm` down that is the `fromFarthest`-th counting from the antipode's (0). */
@@ -175,15 +177,28 @@ export async function createDepthLadderLayer(context: LayerContext): Promise<Lay
   const namePoints = distances.map(() => new THREE.Vector3());
   const valuePoints = distances.map(() => new THREE.Vector3());
   const rank = LABEL_KIND_ORDER.indexOf('country') - 0.9;
-  const style = { fontPx: 11, color: '#e6f1ff' };
-  const rungLabels: GroupLabel[] = [...data.rungs].reverse().flatMap((rung, i) => [
-    // Deepest first: where the view is crowded the far rungs keep their names.
-    { text: rungNameText(rung), priority: i + 1, position: namePoints[i + 1] },
-    { text: rungValuesText(rung), priority: i + 1.5, position: valuePoints[i + 1] },
-  ]);
-  const rungGroup = context.addLabels({ rank, style, frame: 'earth', labels: rungLabels });
-  // The antipode's texts depend on where the user stands: its group is rebuilt on a move.
-  let antipodeGroup = context.addLabels({ rank, style, frame: 'earth', labels: [] });
+  // A text set on its ring is struck through by it: the name hangs just under the
+  // ring's lower edge and the numbers stand just over its upper, clear of the line.
+  const nameStyle = { fontPx: 11, color: '#e6f1ff', offsetYPx: LABEL_CLEARANCE_PX };
+  const valueStyle = { fontPx: 11, color: '#e6f1ff', offsetYPx: -LABEL_CLEARANCE_PX };
+  // Deepest first: where the view is crowded the far rungs keep their names.
+  const deepestFirst = [...data.rungs].reverse();
+  const rungGroups = [
+    context.addLabels({
+      rank,
+      style: nameStyle,
+      frame: 'earth',
+      labels: deepestFirst.map((rung, i): GroupLabel => ({ text: rungNameText(rung), priority: i + 1, position: namePoints[i + 1] })),
+    }),
+    context.addLabels({
+      rank,
+      style: valueStyle,
+      frame: 'earth',
+      labels: deepestFirst.map((rung, i): GroupLabel => ({ text: rungValuesText(rung), priority: i + 1.5, position: valuePoints[i + 1] })),
+    }),
+  ];
+  // The antipode's texts depend on where the user stands: its groups are rebuilt on a move.
+  let antipodeGroups: LabelGroup[] = [];
 
   let visible = false;
   let placedAt: SurfacePosition | null = null;
@@ -206,17 +221,22 @@ export async function createDepthLadderLayer(context: LayerContext): Promise<Lay
       { lon: position.lon, lat: position.lat, altitudeM: -EARTH_RADIUS_M, shape: 'diamond', color: LADDER_COLOR, sizePx: 8 },
     ]);
     const city = nearestCityText(antipode, places);
-    antipodeGroup.remove();
-    antipodeGroup = context.addLabels({
-      rank,
-      style: { ...style, bold: true },
-      frame: 'earth',
-      labels: [
-        { text: `antipode · ${km(diameterKm)}`, priority: 0, position: namePoints[0] },
-        ...(city ? [{ text: city, priority: 0.5, position: valuePoints[0] }] : []),
-      ],
-    });
-    antipodeGroup.setVisible(visible);
+    for (const labels of antipodeGroups) labels.remove();
+    antipodeGroups = [
+      context.addLabels({
+        rank,
+        style: { ...nameStyle, bold: true },
+        frame: 'earth',
+        labels: [{ text: `antipode · ${km(diameterKm)}`, priority: 0, position: namePoints[0] }],
+      }),
+      context.addLabels({
+        rank,
+        style: { ...valueStyle, bold: true },
+        frame: 'earth',
+        labels: city ? [{ text: city, priority: 0.5, position: valuePoints[0] }] : [],
+      }),
+    ];
+    for (const labels of antipodeGroups) labels.setVisible(visible);
   };
   /** Hang each ring's name from its lower edge and set its numbers on its upper, as the screen now lies. */
   const aim = (camera: THREE.Camera): void => {
@@ -234,8 +254,7 @@ export async function createDepthLadderLayer(context: LayerContext): Promise<Lay
     setVisible(next) {
       visible = next;
       group.visible = next;
-      rungGroup.setVisible(next);
-      antipodeGroup.setVisible(next);
+      for (const labels of [...rungGroups, ...antipodeGroups]) labels.setVisible(next);
     },
     update(frame) {
       place(frame.position);
@@ -245,8 +264,7 @@ export async function createDepthLadderLayer(context: LayerContext): Promise<Lay
       material.resolution.set(widthCss, heightCss);
     },
     dispose() {
-      rungGroup.remove();
-      antipodeGroup.remove();
+      for (const labels of [...rungGroups, ...antipodeGroups]) labels.remove();
       group.removeFromParent();
       markers.dispose();
       geometry.dispose();
