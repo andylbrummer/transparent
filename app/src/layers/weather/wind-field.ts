@@ -85,7 +85,16 @@ export interface ParticleOptions {
   readonly lifeSeconds: readonly [number, number];
   /** Uniform in [0, 1); Math.random by default. */
   readonly random?: () => number;
+  /**
+   * For a field with dead cells (land, under ocean currents): a particle
+   * is not started, and does not stay, where the field is slower than
+   * this, m/s. Default 0: every cell is live.
+   */
+  readonly minSpeed?: number;
 }
+
+/** Spots tried for one that moves before a respawn gives up until the next frame. */
+const RESPAWN_TRIES = 6;
 
 /** Floats per trail point: x, y, z, then the wind speed there (m/s) or BREAK. */
 export const POINT_STRIDE = 4;
@@ -133,14 +142,20 @@ export class WindParticles {
     this.field = field;
   }
 
-  /** A point uniform over the sphere's area. */
+  /** A point uniform over the sphere's area - with `minSpeed`, over the part of it that moves. */
   private respawn(i: number): void {
-    const z = 2 * this.random() - 1;
-    const lon = 2 * Math.PI * this.random();
-    const h = Math.sqrt(1 - z * z);
-    this.position[i * 3] = h * Math.cos(lon);
-    this.position[i * 3 + 1] = h * Math.sin(lon);
-    this.position[i * 3 + 2] = z;
+    const minSpeed = this.options.minSpeed ?? 0;
+    for (let attempt = 0; attempt < RESPAWN_TRIES; attempt++) {
+      const z = 2 * this.random() - 1;
+      const lon = 2 * Math.PI * this.random();
+      const h = Math.sqrt(1 - z * z);
+      this.position[i * 3] = h * Math.cos(lon);
+      this.position[i * 3 + 1] = h * Math.sin(lon);
+      this.position[i * 3 + 2] = z;
+      if (minSpeed <= 0) break;
+      sampleWind(this.field, Math.asin(z) / DEG, lon / DEG, wind);
+      if (Math.hypot(wind[0], wind[1]) >= minSpeed) break;
+    }
     const [shortest, longest] = this.options.lifeSeconds;
     this.life[i] = shortest + this.random() * (longest - shortest);
     this.age[i] = 0;
@@ -171,6 +186,7 @@ export class WindParticles {
       advanced = true;
     }
     const arc = radiansPerMsPerSecond * seconds;
+    const minSpeed = this.options.minSpeed ?? 0;
     for (let i = 0; i < count; i++) {
       this.age[i] += seconds;
       let speed: number;
@@ -179,7 +195,11 @@ export class WindParticles {
         speed = BREAK;
       } else {
         speed = advect(this.field, this.position, i * 3, arc);
-        if (this.fresh[i]) speed = BREAK;
+        if (speed < minSpeed) {
+          // Run aground: start again somewhere that moves.
+          this.respawn(i);
+          speed = BREAK;
+        } else if (this.fresh[i]) speed = BREAK;
       }
       this.write(this.head, i, speed);
       if (this.head === 0) this.write(slots, i, speed);

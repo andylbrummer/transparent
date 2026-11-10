@@ -183,6 +183,47 @@ describe('WindParticles', () => {
     expect(polar / 4000).toBeCloseTo(0.5, 1);
   });
 
+  describe('with minSpeed, over a field that is still in places', () => {
+    // An ocean in the southern hemisphere flowing north at 1 m/s; dry land north of the equator.
+    const halfOcean = fieldOf(
+      () => 0,
+      (lat) => (lat < 0 ? 1 : 0)
+    );
+    const moving = { ...options, count: 400, minSpeed: 0.05 };
+
+    it('starts particles only where the field moves', () => {
+      const particles = new WindParticles(halfOcean, { ...moving, random: lcg(3) });
+      let onLand = 0;
+      // The edge cell blends into the land: still water there is under minSpeed too.
+      for (let i = 0; i < moving.count; i++) if (particles.buffer[i * POINT_STRIDE + 2] > 0) onLand++;
+      // Six tries each at even odds: about 400 / 2⁶ = 6 find no water and wait.
+      expect(onLand).toBeLessThan(20);
+    });
+
+    it('restarts a particle that runs aground, breaking its trail', () => {
+      const particles = new WindParticles(halfOcean, { ...moving, random: lcg(3) });
+      // 1 m/s north at 0.002 rad/s: a particle at 30°S reaches the shore in 260 s. Run 400 s in slot-sized steps.
+      for (let step = 0; step < 4000; step++) particles.step(0.1);
+      let onLand = 0;
+      let drawnOnLand = 0;
+      for (let i = 0; i < moving.count; i++) {
+        const head = point({ buffer: particles.buffer } as WindParticles, particles.head, i);
+        if (head[2] > 0.02) {
+          onLand++;
+          if (head[3] !== BREAK) drawnOnLand++;
+        }
+      }
+      expect(onLand).toBeLessThan(20);
+      expect(drawnOnLand).toBe(0);
+    });
+
+    it('changes nothing when minSpeed is not given', () => {
+      const plain = new WindParticles(halfOcean, { ...options, random: lcg(3) });
+      const zero = new WindParticles(halfOcean, { ...options, minSpeed: 0, random: lcg(3) });
+      expect(Array.from(zero.buffer)).toEqual(Array.from(plain.buffer));
+    });
+  });
+
   it('rewrites only the head slot between slot changes', () => {
     const particles = new WindParticles(westerly, { ...options, random: lcg() });
     const before = particles.buffer.slice();
