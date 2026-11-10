@@ -10,22 +10,39 @@ import {
 import type { LayerDefinition } from '../layers/types';
 
 describe('loadLayerVisibility', () => {
-  it('turns everything on when nothing is saved', () => {
+  it('gives every switch its default when nothing is saved', () => {
     const visibility = loadLayerVisibility(null);
     expect(Object.keys(visibility)).toEqual(LAYER_SWITCHES.map((s) => s.id));
-    expect(Object.values(visibility).every(Boolean)).toBe(true);
+    for (const layer of LAYER_SWITCHES) expect(visibility[layer.id]).toBe(!layer.defaultOff);
+  });
+
+  it('starts with the map, the plates, slabs and earthquakes, and leaves the arrow fields and faults off', () => {
+    const on = Object.entries(loadLayerVisibility(null))
+      .filter(([, visible]) => visible)
+      .map(([id]) => id);
+    expect(on).toEqual(expect.arrayContaining(['political', 'boundaries', 'spreading', 'quakes', 'plumes', 'place-labels']));
+    for (const busy of ['mantle-flow', 'plate-motion', 'faults']) expect(on).not.toContain(busy);
+  });
+
+  it('keeps a saved choice for a layer that is now off by default', () => {
+    // What a browser that used the app before the defaults changed has stored: every switch, as it was.
+    const before = Object.fromEntries(LAYER_SWITCHES.map((s) => [s.id, true]));
+    const visibility = loadLayerVisibility(JSON.stringify(before));
+    expect(visibility['mantle-flow']).toBe(true);
+    expect(visibility.faults).toBe(true);
   });
 
   it('takes saved booleans for known switches only', () => {
-    const visibility = loadLayerVisibility(JSON.stringify({ faults: false, quakes: 'no', retired: false }));
-    expect(visibility.faults).toBe(false);
+    const visibility = loadLayerVisibility(JSON.stringify({ boundaries: false, faults: true, quakes: 'no', retired: false }));
+    expect(visibility.boundaries).toBe(false);
+    expect(visibility.faults).toBe(true);
     expect(visibility.quakes).toBe(true);
     expect('retired' in visibility).toBe(false);
   });
 
   it('reports and ignores an unreadable save', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(Object.values(loadLayerVisibility('{not json')).every(Boolean)).toBe(true);
+    expect(loadLayerVisibility('{not json')).toEqual(loadLayerVisibility(null));
     expect(error).toHaveBeenCalledOnce();
     error.mockRestore();
   });
@@ -56,11 +73,11 @@ describe('LayersPanel', () => {
 
   it('saves a flipped switch and reports which layer it was', () => {
     const { parent, saved, onChange } = setup();
-    const faults = parent.querySelector<HTMLInputElement>('input[data-layer="faults"]')!;
-    faults.checked = false;
-    faults.dispatchEvent(new Event('change'));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'faults' }), false);
-    expect(JSON.parse(saved.get(LAYERS_STORAGE_KEY)!)).toMatchObject({ faults: false, quakes: true });
+    const boundaries = parent.querySelector<HTMLInputElement>('input[data-layer="boundaries"]')!;
+    boundaries.checked = false;
+    boundaries.dispatchEvent(new Event('change'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'boundaries' }), false);
+    expect(JSON.parse(saved.get(LAYERS_STORAGE_KEY)!)).toMatchObject({ boundaries: false, quakes: true });
   });
 
   it('shows a legend for every line and interior layer', () => {
@@ -107,7 +124,8 @@ describe('LayersPanel with lazy layers', () => {
     const { input, switches } = setup();
     expect(input('cmb').checked).toBe(false);
     expect(input('clouds').checked).toBe(true);
-    expect(input('faults').checked).toBe(true);
+    expect(input('boundaries').checked).toBe(true);
+    expect(input('faults').checked).toBe(false);
     const sections = [...new Set(switches.map((s) => s.section))];
     expect(sections).toEqual(['Weather', 'Surface lines', 'Inside the Earth', 'Sky maps', 'Labels']);
   });

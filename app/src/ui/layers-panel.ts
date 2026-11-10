@@ -26,7 +26,12 @@ export interface LayerSwitch {
   readonly label: string;
   readonly section: LayerSection;
   readonly target: LayerTarget;
-  /** Off until the user turns it on; the always-loaded layers start on. */
+  /**
+   * Off until the user turns it on. The first view is kept to what reads at
+   * a glance - the far side, the plates' edges, slabs, earthquakes, the
+   * core - and the layers that draw a field of arrows or a tangle of lines
+   * over all of it wait in the panel.
+   */
   readonly defaultOff?: boolean;
   /** Switches sharing a group are exclusive. */
   readonly exclusiveGroup?: string;
@@ -78,6 +83,8 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     label: 'Mantle flow (model)',
     section: 'Inside the Earth',
     target: { interior: 'mantle-flow' },
+    // Thousands of arrows through the whole interior: a layer to study, not to start with.
+    defaultOff: true,
     legend: flowGradient(),
     caption: 'sinking · level · rising · 300, 1450, 2750 km · arrow = 5 Myr',
   },
@@ -102,6 +109,8 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     label: 'Active faults',
     section: 'Surface lines',
     target: { lines: FAULTS },
+    // Dense over every mountain belt, in three colours beside the boundaries' four.
+    defaultOff: true,
     legend: swatches(lineColors(FAULTS)),
     caption: 'normal · reverse · strike-slip',
   },
@@ -110,6 +119,8 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     label: 'Plate motion',
     section: 'Surface lines',
     target: { lines: ['plate-motion'] },
+    // Arrows over every ocean and continent.
+    defaultOff: true,
     legend: hex(OUTLINE_STYLES['plate-motion'].color),
     caption: 'NNR-MORVEL56 · arrow = 3 Myr of travel',
   },
