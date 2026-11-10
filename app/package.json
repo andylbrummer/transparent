@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint 'src/**/*.ts'",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "docs:sources": "vite-node scripts/data-sources.ts"
   },
   "dependencies": {
     "@transparent-earth/core": "*",

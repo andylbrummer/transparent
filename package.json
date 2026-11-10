@@ -12,7 +12,8 @@
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
     "typecheck": "npm run typecheck --workspaces",
-    "dev": "npm run dev -w app"
+    "dev": "npm run dev -w app",
+    "docs:sources": "npm run docs:sources -w app --"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
