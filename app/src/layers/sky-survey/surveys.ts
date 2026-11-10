@@ -25,6 +25,13 @@ export interface SurveySpec {
   readonly floor: number;
   readonly gain: number;
   readonly credits: readonly Credit[];
+  /**
+   * For a survey of scattered patches: its name in sky/closeups.json. Only
+   * tiles touching a patch are asked for, the patches are marked, and the
+   * survey is drawn over whichever whole-sky picture is on rather than
+   * instead of it.
+   */
+  readonly coverage?: string;
 }
 
 const ESA_TILES: Credit = {
@@ -144,6 +151,34 @@ export const SURVEYS: readonly SurveySpec[] = [
         source: 'European Space Agency, XMM-Newton Science Archive, ESAC Science Data Centre',
         licence: 'no stated licence on the tiles; ESA asks for the credit ESA/XMM-Newton',
         url: 'https://www.cosmos.esa.int/web/xmm-newton/xsa',
+      },
+      ESA_TILES,
+    ],
+  },
+  {
+    id: 'survey-jwst',
+    label: 'Webb close-ups (NIRCam)',
+    order: 15,
+    caption:
+      'every patch Webb’s near-infrared camera has imaged, 0.6–5 µm, about two square degrees in all · rings mark them: zoom into one · drawn over the sky map that is on · loaded live as you look',
+    // The CDN, not skies.esac.esa.int: that host sends no CORS header with a 404, so an empty tile reads as a failure.
+    bases: ['https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging'],
+    extension: 'png',
+    // Order 3 and coarser tiles are not served (404); the patches are too small to see at those scales anyway.
+    minOrder: 4,
+    // The survey goes to order 15; at the narrowest view (0.2°) a phone screen wants order 9 or 10.
+    maxOrder: 11,
+    frame: 'equatorial',
+    floor: 0,
+    // A dark field of small galaxies: at the scales a screen reaches, most are a few pixels, averaged down.
+    gain: 2,
+    coverage: 'jwst',
+    credits: [
+      {
+        what: 'JWST NIRCam images, all public observations since the 2022 Early Release Observations',
+        source: 'NASA/ESA/CSA James Webb Space Telescope; original data from the European JWST Archive (eJWST) at ESA/ESAC',
+        licence: 'no stated licence on the tiles; public archive data, the eJWST acknowledgement asked for is given here',
+        url: 'https://ejwst.esac.esa.int/',
       },
       ESA_TILES,
     ],

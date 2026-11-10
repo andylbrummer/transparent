@@ -3,12 +3,12 @@ import { SURVEYS } from './surveys';
 import definitions from './layer';
 
 describe('the surveys', () => {
-  it('have unique ids and one switch each, all in the whole-sky pictures’ exclusive group', () => {
+  it('have unique ids and one switch each; whole-sky ones exclusive with the sky maps, close-ups drawn over them', () => {
     expect(new Set(SURVEYS.map((spec) => spec.id)).size).toBe(SURVEYS.length);
     expect(definitions.map((definition) => definition.id)).toEqual(SURVEYS.map((spec) => spec.id));
-    for (const definition of definitions) {
+    for (const [i, definition] of definitions.entries()) {
       expect(definition.section).toBe('Sky maps');
-      expect(definition.exclusiveGroup).toBe('sky-map');
+      expect(definition.exclusiveGroup).toBe(SURVEYS[i].coverage ? undefined : 'sky-map');
       // Fetched tile by tile over the network: never on unasked.
       expect(definition.defaultOn).toBeUndefined();
     }
@@ -33,5 +33,11 @@ describe('the surveys', () => {
       expect(credit.url).toMatch(/^https:\/\//);
     }
     expect(spec.caption).toContain('loaded live');
+  });
+
+  it('include Webb’s close-ups, limited to its coverage file', () => {
+    const jwst = SURVEYS.find((spec) => spec.id === 'survey-jwst')!;
+    expect(jwst.coverage).toBe('jwst');
+    expect(definitions.find((definition) => definition.id === 'survey-jwst')!.exclusiveGroup).toBeUndefined();
   });
 });
