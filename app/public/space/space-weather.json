@@ -1,0 +1,21 @@
+{
+ "source": "NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public domain",
+ "aurora": {
+  "observed": "2026-11-10T02:12:00Z",
+  "forecast": "2026-11-10T02:52:00Z",
+  "hemisphericPowerGw": {
+   "north": 14,
+   "south": 13
+  }
+ },
+ "kp": {
+  "time": "2026-11-09T21:00:00",
+  "kp": 2.0
+ },
+ "solarWind": {
+  "time": "2026-11-10T02:43:34Z",
+  "speedKmS": 675.0,
+  "densityCm3": 1.83,
+  "bzNt": 0.91
+ }
+}
