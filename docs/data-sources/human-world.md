@@ -163,9 +163,14 @@ Run by the pipeline's tests (`tools/pipeline/test_cables.py`,
   `api.airplanes.live` and `api.adsb.one` answer 403. A live layer would
   need a proxy, which this project does not have. Not built, no fallback
   faked.
-- **Oil and gas pipelines.** Global Energy Monitor's trackers are CC BY 4.0
-  but their downloads sit behind a form asking for name and e-mail: not
-  keyless. Not attempted further.
-- **Protected areas (WDPA).** Licence forbids redistribution; skipped as the
-  brief said.
-- **Time zones, railways, roads, Great Wall geometry.** Not reached.
+- **Time zones.** Natural Earth's `ne_10m_time_zones` was read and set
+  aside: it is dated 2012 (its `iso_8601` field) and still has UTC−04:30
+  for Venezuela and UTC+11:30 for Norfolk Island, both abolished since. A
+  time-zone map that is wrong is worse than none; a current one would have
+  to be derived from the tz database's boundaries (ODbL, via
+  timezone-boundary-builder), which was not attempted.
+- **Oil and gas pipelines.** Not attempted. Global Energy Monitor's
+  trackers were the candidate; whether they can be downloaded without
+  filling in a form was not checked in this session.
+- **Protected areas (WDPA).** Skipped, as the brief said (licence).
+- **Railways, roads, Great Wall geometry.** Not reached.
