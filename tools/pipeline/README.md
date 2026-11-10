@@ -220,3 +220,31 @@ python3 tools/pipeline/test_mantle_flow.py
 
 Imagery (Blue Marble) is fetched by the app at runtime from NASA GIBS, not
 baked. Nothing under `app/public/` is gitignored.
+
+## Deep Sky and All-Sky Maps
+
+`generate_deepsky.py` bakes sixteen catalogues of the faint and invisible
+sky (Messier/NGC/IC objects, X-ray and gamma-ray sources, pulsars,
+exoplanet hosts, the nearest stars, galaxies, clusters, quasars, the 2MASS
+Redshift Survey...) into `app/public/sky/deep/`. Standard library only;
+`sky_catalog_support.py` holds the HEASARC / VizieR / SIMBAD readers and
+the B1950 → J2000 precession.
+
+`generate_skymaps.py` bakes twelve all-sky maps (radio, 21 cm, the
+microwave background from COBE, WMAP and Planck, infrared, H-alpha,
+X-rays, gamma rays, galaxy density) into `app/public/sky/maps/` as
+2048×1024 plate carrées in galactic coordinates. It needs healpy and
+astropy, and downloads 3 GB of source maps into the cache.
+
+```bash
+python3 tools/pipeline/generate_deepsky.py
+python3 tools/pipeline/test_deepsky.py
+
+python3 -m venv tools/pipeline/.cache/venv
+tools/pipeline/.cache/venv/bin/pip install numpy pillow astropy healpy
+tools/pipeline/.cache/venv/bin/python tools/pipeline/generate_skymaps.py
+tools/pipeline/.cache/venv/bin/python tools/pipeline/test_skymaps.py
+```
+
+Sources, licences and what the checks pin down:
+`docs/data-sources/deep-sky.md`.
