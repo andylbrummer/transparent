@@ -25,9 +25,10 @@
  *
  * Writes outDir/<name>.png and outDir/results.json and prints one line per
  * case: frameMs, the interval between frames (16.7 at best on a 60 Hz
- * display); gpuMs, the GPU time of a frame's draw calls, also by object
- * name in results.json - the figure that shows headroom and what a layer
- * costs; texture count, labels, status chips, console problems.
+ * display); gpuMsQuiet and gpuMs, the GPU time of a frame's draw calls in
+ * the quietest tenth of frames and in the median one, and by object name
+ * in results.json - the figures that show headroom and what a layer costs;
+ * texture count, labels, status chips, console problems.
  * Needs playwright-core and a Chromium; see shot.mjs.
  */
 import { chromium } from 'playwright-core';
@@ -212,7 +213,9 @@ for (const c of cases) {
       if (frames > 0) times.push(Math.round(((performance.now() - start) / frames) * 100) / 100);
     }
     times.sort((a, b) => a - b);
-    // Per name, the median over frames of its draws' time in a frame.
+    // Per name, its draws' time in a frame: the median over frames, and the
+    // quiet tenth - a timer query counts the time other programs hold the
+    // GPU, so on a shared machine the low end is nearer what the draw costs.
     const perName = new Map();
     for (const [frame, entry] of gpu.frames) {
       if (frame < firstFrame) continue;
@@ -220,16 +223,20 @@ for (const c of cases) {
     }
     const gpuByName = {};
     let gpuMs = ext ? 0 : null;
+    let gpuMsQuiet = ext ? 0 : null;
     for (const [name, list] of perName) {
       list.sort((a, b) => a - b);
-      gpuByName[name] = Math.round(list[Math.floor(list.length / 2)] * 100) / 100;
+      const quiet = list[Math.floor(list.length / 10)];
+      gpuByName[name] = Math.round(quiet * 100) / 100;
       gpuMs += list[Math.floor(list.length / 2)];
+      gpuMsQuiet += quiet;
     }
     const memory = app.renderer.info.memory;
     return {
       frameMs: times[0] ?? null,
       frameMsMedian: times[Math.floor(times.length / 2)] ?? null,
       gpuMs: gpuMs === null ? null : Math.round(gpuMs * 100) / 100,
+      gpuMsQuiet: gpuMsQuiet === null ? null : Math.round(gpuMsQuiet * 100) / 100,
       gpuByName,
       labels: app.getVisibleLabels(),
       hud: document.getElementById('hud')?.textContent,
@@ -247,7 +254,7 @@ for (const c of cases) {
   const result = { name: c.name, ...info, problems: [...problems] };
   results.push(result);
   console.log(
-    `${c.name}\t${info.frameMs} ms (median ${info.frameMsMedian})\tgpu ${info.gpuMs}\ttex ${info.textures}\t${info.labels.length} labels\t${JSON.stringify(info.status)}` +
+    `${c.name}\t${info.frameMs} ms (median ${info.frameMsMedian})\tgpu ${info.gpuMsQuiet} (median ${info.gpuMs})\ttex ${info.textures}\t${info.labels.length} labels\t${JSON.stringify(info.status)}` +
       (problems.length > 0 ? `\n  ${problems.slice(0, 6).join('\n  ')}` : '')
   );
 }
