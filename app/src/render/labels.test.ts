@@ -286,6 +286,32 @@ describe('LabelLayer groups', () => {
     layer.dispose();
   });
 
+  it('hangs a second name over the marker when the place under it is taken', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    const camera = cameraAimedAt(-119.5, 37.0);
+    const at = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    // Above the horizon: turn the test's camera up at a point of the sky.
+    const zenith = camera.position.clone().normalize();
+    camera.lookAt(camera.position.clone().add(zenith));
+    camera.updateMatrixWorld();
+    at.copy(zenith);
+    const marked = { ...style, offsetYPx: 11 };
+    layer.addGroup({ rank: 6.3, style: marked, frame: 'sky', labels: [{ text: 'M87', priority: 0, position: at.clone() }] });
+    layer.addGroup({ rank: 6.4, style: marked, frame: 'sky', labels: [{ text: 'M87* black hole', priority: 0, position: at.clone() }] });
+    // A third has nowhere left; and a name with no marker offset is never moved.
+    layer.addGroup({ rank: 6.5, style: marked, frame: 'sky', labels: [{ text: 'Virgo A', priority: 0, position: at.clone() }] });
+    layer.addGroup({ rank: 6.6, style, frame: 'sky', labels: [{ text: 'VIRGO', priority: 0, position: at.clone() }] });
+    layer.update(camera, WIDTH, HEIGHT, undefined, new THREE.Matrix4());
+    expect(layer.visibleNames()).toEqual(['M87', 'M87* black hole']);
+    const y = (text: string): number => {
+      const element = [...parent.querySelectorAll<HTMLElement>('.place-label')].find((e) => e.textContent === text)!;
+      return Number(/, ([-\d.]+)px\)/.exec(element.style.transform)![1]);
+    };
+    expect(y('M87') - y('M87* black hole')).toBeCloseTo(22, 0);
+    layer.dispose();
+  });
+
   describe('below the horizon', () => {
     /** Unit directions fanned round `axis`, far enough apart on a big viewport not to collide. */
     function fan(axis: THREE.Vector3, count: number): THREE.Vector3[] {

@@ -182,6 +182,8 @@ interface PlacedLabel {
   readonly halfHeight: number;
   /** Added to the projected y: the text's offset from its point. */
   readonly offsetY: number;
+  /** The offset in use this frame: offsetY, or its opposite where that side was taken. */
+  shownOffsetY: number;
   visible: boolean;
   /** Drawn faint: a sky name below the horizon. */
   dimmed: boolean;
@@ -278,6 +280,7 @@ export class LabelLayer {
         halfWidth: size.width / 2,
         halfHeight: size.height / 2,
         offsetY: 0,
+        shownOffsetY: 0,
         visible: false,
         dimmed: false,
         twin,
@@ -369,6 +372,7 @@ export class LabelLayer {
         halfWidth: (label.text.length * style.fontPx * em + LABEL_PADDING_PX) / 2,
         halfHeight: (style.fontPx * 1.3 + LABEL_PADDING_PX) / 2,
         offsetY: style.offsetYPx ?? 0,
+        shownOffsetY: style.offsetYPx ?? 0,
         visible: false,
         dimmed: false,
         twin,
@@ -457,13 +461,17 @@ export class LabelLayer {
         if ((!below || show) && this.view.z < 0) {
           this.view.applyMatrix4(camera.projectionMatrix);
           x = (this.view.x * 0.5 + 0.5) * width;
-          y = (0.5 - this.view.y * 0.5) * height + placed.offsetY;
-          show =
-            x + placed.halfWidth > 0 &&
-            x - placed.halfWidth < width &&
-            y + placed.halfHeight > 0 &&
-            y - placed.halfHeight < height &&
-            !this.overlapsPlaced(x, y, placed.halfWidth, placed.halfHeight);
+          const pointY = (0.5 - this.view.y * 0.5) * height;
+          y = pointY + placed.offsetY;
+          placed.shownOffsetY = placed.offsetY;
+          show = this.fits(x, y, placed, width, height);
+          // A name hung under its marker may sit over it instead: two things at
+          // one spot on the sky - a galaxy and the black hole in it - both get named.
+          if (!show && placed.offsetY !== 0) {
+            y = pointY - placed.offsetY;
+            placed.shownOffsetY = -placed.offsetY;
+            show = this.fits(x, y, placed, width, height);
+          }
         } else {
           show = false;
         }
@@ -506,7 +514,7 @@ export class LabelLayer {
       if (this.view.z < 0) {
         this.view.applyMatrix4(rightEye.projectionMatrix);
         const x = (this.view.x * 0.5 + 0.5) * width;
-        const y = (0.5 - this.view.y * 0.5) * height + placed.offsetY;
+        const y = (0.5 - this.view.y * 0.5) * height + placed.shownOffsetY;
         twin.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
         show = true;
       }
@@ -515,6 +523,17 @@ export class LabelLayer {
       twin.style.display = show ? '' : 'none';
       placed.twinVisible = show;
     }
+  }
+
+  /** Whether a label's box centred at (x, y) is on screen and clear of every label placed so far. */
+  private fits(x: number, y: number, placed: PlacedLabel, width: number, height: number): boolean {
+    return (
+      x + placed.halfWidth > 0 &&
+      x - placed.halfWidth < width &&
+      y + placed.halfHeight > 0 &&
+      y - placed.halfHeight < height &&
+      !this.overlapsPlaced(x, y, placed.halfWidth, placed.halfHeight)
+    );
   }
 
   private overlapsPlaced(x: number, y: number, halfWidth: number, halfHeight: number): boolean {
