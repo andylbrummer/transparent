@@ -1,0 +1,110 @@
+import { describe, it, expect } from 'vitest';
+import SURFACE_LAYERS from './layer';
+import { imagerySource, isDated, undatedStatus, type ImagerySpec } from './imagery';
+
+const at = (iso: string): Date => new Date(iso);
+const decode = async (blob: Blob): Promise<TexImageSource> => blob as unknown as TexImageSource;
+const assetUrl = (path: string): string => `/base/${path}`;
+
+const TRUE_COLOUR: ImagerySpec = { product: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor', format: 'jpeg', width: 4096, time: 'complete-day' };
+const SST: ImagerySpec = { product: 'GHRSST_L4_MUR_Sea_Surface_Temperature', format: 'png', width: 2048, time: 'latest' };
+const NIGHT: ImagerySpec = { product: 'VIIRS_Black_Marble', format: 'jpeg', width: 4096, time: '2016-01-01', bakedAsset: 'weather/night-lights.jpg' };
+const RELIEF: ImagerySpec = { product: 'BlueMarble_ShadedRelief_Bathymetry', format: 'jpeg', width: 4096, time: null };
+
+/** GIBS, answering DescribeDomains with `domain` and any image request with its own URL. */
+function gibs(domain: string) {
+  const requests: string[] = [];
+  const fetchImpl = async (url: string): Promise<Response> => {
+    requests.push(url);
+    if (url.includes('DescribeDomains')) return new Response(`<Domains><DimensionDomain><Domain>${domain}</Domain></DimensionDomain></Domains>`);
+    if (url.startsWith('/base/')) return new Response('baked');
+    return new Response('image');
+  };
+  return { requests, fetchImpl };
+}
+
+describe('imagerySource', () => {
+  it('asks for the newest whole day of a daily mosaic, not the day still being flown', async () => {
+    const { requests, fetchImpl } = gibs('2022-01-14/2026-11-09/P1D');
+    const source = imagerySource(TRUE_COLOUR, 'surface-true-colour', assetUrl, decode, fetchImpl);
+    // GIBS already lists the 9th, but at 00:20 on the 10th its Pacific passes are not in.
+    const latest = await source.latest(at('2026-11-10T00:20:00Z'));
+    expect(latest).toEqual({ tag: '2026-11-08', validTime: at('2026-11-08T00:00:00Z') });
+    await source.download(latest.tag);
+    const image = new URL(requests[1]).searchParams;
+    expect([image.get('LAYERS'), image.get('TIME'), image.get('FORMAT')]).toEqual([TRUE_COLOUR.product, '2026-11-08', 'image/jpeg']);
+    expect([image.get('WIDTH'), image.get('HEIGHT')]).toEqual(['4096', '2048']);
+  });
+
+  it('steps back to the last day the product has when the whole day wanted is missing', async () => {
+    const { fetchImpl } = gibs('2026-04-30/2026-07-10/P1D,2026-07-16/2026-11-02/P1D');
+    const source = imagerySource(TRUE_COLOUR, 'x', assetUrl, decode, fetchImpl);
+    expect((await source.latest(at('2026-11-10T12:00:00Z'))).tag).toBe('2026-11-02');
+    // Inside a gap in the record.
+    expect((await source.latest(at('2026-07-14T12:00:00Z'))).tag).toBe('2026-07-10');
+  });
+
+  it('asks for the newest date of an analysis that has no swath to wait for', async () => {
+    const { fetchImpl } = gibs('2024-07-03/2026-11-08/P1D');
+    const source = imagerySource(SST, 'surface-sst', assetUrl, decode, fetchImpl);
+    expect((await source.latest(at('2026-11-10T00:20:00Z'))).tag).toBe('2026-11-08');
+    expect((await source.latest(at('2025-01-15T09:00:00Z'))).tag).toBe('2025-01-15');
+  });
+
+  it('asks for a fixed date without consulting the domain', async () => {
+    const { requests, fetchImpl } = gibs('unused');
+    const source = imagerySource(NIGHT, 'surface-night-lights', assetUrl, decode, fetchImpl);
+    const latest = await source.latest(at('2026-11-10T00:20:00Z'));
+    expect(latest.tag).toBe('2016-01-01');
+    await source.download(latest.tag);
+    expect(requests).toHaveLength(1);
+    expect(new URL(requests[0]).searchParams.get('TIME')).toBe('2016-01-01');
+  });
+
+  it('sends no time for a product that has only one', async () => {
+    const { requests, fetchImpl } = gibs('unused');
+    const source = imagerySource(RELIEF, 'surface-relief', assetUrl, decode, fetchImpl);
+    await source.download((await source.latest(at('2026-11-10T00:20:00Z'))).tag);
+    expect(new URL(requests[0]).searchParams.has('TIME')).toBe(false);
+  });
+
+  it('falls back to a baked copy only where there is one', async () => {
+    const { requests, fetchImpl } = gibs('unused');
+    const night = await imagerySource(NIGHT, 'n', assetUrl, decode, fetchImpl).snapshot();
+    expect(await (night.value as unknown as Blob).text()).toBe('baked');
+    expect(requests).toEqual(['/base/weather/night-lights.jpg']);
+    await expect(imagerySource(RELIEF, 'r', assetUrl, decode, fetchImpl).snapshot()).rejects.toThrow('no baked copy');
+  });
+
+  it('fails for a date before the product began', async () => {
+    const { fetchImpl } = gibs('2024-07-03/2026-11-08/P1D');
+    await expect(imagerySource(SST, 's', assetUrl, decode, fetchImpl).latest(at('2010-01-01T00:00:00Z'))).rejects.toThrow('nothing at or before');
+  });
+});
+
+describe('undatedStatus', () => {
+  it('shows no chip for the real thing and says so when it is a stand-in', () => {
+    expect(undatedStatus('live · 1 Jan 1970')).toEqual({ text: null, tone: 'info' });
+    expect(undatedStatus('latest · 1 Jan 1970')).toEqual({ text: null, tone: 'info' });
+    expect(undatedStatus('offline · cached 1 Jan 1970')).toEqual({ text: 'offline · cached', tone: 'stale' });
+    expect(undatedStatus('offline · snapshot 1 Jan 1970')).toEqual({ text: 'offline · low-resolution copy', tone: 'stale' });
+  });
+});
+
+describe('the surface layers', () => {
+  it('are one exclusive group in the Surface section, all off by default', () => {
+    expect(SURFACE_LAYERS.length).toBeGreaterThanOrEqual(4);
+    for (const layer of SURFACE_LAYERS) {
+      expect(layer.section).toBe('Surface');
+      expect(layer.exclusiveGroup).toBe('surface-imagery');
+      expect(layer.defaultOn).toBeUndefined();
+      expect(layer.id).toMatch(/^surface-[a-z-]+$/);
+      expect(layer.credits.length).toBeGreaterThan(0);
+    }
+    expect(new Set(SURFACE_LAYERS.map((layer) => layer.id)).size).toBe(SURFACE_LAYERS.length);
+  });
+
+  it('knows a dated product from a fixed one', () => {
+    expect([TRUE_COLOUR, SST, NIGHT, RELIEF].map(isDated)).toEqual([true, true, false, false]);
+  });
+});
