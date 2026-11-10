@@ -1,39 +1,43 @@
 # Content Pipeline
 
-## Travel-Time Texture
+## Seismic Wavefronts
 
-`generate_traveltime.py` generates a 1024×512 three-channel uint16 texture
-from the ak135 Earth model using ObsPy TauP:
+`generate_seismic_waves.py` bakes what the "Seismic waves" layer plays: where
+the P and S wavefronts of an earthquake are, inside the Earth, at every moment.
+(It replaces `generate_traveltime.py`, whose depth × distance texture held the
+first direct P and S only: nothing arrived past 98°, and it said nothing about
+the interior.)
 
-- **R channel**: direct P (`P`/`p`) arrival times (deciseconds, 0–65534)
-- **G channel**: direct S (`S`/`s`) arrival times (deciseconds, 0–65534)
-- **B channel**: surface wave (`3.5kmps`) arrival times (deciseconds, 0–65534)
-- **Sentinel value** 65535 = no arrival (core shadow)
+The Earth model is ak135 (Kennett, Engdahl & Buland 1995), radial, traced with
+ObsPy TauP. For each of nine source depths (0, 12, 30, 60, 150, 300, 450, 600,
+700 km) it shoots a fan of 464 rays by take-off angle - PKIKP, PKP, P and the
+upgoing p; the S that strikes the core (kept as far as the core, where it
+ends), S and s - and stores each ray's radius and angular distance every 20 s.
+The front at a time is the curve through the rays at that time, turned about
+the source's axis; the app does that in a vertex shader.
 
-It is written as raw little-endian uint16, not PNG: browsers decode PNGs to
-8 bits per channel before WebGL sees them, which would discard the 16-bit
-precision.
-
-X-axis: angular distance 0–180° (1024 samples)
-Y-axis: source depth 0–700 km (512 samples)
-
-## Usage
+- `app/public/geo/seismic-waves.bin` (1.35 MB) - per depth, 78 × 464 texels of
+  two uint16 (radius, distance), then three float32 arrays: when and where
+  each ray reaches the surface, and its take-off angle
+- `app/public/geo/seismic-waves.json` - the layout, the branches, the
+  diffracted-phase ranges (Pdiff, Sdiff), the surface-wave group speeds
+  (PREM, Dziewonski & Anderson 1981, Table V) and two deep earthquakes from
+  USGS ComCat
+- `app/src/layers/seismic-waves/taup.fixture.ts` - TauP's own answers at
+  depths and times that are not baked, for the app's tests
 
 ```bash
-# Generate texture (requires Python + obspy + numpy)
-pip install obspy numpy
-python3 tools/pipeline/generate_traveltime.py
-# Quick low-resolution run for checking the pipeline end to end
-python3 tools/pipeline/generate_traveltime.py --width 128 --height 16
-
-# Test against ObsPy spot checks
-python3 tools/pipeline/test_traveltime.py
+python3 -m venv tools/pipeline/.cache/venv
+tools/pipeline/.cache/venv/bin/pip install obspy numpy
+tools/pipeline/.cache/venv/bin/python tools/pipeline/generate_seismic_waves.py   # about a minute
+tools/pipeline/.cache/venv/bin/python tools/pipeline/test_seismic_waves.py
 ```
 
-## Output
-
-- `tools/pipeline/output/traveltime.bin` — height × width × 3 uint16 LE, row = depth
-- `tools/pipeline/output/traveltime_manifest.json` — metadata + sample arrays
+`test_seismic_waves.py` checks the bake against three things: Kennett's
+published ak135 travel-time tables (ANU, surface focus), an independent
+integration of the ray integrals through the ak135 velocity table as ANU
+publishes it (deep sources, shadow edges, the front on the axis through the
+centre), and TauP asked by distance.
 
 ## Outlines and Labels
 
