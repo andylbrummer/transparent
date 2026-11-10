@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@transparent-earth/core": "*",
+    "satellite.js": "^6.0.2",
     "three": "^0.165.0"
   },
   "devDependencies": {
