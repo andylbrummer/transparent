@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
-import { DEFAULT_SURFACE_GAIN, GlobeRenderer } from './globe';
+import { DEFAULT_SURFACE_GAIN, GlobeRenderer, TWILIGHT_SUN_ELEVATION_DEG } from './globe';
 import { PREM_LAYERS } from './prem';
 
 describe('GlobeRenderer', () => {
@@ -80,6 +80,39 @@ describe('GlobeRenderer', () => {
     globe.setSurfaceOverride(null);
     expect(uniforms.uSurface.value).toBe(base);
     expect(uniforms.uSurfaceGain.value).toBe(DEFAULT_SURFACE_GAIN);
+  });
+
+  it('shades the night side into the surface itself, not over the interior', () => {
+    const globe = new GlobeRenderer();
+    const material = globe.getMesh().material as THREE.ShaderMaterial;
+    const uniforms = material.uniforms;
+    expect(uniforms.uNightReady.value).toBe(0);
+    const night = new THREE.Texture();
+    globe.setNightSide(night);
+    expect(uniforms.uNight.value).toBe(night);
+    expect(uniforms.uNightReady.value).toBe(1);
+    expect(night.generateMipmaps).toBe(false);
+    globe.sunDirection.set(0, 1, 0);
+    expect(uniforms.uSunDirection.value.y).toBe(1);
+    // The night is mixed into the surface's own colour, before that colour is
+    // composited behind the shells in front of it.
+    const shader = material.fragmentShader;
+    const nightAt = shader.indexOf('uNightReady > 0.5');
+    expect(nightAt).toBeGreaterThan(shader.indexOf('if (i == SURFACE)'));
+    expect(nightAt).toBeLessThan(shader.indexOf('color += trans * a * tint'));
+    // Twilight from the Sun 1° up to 12° down.
+    expect(shader).toContain(`smoothstep(${Math.sin((TWILIGHT_SUN_ELEVATION_DEG.start * Math.PI) / 180).toFixed(4)}, ${Math.sin((TWILIGHT_SUN_ELEVATION_DEG.end * Math.PI) / 180).toFixed(4)}`);
+    globe.setNightSide(null);
+    expect(uniforms.uNightReady.value).toBe(0);
+  });
+
+  it('says whether the surface shows an image at all', () => {
+    const globe = new GlobeRenderer();
+    expect(globe.hasSurfaceImagery()).toBe(false);
+    globe.setSurfaceOverride(new THREE.Texture());
+    expect(globe.hasSurfaceImagery()).toBe(true);
+    globe.setSurfaceOverride(null);
+    expect(globe.hasSurfaceImagery()).toBe(false);
   });
 
   it('falls back to the flat surface colour when an override is cleared with no base', () => {

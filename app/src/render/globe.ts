@@ -24,7 +24,15 @@ export const BLUE_MARBLE_URL =
 /** Brightening applied to the surface imagery unless an override asks for its own. */
 export const DEFAULT_SURFACE_GAIN = 1.4;
 
+/**
+ * Night falls between the Sun 1° above the horizon and 12° below it - the
+ * end of nautical twilight - so the terminator is the soft band it is from
+ * orbit, not a line.
+ */
+export const TWILIGHT_SUN_ELEVATION_DEG = { start: 1, end: -12 } as const;
+
 const LAYER_COUNT = PREM_LAYERS.length;
+const DEG = Math.PI / 180;
 
 const VERTEX_SHADER = `
   varying vec2 vUv;
@@ -55,6 +63,10 @@ const FRAGMENT_SHADER = `
   uniform sampler2D uSurface;
   uniform float uSurfaceReady;
   uniform float uSurfaceGain;
+  // The night side: an image of the unlit Earth, shown where the Sun is down.
+  uniform sampler2D uNight;
+  uniform float uNightReady;
+  uniform vec3 uSunDirection;
   // Sine of the horizon's elevation (negative: a dip below level), from the
   // CPU - in float32, 1 - (R / |camera|)^2 at eye height rounds to zero.
   uniform float uHorizonSin;
@@ -96,6 +108,16 @@ const FRAGMENT_SHADER = `
       // Unlit and boosted: this is a geology view, not a photo, so land
       // masses must read clearly through the shells.
       tint = min(albedo * uSurfaceGain, vec3(1.0));
+      if (uNightReady > 0.5) {
+        // Shaded here, on the surface alone: laid over the finished picture
+        // it would also darken the mantle and core in front of the night side.
+        float night = smoothstep(${Math.sin(TWILIGHT_SUN_ELEVATION_DEG.start * DEG).toFixed(4)}, ${Math.sin(TWILIGHT_SUN_ELEVATION_DEG.end * DEG).toFixed(4)}, dot(n, uSunDirection));
+        vec3 texel = texture2D(uNight, equirectUv(n)).rgb;
+        float glow = max(texel.r, max(texel.g, texel.b));
+        // Unlit ground stays dim; lit ground is lifted toward the sodium glow it has from orbit.
+        vec3 lights = texel * mix(0.6, 1.0, smoothstep(0.25, 0.6, glow)) + vec3(1.0, 0.78, 0.45) * smoothstep(0.3, 0.95, glow);
+        tint = mix(tint, min(lights, vec3(1.0)), night * mix(0.78, 1.0, smoothstep(0.3, 0.7, glow)));
+      }
       // Only ever reached on exit: the far side, the destination of the
       // view, shown nearly opaque.
       a = 0.9;
@@ -168,6 +190,9 @@ export class GlobeRenderer {
       uSurface: { value: null as THREE.Texture | null },
       uSurfaceReady: { value: 0 },
       uSurfaceGain: { value: DEFAULT_SURFACE_GAIN },
+      uNight: { value: null as THREE.Texture | null },
+      uNightReady: { value: 0 },
+      uSunDirection: { value: new THREE.Vector3(1, 0, 0) },
       uHorizonSin: { value: 0 },
       uPixelAngle: { value: 0.002 },
     };
@@ -215,6 +240,27 @@ export class GlobeRenderer {
     this.overrideImagery = texture ? this.prepareImagery(texture) : null;
     this.overrideGain = gain;
     this.applyImagery();
+  }
+
+  /**
+   * Shade the night side of the surface with `texture` - the Earth unlit,
+   * equirectangular like the imagery - or stop with null. Where the night
+   * is comes from sunDirection, which the caller keeps current. The caller
+   * owns the texture and disposes of it after clearing it.
+   */
+  setNightSide(texture: THREE.Texture | null): void {
+    this.material.uniforms.uNight.value = texture ? this.prepareImagery(texture) : null;
+    this.material.uniforms.uNightReady.value = texture ? 1 : 0;
+  }
+
+  /** Unit vector from the Earth's centre toward the Sun, ECEF: written by whoever calls setNightSide. */
+  get sunDirection(): THREE.Vector3 {
+    return this.material.uniforms.uSunDirection.value as THREE.Vector3;
+  }
+
+  /** Whether the surface shows an image - the base or an override - rather than its flat colour. */
+  hasSurfaceImagery(): boolean {
+    return this.material.uniforms.uSurfaceReady.value === 1;
   }
 
   private prepareImagery(texture: THREE.Texture): THREE.Texture {

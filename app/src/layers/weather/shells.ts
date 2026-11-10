@@ -19,11 +19,11 @@ const DEG = Math.PI / 180;
 
 /**
  * Draw order among the weather shells, all between the globe's surface and
- * the coastlines: the night side lowest, then temperature, clouds over
- * both, rain over the clouds it falls from, wind on top.
+ * the coastlines: temperature, clouds over it, rain over the clouds it
+ * falls from, wind on top. The night side is under them all: the globe
+ * shades it into the surface itself.
  */
 export const WEATHER_ORDER = {
-  nightSide: RENDER_ORDER.surfaceShell,
   temperature: RENDER_ORDER.surfaceShell + 0.05,
   clouds: RENDER_ORDER.surfaceShell + 0.1,
   precipitation: RENDER_ORDER.surfaceShell + 0.15,
@@ -185,33 +185,17 @@ export function formatSubsolar(date: Date): string {
   return `${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}`;
 }
 
-/**
- * Night falls between the Sun 1° above the horizon and 12° below it - the
- * end of nautical twilight - so the terminator is the soft band it is from
- * orbit, not a line. The night side is the Black Marble image: dark land
- * and sea with the lights of towns, brightened to carry through the globe.
- */
-const NIGHT_SHADE = `
-  float night = smoothstep(${Math.sin(1 * DEG).toFixed(4)}, ${(-Math.sin(12 * DEG)).toFixed(4)}, dot(n, uSunDirection));
-  float glow = max(texel.r, max(texel.g, texel.b));
-  // Unlit ground stays dim; lit ground is lifted toward the sodium glow it has from orbit.
-  vec3 lights = texel.rgb * mix(0.6, 1.0, smoothstep(0.25, 0.6, glow)) + vec3(1.0, 0.78, 0.45) * smoothstep(0.3, 0.95, glow);
-  return vec4(min(lights, vec3(1.0)), night * mix(0.78, 1.0, smoothstep(0.3, 0.7, glow)));
-`;
-
 export const NIGHT_LIGHTS_ASSET = 'weather/night-lights.jpg';
 
+/**
+ * The night side with its city lights: the Black Marble image - dark land
+ * and sea with the lights of towns - where the Sun is down. The globe
+ * shades it into its own surface, so the interior in front of the night
+ * hemisphere keeps its light.
+ */
 export async function createNightSideLayer(context: LayerContext): Promise<LayerInstance> {
-  const sun = new THREE.Vector3();
-  const shell = new SurfaceShell(context.skyUniforms, {
-    name: 'night-side',
-    renderOrder: WEATHER_ORDER.nightSide,
-    uniforms: { uSunDirection: { value: sunDirection(context.now(), sun) } },
-    declarationsGlsl: 'uniform vec3 uSunDirection;',
-    shadeGlsl: NIGHT_SHADE,
-  });
-  shell.setTexture(await new THREE.TextureLoader().loadAsync(context.assetUrl(NIGHT_LIGHTS_ASSET)));
-  context.earthRoot.add(shell.object);
+  const texture = await new THREE.TextureLoader().loadAsync(context.assetUrl(NIGHT_LIGHTS_ASSET));
+  const sun = context.globe.sunDirection;
   let statusMinute = -1;
   const report = (date: Date): void => {
     const minute = Math.floor(date.getTime() / MINUTE_MS);
@@ -219,17 +203,19 @@ export async function createNightSideLayer(context: LayerContext): Promise<Layer
     statusMinute = minute;
     context.setStatus(`sun over ${formatSubsolar(date)}`, 'info');
   };
+  sunDirection(context.now(), sun);
   report(context.now());
   return {
     setVisible(visible) {
-      shell.object.visible = visible;
+      context.globe.setNightSide(visible ? texture : null);
     },
     update(frame) {
       sunDirection(frame.date, sun);
       report(frame.date);
     },
     dispose() {
-      shell.dispose();
+      context.globe.setNightSide(null);
+      texture.dispose();
     },
   };
 }

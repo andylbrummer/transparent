@@ -81,8 +81,8 @@ describe('temperatureTexels', () => {
 });
 
 describe('WEATHER_ORDER', () => {
-  it('stacks the shells between the globe and the coastlines, night side lowest and wind on top', () => {
-    const order = [WEATHER_ORDER.nightSide, WEATHER_ORDER.temperature, WEATHER_ORDER.clouds, WEATHER_ORDER.precipitation, WEATHER_ORDER.wind];
+  it('stacks the shells between the globe and the coastlines, wind on top', () => {
+    const order = [WEATHER_ORDER.temperature, WEATHER_ORDER.clouds, WEATHER_ORDER.precipitation, WEATHER_ORDER.wind];
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(new Set(order).size).toBe(order.length);
     expect(order[0]).toBeGreaterThan(RENDER_ORDER.sky);
