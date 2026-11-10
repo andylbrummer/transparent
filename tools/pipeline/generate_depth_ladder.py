@@ -23,6 +23,10 @@ Temperature:
     estimates for the core differ by a thousand kelvin and more. The app
     says so.
 
+BurnMan is GPL-2.0 or later. Nothing of it but these two tables of
+published numbers is read, at the commit pinned below, and what is baked
+is eight rows interpolated from them: no code and no text of BurnMan's.
+
 Both tables are read at each rung's depth by linear interpolation. Where
 a rung is a discontinuity - a table lists the depth twice, with different
 values - density and temperature are given on both sides, above then
@@ -43,7 +47,9 @@ from pathlib import Path
 from fetch_cache import cached_fetch
 from generate_geo import OUTPUT_DIR, write_json
 
-BURNMAN = "https://raw.githubusercontent.com/geodynamics/burnman/main/burnman/data/"
+# Pinned: the two tables as they stood on 2026-11-09.
+BURNMAN_COMMIT = "c3b396d091a5985f22fb3f981dd155957e667015"
+BURNMAN = f"https://raw.githubusercontent.com/geodynamics/burnman/{BURNMAN_COMMIT}/burnman/data/"
 EARTH_RADIUS_KM = 6371.0
 # Anderson's table puts the 670 km discontinuity at 671 km and the core-mantle boundary at 2886 km; PREM, at 670 and 2891.
 BOUNDARY_TOLERANCE_M = 6000.0
