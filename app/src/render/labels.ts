@@ -184,6 +184,11 @@ interface PlacedLabel {
   readonly offsetY: number;
   /** The offset in use this frame: offsetY, or its opposite where that side was taken. */
   shownOffsetY: number;
+  /** Where the element was last put, in tenths of a CSS pixel; NaN before the first time. */
+  shownX: number;
+  shownY: number;
+  twinX: number;
+  twinY: number;
   visible: boolean;
   /** Drawn faint: a sky name below the horizon. */
   dimmed: boolean;
@@ -281,6 +286,10 @@ export class LabelLayer {
         halfHeight: size.height / 2,
         offsetY: 0,
         shownOffsetY: 0,
+        shownX: NaN,
+        shownY: NaN,
+        twinX: NaN,
+        twinY: NaN,
         visible: false,
         dimmed: false,
         twin,
@@ -373,6 +382,10 @@ export class LabelLayer {
         halfHeight: (style.fontPx * 1.3 + LABEL_PADDING_PX) / 2,
         offsetY: style.offsetYPx ?? 0,
         shownOffsetY: style.offsetYPx ?? 0,
+        shownX: NaN,
+        shownY: NaN,
+        twinX: NaN,
+        twinY: NaN,
         visible: false,
         dimmed: false,
         twin,
@@ -479,7 +492,15 @@ export class LabelLayer {
 
       if (show) {
         this.boxes.push(x - placed.halfWidth, y - placed.halfHeight, x + placed.halfWidth, y + placed.halfHeight);
-        placed.element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
+        // Tenths of a pixel, and written only on a move: looking steadily at
+        // a view, no label's style is touched at all.
+        const tx = Math.round(x * 10);
+        const ty = Math.round(y * 10);
+        if (tx !== placed.shownX || ty !== placed.shownY) {
+          placed.shownX = tx;
+          placed.shownY = ty;
+          placed.element.style.transform = `translate(${(tx / 10).toFixed(1)}px, ${(ty / 10).toFixed(1)}px) translate(-50%, -50%)`;
+        }
         if (sky) {
           shownSky++;
           if (below) shownThroughEarth++;
@@ -513,9 +534,13 @@ export class LabelLayer {
       this.worldPoint(placed, rightEye).applyMatrix4(rightEye.matrixWorldInverse);
       if (this.view.z < 0) {
         this.view.applyMatrix4(rightEye.projectionMatrix);
-        const x = (this.view.x * 0.5 + 0.5) * width;
-        const y = (0.5 - this.view.y * 0.5) * height + placed.shownOffsetY;
-        twin.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
+        const tx = Math.round((this.view.x * 0.5 + 0.5) * width * 10);
+        const ty = Math.round(((0.5 - this.view.y * 0.5) * height + placed.shownOffsetY) * 10);
+        if (tx !== placed.twinX || ty !== placed.twinY) {
+          placed.twinX = tx;
+          placed.twinY = ty;
+          twin.style.transform = `translate(${(tx / 10).toFixed(1)}px, ${(ty / 10).toFixed(1)}px) translate(-50%, -50%)`;
+        }
         show = true;
       }
     }

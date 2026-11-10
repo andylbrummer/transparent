@@ -286,6 +286,28 @@ describe('LabelLayer groups', () => {
     layer.dispose();
   });
 
+  it('leaves a label that has not moved alone', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Still', priority: 0, position: surface(-119.5, 37.0) }] });
+    const camera = cameraAimedAt(-119.5, 37.0);
+    layer.update(camera, WIDTH, HEIGHT);
+    const element = parent.querySelector<HTMLElement>('.place-label')!;
+    const placedAt = element.style.transform;
+    expect(placedAt).toMatch(/^translate\(/);
+    // Any write would replace this marker.
+    element.style.transform = 'none';
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(element.style.transform).toBe('none');
+    // A move writes again.
+    camera.rotateY(0.01);
+    camera.updateMatrixWorld();
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(element.style.transform).toMatch(/^translate\(/);
+    expect(element.style.transform).not.toBe(placedAt);
+    layer.dispose();
+  });
+
   it('hangs a second name over the marker when the place under it is taken', () => {
     const parent = document.createElement('div');
     const layer = new LabelLayer(parent, []);
