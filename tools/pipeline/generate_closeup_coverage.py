@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Content pipeline for Transparent Earth: where Webb has looked.
+Content pipeline for Transparent Earth: where Webb and Euclid have looked.
 
 Writes app/public/sky/closeups.json: the patches of sky covered by ESA's
-picture survey (HiPS) of JWST NIRCam images, as HEALPix cells at one order. The app uses them twice: to mark on the sky
+picture surveys (HiPS) of JWST NIRCam images and of Euclid's deep fields,
+as HEALPix cells at one order. The app uses them twice: to mark on the sky
 where there is a close-up to zoom into, and to ask the tile server only
-for tiles that touch one - the survey covers about two square degrees of
-the 41,253 there are, and every other tile is a wasted request.
+for tiles that touch one - between them they cover under 0.5% of the
+41,253 square degrees there are, and every other tile is a wasted request.
 
 Source: each survey's own coverage map (its Multi-Order Coverage map,
 Moc.fits, IVOA MOC 1.1: a FITS binary table of NUNIQ cells), from the
@@ -17,6 +18,11 @@ output covers a little more sky than the surveys do, never less.
   Webb: JWST NIRCam imaging since the Early Release Observations,
     European JWST Archive (eJWST) at ESA/ESAC -
     https://skies.esac.esa.int/JWST/NIRCam_Imaging/
+  Euclid: colour (VIS + NISP) mosaics of the three Quick Release 1 deep
+    fields (South, Fornax, North; March 2025) and the 2026 outreach field
+    on the Galactic bulge, ESA Euclid Science Archive at ESAC -
+    https://cdn.skies.esac.esa.int/Q1-EDFS-R4-PNG-RGB_HIPS/ and siblings,
+    https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS/
 
 ESA's Hubble ACS survey is left out: its tiles are negatives (white sky)
 crossed by satellite trails and chip gaps, which drawn as added light
@@ -39,6 +45,10 @@ from fetch_cache import cached_fetch
 
 SURVEYS = {
     "jwst": "https://skies.esac.esa.int/JWST/NIRCam_Imaging",
+    "euclid-edfs": "https://cdn.skies.esac.esa.int/Q1-EDFS-R4-PNG-RGB_HIPS",
+    "euclid-edff": "https://cdn.skies.esac.esa.int/Q1-EDFF-R4-PNG-RGB_HIPS",
+    "euclid-edfn": "https://cdn.skies.esac.esa.int/Q1-EDFN-R4-PNG-RGB_HIPS",
+    "euclid-egbs": "https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS",
 }
 # Order 8 cells are 13.7' across: fine enough that a tile request outside every
 # patch can be skipped, coarse enough that the file stays small.

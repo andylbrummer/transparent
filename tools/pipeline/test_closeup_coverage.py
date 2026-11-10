@@ -3,8 +3,8 @@
 Data checks for generate_closeup_coverage.py's output.
 
 The cells are sorted, unique and in range, cover at least the area the
-coverage maps state and not much more, and include famous fields Webb
-is known to have imaged - placed with healpy, not with the
+coverage maps state and not much more, and include fields Webb is known
+to have imaged and the centres of Euclid's deep fields - placed with healpy, not with the
 script's own arithmetic - while leaving most of the sky out.
 
 Usage:
@@ -26,17 +26,35 @@ WEBB_FIELDS = {
     "Stephan's Quintet (NIRCam, 2022)": (338.9894, 33.9597),
     "Pillars of Creation, M16 (NIRCam, 2022)": (274.7000, -13.8370),
 }
+# Centres of Euclid's deep fields as the mission's Q1 release gives them (Euclid Collaboration: Aussel et al. 2025).
+EUCLID_FIELDS = {
+    "euclid-edfs": {"Euclid Deep Field South": (61.24, -48.42)},
+    "euclid-edff": {"Euclid Deep Field Fornax": (52.93, -28.09)},
+    "euclid-edfn": {"Euclid Deep Field North": (269.73, 66.02)},
+    "euclid-egbs": {},
+}
+# Each survey's moc_sky_fraction from its HiPS properties file, read 2026-11-10: the bake's area must agree.
+# Webb's states 1.025e-5 (0.42 deg²) while its Moc.fits, dated the same minute, sums to 2.37 deg²; the same sum
+# matches all four Euclid files, so the stated fraction is taken as stale and not checked.
+SKY_FRACTION = {
+    "jwst": None,
+    "euclid-edfs": 1.357e-3,
+    "euclid-edff": 7.266e-4,
+    "euclid-edfn": 1.132e-3,
+    "euclid-egbs": 1.254e-4,
+}
 
 
 def main() -> None:
     data = json.loads(OUTPUT.read_text())
-    check(OUTPUT.stat().st_size < 10_000, f"{OUTPUT.stat().st_size / 1024:.0f} KB")
+    check(OUTPUT.stat().st_size < 20_000, f"{OUTPUT.stat().st_size / 1024:.0f} KB")
     order = data["order"]
     nside = 2**order
     cell_area = 4 * math.pi * (180 / math.pi) ** 2 / hp.nside2npix(nside)
     check(data["frame"] == "icrs", "cells are in ICRS")
 
-    for name, fields in (("jwst", WEBB_FIELDS),):
+    check(sorted(data["surveys"]) == sorted(SKY_FRACTION), "the expected surveys, no more")
+    for name, fields in (("jwst", WEBB_FIELDS), *EUCLID_FIELDS.items()):
         survey = data["surveys"][name]
         deltas = survey["deltas"]
         cells = []
@@ -47,6 +65,9 @@ def main() -> None:
         check(len(cells) == survey["cells"], f"{name}: {len(cells)} cells as stated")
         check(all(b > a for a, b in zip(cells, cells[1:])), f"{name}: cells sorted and unique")
         check(0 <= cells[0] and cells[-1] < hp.nside2npix(nside), f"{name}: cells within order {order}")
+        if SKY_FRACTION[name] is not None:
+            stated = SKY_FRACTION[name] * 41_253
+            check(abs(survey["areaDeg2"] - stated) < 0.01 * stated, f"{name}: {survey['areaDeg2']} deg² as the survey states ({stated:.2f})")
         covered = len(cells) * cell_area
         # Coarsening can only add sky; patches far smaller than a cell can add a lot of it, but not without limit.
         check(survey["areaDeg2"] <= covered <= 60 * survey["areaDeg2"], f"{name}: {covered:.1f} deg² of cells for {survey['areaDeg2']} deg² of coverage")
