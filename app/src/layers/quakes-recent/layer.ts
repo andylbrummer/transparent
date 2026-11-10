@@ -7,8 +7,7 @@ const quakesRecent: LayerDefinition = {
   section: 'Inside the Earth',
   order: 10,
   legend: depthRampGradient(700),
-  caption:
-    'rings at the hypocentre · depth 0 – 700 km · M4.5+ of the past 30 days, M2.5+ of the past 7 (small ones mostly from US networks) · the last 24 h ripple',
+  caption: 'depth 0 – 700 km · M4.5+ past 30 days, M2.5+ past 7 (mostly US) · last 24 h ripple',
   credits: [
     {
       what: 'Recent earthquakes (live)',

@@ -7,7 +7,7 @@ const quakesNotable: LayerDefinition = {
   section: 'Inside the Earth',
   order: 11,
   legend: depthRampGradient(700),
-  caption: 'every M8.5+ since 1900, and San Francisco 1906 and Türkiye 2023 · rings at the hypocentre · depth 0 – 700 km',
+  caption: 'depth 0 – 700 km · every M8.5+, and San Francisco 1906 and Türkiye 2023',
   credits: [
     {
       what: 'Notable earthquakes: magnitudes, and locations since 1973',
