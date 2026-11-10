@@ -379,5 +379,53 @@ Checked:
   and Sahul shelves joining Asia to Borneo and Australia to New Guinea) and
   on a phone-sized screen (`~/review-loop/shots/ice-age/`, 4 shots);
   16.7 ms.
-- Not checked: other time-slices in the same dataset (17 more, back to
-  3.6 Ma — not baked); stereo.
+- Not checked: stereo. (The other 17 time-slices are now baked; see the
+  next section.)
+
+## Ice sheets through time (added 2026-11-10)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ice sheets through time (`ice-sheets-time`, lazy, off by default) | Northern Hemisphere ice-sheet extent in all 18 of the paper's time-slices: the LGM, 30, 35, 40 and 45 ka, MIS 4, 5a–5d, 6, 8, 10, 12, 16, 20–24, the early Matuyama and late Gauss chrons (back to 3.59 Ma); best estimate of each | Batchelor et al. (2019), as above; age ranges from the repository's README | As above: article CC BY 4.0, **repository states no licence** | https://osf.io/7jen3/ | Baked: `generate_ice_sheets_through_time.py` → `app/public/geo/ice-sheets/*.png` (18 × 9–13 kB, 197 kB in all), `ice-sheets.json` | Batchelor et al. (2019) |
+
+How it is drawn, and what that means:
+
+- **One slice at a time**, stepped through with the deep-time control (the
+  slices are irregular in time, so the control steps through slices, not
+  years); `?ice=<slice id>` opens on one. Each picture is fetched when first
+  shown. Exclusive with the LGM layer above, which adds the emerged land.
+- **Best estimates only.** The repository also has minimum and maximum
+  hypotheses for the 17 older slices; not drawn. Each slice is the
+  largest ice within its span except 45 ka, MIS 5a and 5c, drawn at peak
+  warmth — the control says which. Where a slice had no evidence for a
+  region the authors borrowed another slice's ice with a similar d18O value;
+  the largest extent may have come at different times in different places.
+  No sea level is drawn for these slices (none is in the dataset).
+- **Projection**: the 17 older files are in north-polar Lambert azimuthal
+  equal-area on the WGS 84 ellipsoid (their `.prj` files are asserted). No
+  projection library is in the pipeline's environment, so the forward
+  formula is written out (Snyder 1987) and polygons are drawn on a polar
+  raster that each output pixel samples: nothing crossing the date line or
+  circling the pole needs cutting.
+
+Checked (`tools/pipeline/test_ice_sheets_through_time.py`, 49):
+
+- The projection against the ellipsoid itself: the area inside the
+  projected circle at 80°, 60° and 40° equals the polar cap integrated on
+  WGS 84 to 1e-6; longitudes land the right way round.
+- The LGM drawn through the projection (26.1 million km²) agrees with the
+  LGM layer drawn straight from longitude and latitude (26.2).
+- MIS 6 has more ice than the LGM, as the paper finds; the three warm
+  slices under half the LGM's.
+- Places: ice over central Greenland in all 18 slices; over Hudson Bay in
+  the eight full glacials; over Cambridge in MIS 12 (the Anglian) but not at
+  the LGM; never over Paris, Beijing, Washington or Tokyo; MIS 6's north-east
+  Asian ice continuous across the date line.
+- **One check was dropped, not bent**: Utrecht under the MIS 6 (Saalian)
+  ice, whose push moraine is there. The best estimate puts the margin 22 km
+  north of the city; the README says the maps are for general extent, not
+  local study, so a point that close to a margin tests nothing.
+- `ice-sheets-time.test.ts` (9): the baked file, the labels (age ranges in
+  ka or Ma, read out in years), the chip, the URL parameter, the switch.
+- Looked at (`~/review-loop/shots/ice-sheets/`): the LGM, MIS 6 and MIS 5a
+  through the planet from the antipode of Hudson Bay, with the control.

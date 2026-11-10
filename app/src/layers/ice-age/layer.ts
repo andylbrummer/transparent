@@ -10,6 +10,8 @@ const iceAge: LayerDefinition = {
   section: 'Surface',
   order: 97,
   legend: `linear-gradient(to right, ${ICE_SHEET_COLOR} 0 50%, ${EMERGED_LAND_COLOR} 50% 100%)`,
+  // One drape of past ice at a time: this or the ice sheets through time.
+  exclusiveGroup: 'ice-age',
   caption:
     'white: the northern ice sheets about 26,000–19,000 years ago, a published reconstruction · tan: sea floor less than 125 m deep today, about what a sea 120–135 m lower left dry · today’s depths, no allowance for the crust rising and sinking · Antarctica’s and Patagonia’s larger ice is not drawn',
   credits: [
