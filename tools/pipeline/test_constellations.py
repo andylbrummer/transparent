@@ -62,14 +62,11 @@ def main() -> None:
         for i in range(0, len(polyline), 2)
     }
     misses = sorted(((nearest_star_deg(ra, dec), ra, dec) for ra, dec in vertices), reverse=True)
-    far = [miss for miss in misses if miss[0] > 0.1]
-    # The one exception is not the figure's fault: xi UMa (HIP 55203, V 3.8), a close binary for which the
-    # Hipparcos main catalogue gives no position, so stars.json lacks it. Ursa Major's hind foot ends there.
-    xi_uma = (169.547, 31.531)
+    # Every corner, Ursa Major's hind foot included: xi UMa has no Hipparcos astrometry, and
+    # generate_stars.py places it from SIMBAD.
     check(
-        [(round(ra, 3), round(dec, 3)) for _, ra, dec in far] == [xi_uma],
-        f"all {len(vertices)} figure corners sit on a catalogue star, but for xi UMa "
-        f"(worst other miss {misses[len(far)][0] * 60:.1f} arcmin)",
+        misses[0][0] < 0.1,
+        f"all {len(vertices)} figure corners sit on a catalogue star (worst miss {misses[0][0] * 60:.1f} arcmin)",
     )
 
     def joined(figure_name: str, star_a: str, star_b: str) -> bool:

@@ -110,8 +110,7 @@ from documentation:
 ### Baked data (`tools/pipeline/test_*.py`)
 
 - `test_constellations.py`: 89 figures (Serpens in two parts), every
-  corner on a star of `stars.json` within 0.1° (one documented
-  exception, below), Orion's belt, the Big Dipper, Crux, Cassiopeia and
+  corner on a star of `stars.json` within 0.1°, Orion's belt, the Big Dipper, Crux, Cassiopeia and
   Scorpius joined star to star; boundaries against VI/49's own J2000
   table and d3-celestial's Crux corner.
 - `test_milkyway.py`: the bulge, the Scutum and Cygnus clouds, the Great
@@ -154,11 +153,10 @@ from documentation:
 - **Aberration and nutation** (≤ 20″ and ≤ 17″) are left out for
   everything in the sky alike, so relative positions are right and
   absolute azimuth/elevation is within 0.01°.
-- **ξ Ursae Majoris is missing from the star layer** (`stars.json`): the
-  Hipparcos main catalogue has no position for HIP 55203, a close binary
-  of V 3.8. Ursa Major's hind foot therefore ends on an empty spot. This
-  belongs to the stars pipeline, not this slice; other bright Hipparcos
-  entries without astrometry may be missing for the same reason.
+- **ξ Ursae Majoris** (HIP 55203, V 3.8) and six other close binaries
+  have no position in the Hipparcos main catalogue. The stars pipeline
+  now places them from SIMBAD (see `docs/data-sources/deep-sky.md`), so
+  Ursa Major's hind foot ends on a star.
 - **Not built**: the Galilean moons and Titan (no compact theory was
   verified), planet discs, Pluto, GOES CCOR-2/SWFO-L1 imagery (SWPC
   serves it at `/images/animations/ccor2/`; not evaluated).

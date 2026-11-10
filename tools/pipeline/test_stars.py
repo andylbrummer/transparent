@@ -62,6 +62,22 @@ def main() -> None:
         check(sep < 8, f"{name} within 8 arcsec of its 2026 place ({sep:.1f} arcsec)")
         check(abs(data["mag"][i] / 100 - v) < 0.15, f"{name} magnitude {data['mag'][i] / 100} ~ {v}")
 
+    # Close binaries the Hipparcos main catalogue lists with a magnitude but no position, placed from SIMBAD.
+    # Reference: (ra, dec J2000, pmRA*cos(dec), pmDec mas/yr, V) of the Bright Star Catalogue's brighter
+    # component (CDS V/50), an independent source; V is Hipparcos's combined magnitude of the pair.
+    binaries = {
+        "xi UMa": (169.54583, 31.52917, -430.0, -586.0, 3.79),  # HR 4375: 11 18 11.0 +31 31 45
+        "xi Sco": (241.09208, -11.37306, -60.0, -29.0, 4.16),  # HR 5978: 16 04 22.1 -11 22 23
+    }
+    for name, (ra0, dec0, pm_ra, pm_dec, v) in binaries.items():
+        dec = dec0 + pm_dec * years / 3.6e6
+        ra = ra0 + pm_ra * years / 3.6e6 / math.cos(math.radians(dec0))
+        best = min(range(count), key=lambda i: separation_arcsec(data["ra"][i] / quantum, data["dec"][i] / quantum, ra, dec))
+        sep = separation_arcsec(data["ra"][best] / quantum, data["dec"][best] / quantum, ra, dec)
+        check(sep < 8, f"{name} is present, within 8 arcsec of its 2026 place ({sep:.1f} arcsec)")
+        check(abs(data["mag"][best] / 100 - v) < 0.05, f"{name} magnitude {data['mag'][best] / 100} ~ {v}")
+    check(count == 15544, f"{count} stars: all 15,544 Hipparcos entries of V <= 7, the 7 without astrometry included")
+
     # The sky is not uniform: the Milky Way's plane holds more stars than its poles.
     def galactic_latitude(ra_deg: float, dec_deg: float) -> float:
         ra, dec = math.radians(ra_deg), math.radians(dec_deg)
