@@ -7,7 +7,7 @@
  * The panel doubles as the legend: each switch shows the colours it draws.
  */
 
-import { OUTLINE_STYLES, type OutlineLayerName } from '../render/outlines';
+import { OUTLINE_STYLES, SPREADING_RIBBON_MYR, spreadingRampGradient, type OutlineLayerName } from '../render/outlines';
 import type { LabelKind } from '../render/labels';
 import { PLUME_COLOR, depthRampGradient, flowGradient } from '../render/interior';
 import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
@@ -87,7 +87,15 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     section: 'Surface lines',
     target: { lines: BOUNDARIES },
     legend: swatches(lineColors(BOUNDARIES)),
-    caption: 'ridge · transform · collision · subduction',
+    caption: 'ridge · transform · collision · subduction, teeth on the overriding plate',
+  },
+  {
+    id: 'spreading',
+    label: 'Seafloor spreading',
+    section: 'Surface lines',
+    target: { lines: ['spreading'] },
+    legend: spreadingRampGradient(),
+    caption: `ribbon = seafloor made in ${SPREADING_RIBBON_MYR} Myr at today's rate · colour 0 – 160 mm/yr · arrows: the plates parting`,
   },
   {
     id: 'faults',

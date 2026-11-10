@@ -20,7 +20,7 @@ export const BUILTIN_CREDITS: readonly Credit[] = [
     url: 'https://www.naturalearthdata.com/',
   },
   {
-    what: 'Plate boundaries and plate names',
+    what: 'Plate boundaries, spreading rates and plate names',
     source: 'Bird (2003) PB2002; GIS conversion by H. Ahlenius, Nordpil',
     licence: 'ODC-By 1.0',
     url: 'https://github.com/fraxen/tectonicplates',
