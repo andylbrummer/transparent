@@ -1,0 +1,858 @@
+{
+ "source": "International Meteor Organization, 2026 Meteor Shower Calendar (ed. J. Rendtel), Table 5: Working List of Visual Meteor Showers",
+ "url": "https://www.imo.net/files/meteor-shower/cal2026.pdf",
+ "year": 2026,
+ "showers": [
+  {
+   "code": "QUA",
+   "iau": 10,
+   "name": "Quadrantids",
+   "start": [
+    12,
+    28
+   ],
+   "end": [
+    1,
+    12
+   ],
+   "peak": [
+    1,
+    3
+   ],
+   "solarLongitude": 283.15,
+   "ra": 230,
+   "dec": 49,
+   "speedKmS": 41,
+   "r": 2.1,
+   "zhr": 80
+  },
+  {
+   "code": "GUM",
+   "iau": 404,
+   "name": "γ-Ursae Minorids",
+   "start": [
+    1,
+    10
+   ],
+   "end": [
+    1,
+    22
+   ],
+   "peak": [
+    1,
+    18
+   ],
+   "solarLongitude": 298.0,
+   "ra": 228,
+   "dec": 67,
+   "speedKmS": 31,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "ACE",
+   "iau": 102,
+   "name": "α-Centaurids",
+   "start": [
+    1,
+    31
+   ],
+   "end": [
+    2,
+    20
+   ],
+   "peak": [
+    2,
+    8
+   ],
+   "solarLongitude": 319.4,
+   "ra": 211,
+   "dec": -58,
+   "speedKmS": 58,
+   "r": 2.0,
+   "zhr": 6
+  },
+  {
+   "code": "LYR",
+   "iau": 6,
+   "name": "April Lyrids",
+   "start": [
+    4,
+    14
+   ],
+   "end": [
+    4,
+    30
+   ],
+   "peak": [
+    4,
+    22
+   ],
+   "solarLongitude": 32.32,
+   "ra": 271,
+   "dec": 34,
+   "speedKmS": 49,
+   "r": 2.1,
+   "zhr": 18
+  },
+  {
+   "code": "PPU",
+   "iau": 137,
+   "name": "π-Puppids",
+   "start": [
+    4,
+    15
+   ],
+   "end": [
+    4,
+    28
+   ],
+   "peak": [
+    4,
+    24
+   ],
+   "solarLongitude": 33.5,
+   "ra": 110,
+   "dec": -45,
+   "speedKmS": 18,
+   "r": 2.0,
+   "zhr": null
+  },
+  {
+   "code": "ETA",
+   "iau": 31,
+   "name": "η-Aquariids",
+   "start": [
+    4,
+    19
+   ],
+   "end": [
+    5,
+    28
+   ],
+   "peak": [
+    5,
+    6
+   ],
+   "solarLongitude": 45.5,
+   "ra": 338,
+   "dec": -1,
+   "speedKmS": 66,
+   "r": 2.4,
+   "zhr": 50
+  },
+  {
+   "code": "ELY",
+   "iau": 145,
+   "name": "η-Lyrids",
+   "start": [
+    5,
+    3
+   ],
+   "end": [
+    5,
+    14
+   ],
+   "peak": [
+    5,
+    11
+   ],
+   "solarLongitude": 50.0,
+   "ra": 291,
+   "dec": 43,
+   "speedKmS": 43,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "ARI",
+   "iau": 171,
+   "name": "Daytime Arietids",
+   "start": [
+    5,
+    14
+   ],
+   "end": [
+    6,
+    24
+   ],
+   "peak": [
+    6,
+    7
+   ],
+   "solarLongitude": 76.7,
+   "ra": 43,
+   "dec": 24,
+   "speedKmS": 38,
+   "r": 2.8,
+   "zhr": 30
+  },
+  {
+   "code": "JBO",
+   "iau": 170,
+   "name": "June Bootids",
+   "start": [
+    6,
+    22
+   ],
+   "end": [
+    7,
+    2
+   ],
+   "peak": [
+    6,
+    22
+   ],
+   "solarLongitude": 90.3,
+   "ra": 221,
+   "dec": 48,
+   "speedKmS": 18,
+   "r": 2.2,
+   "zhr": null
+  },
+  {
+   "code": "JPE",
+   "iau": 175,
+   "name": "July Pegasids",
+   "start": [
+    7,
+    1
+   ],
+   "end": [
+    7,
+    20
+   ],
+   "peak": [
+    7,
+    10
+   ],
+   "solarLongitude": 108.0,
+   "ra": 347,
+   "dec": 11,
+   "speedKmS": 63,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "GDR",
+   "iau": 184,
+   "name": "July γ-Draconids",
+   "start": [
+    7,
+    25
+   ],
+   "end": [
+    7,
+    31
+   ],
+   "peak": [
+    7,
+    28
+   ],
+   "solarLongitude": 125.13,
+   "ra": 280,
+   "dec": 51,
+   "speedKmS": 27,
+   "r": 3.0,
+   "zhr": 5
+  },
+  {
+   "code": "SDA",
+   "iau": 5,
+   "name": "Southern δ-Aquariids",
+   "start": [
+    7,
+    12
+   ],
+   "end": [
+    8,
+    23
+   ],
+   "peak": [
+    7,
+    31
+   ],
+   "solarLongitude": 128.0,
+   "ra": 340,
+   "dec": -16,
+   "speedKmS": 41,
+   "r": 2.5,
+   "zhr": 25
+  },
+  {
+   "code": "CAP",
+   "iau": 1,
+   "name": "α-Capricornids",
+   "start": [
+    7,
+    3
+   ],
+   "end": [
+    8,
+    15
+   ],
+   "peak": [
+    7,
+    31
+   ],
+   "solarLongitude": 128.0,
+   "ra": 307,
+   "dec": -10,
+   "speedKmS": 23,
+   "r": 2.5,
+   "zhr": 5
+  },
+  {
+   "code": "ERI",
+   "iau": 191,
+   "name": "η-Eridanids",
+   "start": [
+    7,
+    31
+   ],
+   "end": [
+    8,
+    19
+   ],
+   "peak": [
+    8,
+    7
+   ],
+   "solarLongitude": 135.0,
+   "ra": 41,
+   "dec": -11,
+   "speedKmS": 64,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "PER",
+   "iau": 7,
+   "name": "Perseids",
+   "start": [
+    7,
+    17
+   ],
+   "end": [
+    8,
+    24
+   ],
+   "peak": [
+    8,
+    13
+   ],
+   "solarLongitude": 140.0,
+   "ra": 48,
+   "dec": 58,
+   "speedKmS": 59,
+   "r": 2.2,
+   "zhr": 100
+  },
+  {
+   "code": "KCG",
+   "iau": 12,
+   "name": "κ-Cygnids",
+   "start": [
+    8,
+    3
+   ],
+   "end": [
+    8,
+    28
+   ],
+   "peak": [
+    8,
+    17
+   ],
+   "solarLongitude": 144.0,
+   "ra": 286,
+   "dec": 59,
+   "speedKmS": 23,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "AUR",
+   "iau": 206,
+   "name": "Aurigids",
+   "start": [
+    8,
+    28
+   ],
+   "end": [
+    9,
+    5
+   ],
+   "peak": [
+    9,
+    1
+   ],
+   "solarLongitude": 158.6,
+   "ra": 91,
+   "dec": 39,
+   "speedKmS": 66,
+   "r": 2.5,
+   "zhr": 6
+  },
+  {
+   "code": "SPE",
+   "iau": 208,
+   "name": "September ε-Perseids",
+   "start": [
+    9,
+    5
+   ],
+   "end": [
+    9,
+    21
+   ],
+   "peak": [
+    9,
+    9
+   ],
+   "solarLongitude": 166.7,
+   "ra": 48,
+   "dec": 40,
+   "speedKmS": 64,
+   "r": 2.5,
+   "zhr": 8
+  },
+  {
+   "code": "SLY",
+   "iau": 81,
+   "name": "September Lyncids",
+   "start": [
+    9,
+    10
+   ],
+   "end": [
+    10,
+    8
+   ],
+   "peak": [
+    9,
+    13
+   ],
+   "solarLongitude": 170.0,
+   "ra": 113,
+   "dec": 56,
+   "speedKmS": 60,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "DSX",
+   "iau": 221,
+   "name": "Daytime Sextantids",
+   "start": [
+    9,
+    20
+   ],
+   "end": [
+    10,
+    6
+   ],
+   "peak": [
+    10,
+    1
+   ],
+   "solarLongitude": 188.0,
+   "ra": 156,
+   "dec": -2,
+   "speedKmS": 32,
+   "r": 2.5,
+   "zhr": 5
+  },
+  {
+   "code": "OCT",
+   "iau": 281,
+   "name": "October Camelopardalids",
+   "start": [
+    10,
+    5
+   ],
+   "end": [
+    10,
+    6
+   ],
+   "peak": [
+    10,
+    6
+   ],
+   "solarLongitude": 192.58,
+   "ra": 164,
+   "dec": 79,
+   "speedKmS": 47,
+   "r": 2.5,
+   "zhr": 5
+  },
+  {
+   "code": "DRA",
+   "iau": 9,
+   "name": "Draconids",
+   "start": [
+    10,
+    6
+   ],
+   "end": [
+    10,
+    10
+   ],
+   "peak": [
+    10,
+    9
+   ],
+   "solarLongitude": 195.4,
+   "ra": 262,
+   "dec": 54,
+   "speedKmS": 20,
+   "r": 2.6,
+   "zhr": 5
+  },
+  {
+   "code": "EGE",
+   "iau": 23,
+   "name": "ε-Geminids",
+   "start": [
+    10,
+    14
+   ],
+   "end": [
+    10,
+    27
+   ],
+   "peak": [
+    10,
+    18
+   ],
+   "solarLongitude": 205.0,
+   "ra": 102,
+   "dec": 27,
+   "speedKmS": 70,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "ORI",
+   "iau": 8,
+   "name": "Orionids",
+   "start": [
+    10,
+    2
+   ],
+   "end": [
+    11,
+    7
+   ],
+   "peak": [
+    10,
+    21
+   ],
+   "solarLongitude": 208.0,
+   "ra": 95,
+   "dec": 16,
+   "speedKmS": 66,
+   "r": 2.5,
+   "zhr": 20
+  },
+  {
+   "code": "LMI",
+   "iau": 22,
+   "name": "Leonis Minorids",
+   "start": [
+    10,
+    19
+   ],
+   "end": [
+    10,
+    27
+   ],
+   "peak": [
+    10,
+    24
+   ],
+   "solarLongitude": 211.0,
+   "ra": 162,
+   "dec": 37,
+   "speedKmS": 62,
+   "r": 3.0,
+   "zhr": 2
+  },
+  {
+   "code": "STA",
+   "iau": 2,
+   "name": "Southern Taurids",
+   "start": [
+    9,
+    20
+   ],
+   "end": [
+    11,
+    20
+   ],
+   "peak": [
+    11,
+    5
+   ],
+   "solarLongitude": 223.0,
+   "ra": 52,
+   "dec": 15,
+   "speedKmS": 27,
+   "r": 2.3,
+   "zhr": 7
+  },
+  {
+   "code": "NTA",
+   "iau": 17,
+   "name": "Northern Taurids",
+   "start": [
+    10,
+    20
+   ],
+   "end": [
+    12,
+    10
+   ],
+   "peak": [
+    11,
+    12
+   ],
+   "solarLongitude": 230.0,
+   "ra": 58,
+   "dec": 22,
+   "speedKmS": 29,
+   "r": 2.3,
+   "zhr": 5
+  },
+  {
+   "code": "LEO",
+   "iau": 13,
+   "name": "Leonids",
+   "start": [
+    11,
+    6
+   ],
+   "end": [
+    11,
+    30
+   ],
+   "peak": [
+    11,
+    17
+   ],
+   "solarLongitude": 235.27,
+   "ra": 152,
+   "dec": 22,
+   "speedKmS": 71,
+   "r": 2.5,
+   "zhr": 15
+  },
+  {
+   "code": "AMO",
+   "iau": 246,
+   "name": "α-Monocerotids",
+   "start": [
+    11,
+    15
+   ],
+   "end": [
+    11,
+    25
+   ],
+   "peak": [
+    11,
+    22
+   ],
+   "solarLongitude": 239.32,
+   "ra": 117,
+   "dec": 1,
+   "speedKmS": 65,
+   "r": 2.4,
+   "zhr": null
+  },
+  {
+   "code": "NOO",
+   "iau": 250,
+   "name": "November Orionids",
+   "start": [
+    11,
+    13
+   ],
+   "end": [
+    12,
+    6
+   ],
+   "peak": [
+    11,
+    28
+   ],
+   "solarLongitude": 246.0,
+   "ra": 91,
+   "dec": 16,
+   "speedKmS": 44,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "PHO",
+   "iau": 254,
+   "name": "Phoenicids",
+   "start": [
+    12,
+    1
+   ],
+   "end": [
+    12,
+    5
+   ],
+   "peak": [
+    12,
+    2
+   ],
+   "solarLongitude": 249.5,
+   "ra": 8,
+   "dec": -27,
+   "speedKmS": 15,
+   "r": 2.8,
+   "zhr": null
+  },
+  {
+   "code": "PUP",
+   "iau": 301,
+   "name": "Puppid-Velids",
+   "start": [
+    12,
+    1
+   ],
+   "end": [
+    12,
+    15
+   ],
+   "peak": [
+    12,
+    7
+   ],
+   "solarLongitude": 255.0,
+   "ra": 123,
+   "dec": -45,
+   "speedKmS": 44,
+   "r": 2.9,
+   "zhr": 10
+  },
+  {
+   "code": "MON",
+   "iau": 19,
+   "name": "Monocerotids",
+   "start": [
+    12,
+    1
+   ],
+   "end": [
+    12,
+    19
+   ],
+   "peak": [
+    12,
+    9
+   ],
+   "solarLongitude": 257.0,
+   "ra": 100,
+   "dec": 8,
+   "speedKmS": 41,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "HYD",
+   "iau": 16,
+   "name": "σ-Hydrids",
+   "start": [
+    12,
+    3
+   ],
+   "end": [
+    12,
+    20
+   ],
+   "peak": [
+    12,
+    9
+   ],
+   "solarLongitude": 257.0,
+   "ra": 125,
+   "dec": 2,
+   "speedKmS": 58,
+   "r": 3.0,
+   "zhr": 7
+  },
+  {
+   "code": "GEM",
+   "iau": 4,
+   "name": "Geminids",
+   "start": [
+    12,
+    4
+   ],
+   "end": [
+    12,
+    20
+   ],
+   "peak": [
+    12,
+    14
+   ],
+   "solarLongitude": 262.2,
+   "ra": 112,
+   "dec": 33,
+   "speedKmS": 35,
+   "r": 2.6,
+   "zhr": 150
+  },
+  {
+   "code": "COM",
+   "iau": 20,
+   "name": "Comae Berenicids",
+   "start": [
+    12,
+    4
+   ],
+   "end": [
+    1,
+    30
+   ],
+   "peak": [
+    12,
+    23
+   ],
+   "solarLongitude": 271.0,
+   "ra": 164,
+   "dec": 29,
+   "speedKmS": 65,
+   "r": 3.0,
+   "zhr": 3
+  },
+  {
+   "code": "URS",
+   "iau": 15,
+   "name": "Ursids",
+   "start": [
+    12,
+    17
+   ],
+   "end": [
+    12,
+    26
+   ],
+   "peak": [
+    12,
+    22
+   ],
+   "solarLongitude": 270.7,
+   "ra": 217,
+   "dec": 76,
+   "speedKmS": 33,
+   "r": 2.8,
+   "zhr": 10
+  }
+ ]
+}
