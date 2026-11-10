@@ -8,7 +8,8 @@
  */
 
 import * as THREE from 'three';
-import { GlobeRenderer, BLUE_MARBLE_URL } from './render/globe';
+import { GlobeRenderer, BLUE_MARBLE_TILES, BLUE_MARBLE_WIDTH } from './render/globe';
+import { composeGlobe } from './layers/weather/gibs-tiles';
 import { OutlineLayer, type OutlineData } from './render/outlines';
 import { CompassBar } from './render/compass-bar';
 import { LabelLayer, type LabelData } from './render/labels';
@@ -162,16 +163,14 @@ export function init(): App | null {
     }
   );
   const loadLiveImagery = (): void => {
-    imageryLoader.load(
-      BLUE_MARBLE_URL,
-      (texture) => {
-        globe.setSurfaceImagery(texture);
+    composeGlobe(BLUE_MARBLE_TILES, null, BLUE_MARBLE_WIDTH).then(
+      (canvas) => {
+        globe.setSurfaceImagery(new THREE.CanvasTexture(canvas));
         standIn?.dispose();
         standIn = null;
         imageryStatus = 'ready';
         renderHud();
       },
-      undefined,
       () => {
         imageryStatus = standIn ? 'offline' : 'failed';
         renderHud();

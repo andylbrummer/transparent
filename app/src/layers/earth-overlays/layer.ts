@@ -44,7 +44,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'JPL MUR MEaSUREs Project, GHRSST Level 4 MUR 0.25deg Global Foundation Sea Surface Temperature Analysis (v4.2), NASA/JPL PO.DAAC, doi:10.5067/GHM25-4FJ42'
       ),
     ],
-    spec: { product: 'GHRSST_L4_MUR25_Sea_Ice_Concentration', time: 'latest', cadence: 'daily' },
+    spec: { product: 'GHRSST_L4_MUR25_Sea_Ice_Concentration', matrixSet: '2km', time: 'latest', cadence: 'daily' },
   },
   {
     id: 'overlay-snow',
@@ -59,7 +59,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'MODIS/Terra Snow Cover Monthly L3 Global 0.05Deg CMG V061 (MOD10CM), NASA National Snow and Ice Data Center DAAC, doi:10.5067/MODIS/MOD10CM.061'
       ),
     ],
-    spec: { product: 'MODIS_Terra_L3_Snow_Cover_Monthly_Average_Pct', time: 'latest', cadence: 'monthly', shade: 'snow' },
+    spec: { product: 'MODIS_Terra_L3_Snow_Cover_Monthly_Average_Pct', matrixSet: '2km', time: 'latest', cadence: 'monthly', shade: 'snow' },
   },
   {
     id: 'overlay-fires',
@@ -73,7 +73,8 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'NASA LANCE / FIRMS, VIIRS NOAA-20 (JPSS-1) 375m I-Band Active Fire Product NRT (VJ114IMGT_NRT), doi:10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002'
       ),
     ],
-    spec: { product: 'VIIRS_NOAA20_Thermal_Anomalies_375m_All', time: 'complete-day', cadence: 'daily', shade: 'points', width: 4096 },
+    // GIBS tiles the fire detections only as vectors: WMS draws them.
+    spec: { product: 'VIIRS_NOAA20_Thermal_Anomalies_375m_All', matrixSet: 'wms', time: 'complete-day', cadence: 'daily', shade: 'points', width: 4096 },
   },
   {
     id: 'overlay-aerosol',
@@ -87,7 +88,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'NASA Global Modeling and Assimilation Office (GMAO), MERRA-2 tavgM_2d_aer_Nx V5.12.4 (M2TMNXAER), NASA GES DISC, doi:10.5067/FH9A0MLJPC7N'
       ),
     ],
-    spec: { product: 'MERRA2_Total_Aerosol_Optical_Thickness_550nm_Extinction_Monthly', time: 'latest', cadence: 'monthly', shade: 'fade-low' },
+    spec: { product: 'MERRA2_Total_Aerosol_Optical_Thickness_550nm_Extinction_Monthly', matrixSet: '2km', time: 'latest', cadence: 'monthly', shade: 'fade-low' },
   },
   {
     id: 'overlay-no2',
@@ -102,7 +103,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'Copernicus Sentinel data: free, full and open access with attribution (contains modified Copernicus Sentinel data)'
       ),
     ],
-    spec: { product: 'TROPOMI_L2_Nitrogen_Dioxide_Tropospheric_Column', time: 'latest', lagDays: 2, cadence: 'daily', shade: 'fade-low' },
+    spec: { product: 'TROPOMI_L2_Nitrogen_Dioxide_Tropospheric_Column', matrixSet: '2km', time: 'latest', lagDays: 2, cadence: 'daily', shade: 'fade-low' },
   },
   {
     id: 'overlay-carbon-monoxide',
@@ -116,7 +117,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'AIRS Science Team / J. Teixeira, AIRS/Aqua L3 Monthly Standard Physical Retrieval (AIRS-only) 1°×1° V006 (AIRS3STM), NASA GES DISC, doi:10.5067/Aqua/AIRS/DATA321'
       ),
     ],
-    spec: { product: 'AIRS_L3_Carbon_Monoxide_500hPa_Volume_Mixing_Ratio_Monthly_Day', time: 'latest', cadence: 'monthly', shade: 'fade-low' },
+    spec: { product: 'AIRS_L3_Carbon_Monoxide_500hPa_Volume_Mixing_Ratio_Monthly_Day', matrixSet: '2km', time: 'latest', cadence: 'monthly', shade: 'fade-low' },
   },
   {
     id: 'overlay-ozone',
@@ -130,7 +131,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'G. Jaross, OMPS-NPP L2 NM Ozone (O3) Total Column swath orbital V2 (OMPS_NPP_NMTO3_L2; near-real-time stream NMTO3NRT), NASA GES DISC, doi:10.5067/0WF4HAAZ0VHK'
       ),
     ],
-    spec: { product: 'OMPS_Ozone_Total_Column', time: 'latest', lagDays: 1, cadence: 'daily' },
+    spec: { product: 'OMPS_Ozone_Total_Column', matrixSet: '2km', time: 'latest', lagDays: 1, cadence: 'daily' },
   },
   {
     id: 'overlay-water-vapour',
@@ -144,7 +145,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'NASA Global Modeling and Assimilation Office (GMAO), MERRA-2 instM_2d_int_Nx V5.12.4 (M2IMNXINT), NASA GES DISC, doi:10.5067/KVTU1A8BWFSJ'
       ),
     ],
-    spec: { product: 'MERRA2_Total_Precipitable_Water_Vapor_Monthly', time: 'latest', cadence: 'monthly', shade: 'fade-low' },
+    spec: { product: 'MERRA2_Total_Precipitable_Water_Vapor_Monthly', matrixSet: '2km', time: 'latest', cadence: 'monthly', shade: 'fade-low' },
   },
   {
     id: 'overlay-soil-moisture',
@@ -158,7 +159,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
         'SMAP L4 Global 3-hourly 9 km EASE-Grid Surface and Root Zone Soil Moisture Analysis Update V008 (SPL4SMAU), NASA National Snow and Ice Data Center DAAC, doi:10.5067/02LGW4DGJYRX'
       ),
     ],
-    spec: { product: 'SMAP_L4_Analyzed_Surface_Soil_Moisture', time: 'latest', cadence: 'daily' },
+    spec: { product: 'SMAP_L4_Analyzed_Surface_Soil_Moisture', matrixSet: '2km', time: 'latest', cadence: 'daily' },
   },
   {
     id: 'overlay-lightning',
@@ -174,6 +175,7 @@ export const OVERLAY_ENTRIES: readonly Entry[] = [
     ],
     spec: {
       product: 'LIS_High_Resolution_Full_Climatology_Combined_Flash_Rate_Climatology',
+      matrixSet: '2km',
       time: null,
       cadence: 'fixed',
       bakedAsset: 'geo/overlay-lightning.png',

@@ -1,7 +1,7 @@
 /**
  * A different map of the surface in place of Blue Marble: a whole-globe
- * image from NASA GIBS, handed to the globe as its surface override while
- * the layer's switch is on.
+ * image put together from NASA GIBS map tiles (../weather/gibs-tiles.ts),
+ * handed to the globe as its surface override while the layer's switch is on.
  *
  * Dated products go through the same live-then-fallback loading as the
  * weather (../weather/live.ts): the product's time domain says which date
@@ -14,11 +14,18 @@ import * as THREE from 'three';
 import { DEFAULT_SURFACE_GAIN } from '../../render/globe';
 import type { LayerContext, LayerInstance, StatusTone } from '../types';
 import { GIBS_WMS, gibsDomainUrl, gibsTime, latestCompleteDay, latestInDomain, parseTimeDomain, wmsGlobeUrl } from '../weather/gibs';
+import { canvasBlob, composeGlobe, type TiledProduct } from '../weather/gibs-tiles';
 import { cacheStore, decodeImage, fetchOk, type FetchLike, ProductWatcher, type ProductSource } from '../weather/live';
 
 export interface ImagerySpec {
   /** GIBS layer identifier. */
   readonly product: string;
+  /**
+   * The tile matrix set GIBS lists for the product; 'wms' to have the WMS
+   * endpoint draw it instead, for a product GIBS tiles only as vectors or
+   * only in a file type many times the size of a JPEG.
+   */
+  readonly matrixSet: TiledProduct['matrixSet'] | 'wms';
   /** JPEG for photographs; PNG for data products, which are transparent where they have no data. */
   readonly format: 'jpeg' | 'png';
   /** Pixels across; half as many down. 4096 is the globe's budget for a base map. */
@@ -43,8 +50,6 @@ export interface ImagerySpec {
   readonly bakedAsset?: string;
 }
 
-/** A whole-globe 4096×2048 JPEG takes GIBS five or six seconds to compose. */
-const IMAGERY_TIMEOUT_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 /** What shows where a data product has nothing: land under an ocean map, sea under a land map. */
@@ -54,12 +59,27 @@ const UNDATED = new Date(0);
 
 export const isDated = (spec: ImagerySpec): boolean => spec.time === 'latest' || spec.time === 'complete-day';
 
+export const tiledProduct = (spec: ImagerySpec): TiledProduct | null =>
+  spec.matrixSet === 'wms' ? null : { layer: spec.product, matrixSet: spec.matrixSet, ext: spec.format };
+
+/** A whole-globe 4096×2048 picture takes GIBS's WMS five or six seconds to draw. */
+const WMS_TIMEOUT_MS = 60_000;
+
+/** A whole-globe picture of `width` pixels across, as a file of `type`. */
+export type GlobeFetcher = (product: TiledProduct, time: string | null, width: number, type: 'image/jpeg' | 'image/png') => Promise<Blob>;
+
+const fetchGlobeFile =
+  (fetchImpl?: FetchLike): GlobeFetcher =>
+  async (product, time, width, type) =>
+    canvasBlob(await composeGlobe(product, time, width, fetchImpl), type, type === 'image/jpeg' ? 0.92 : undefined);
+
 export function imagerySource(
   spec: ImagerySpec,
   storeKey: string,
   assetUrl: (path: string) => string,
   decode: (blob: Blob) => Promise<TexImageSource>,
-  fetchImpl?: FetchLike
+  fetchImpl?: FetchLike,
+  fetchGlobe: GlobeFetcher = fetchGlobeFile(fetchImpl)
 ): ProductSource<TexImageSource> {
   return {
     storeKey,
@@ -72,13 +92,14 @@ export function imagerySource(
       return { tag: gibsTime(latest.time, latest.daily), validTime: latest.time };
     },
     async download(tag) {
-      const url = wmsGlobeUrl(GIBS_WMS, spec.product, {
-        width: spec.width,
-        height: spec.width / 2,
-        format: spec.format,
-        time: spec.time === null ? undefined : tag,
-      });
-      return (await fetchOk(url, {}, IMAGERY_TIMEOUT_MS, fetchImpl)).blob();
+      const time = spec.time === null ? null : tag;
+      const tiled = tiledProduct(spec);
+      if (!tiled) {
+        const url = wmsGlobeUrl(GIBS_WMS, spec.product, { width: spec.width, height: spec.width / 2, format: spec.format, time: time ?? undefined });
+        return (await fetchOk(url, {}, WMS_TIMEOUT_MS, fetchImpl)).blob();
+      }
+      // A photograph is kept as a JPEG; a data product losslessly, so its colours still match its legend.
+      return fetchGlobe(tiled, time, spec.width, spec.format === 'png' ? 'image/png' : 'image/jpeg');
     },
     decode,
     async snapshot() {

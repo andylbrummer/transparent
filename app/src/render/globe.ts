@@ -12,14 +12,13 @@ import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
 
 /**
- * NASA GIBS Blue Marble (Next Generation) as one equirectangular image.
- * 4096×2048 keeps the texture at 32 MB of GPU memory, inside every phone's
- * max texture size, at ~10 km per texel — finer than a far-side pixel.
+ * NASA GIBS Blue Marble (Next Generation) as map tiles, put together into one
+ * equirectangular image (layers/weather/gibs-tiles.ts). 4096×2048 keeps the
+ * texture at 32 MB of GPU memory, inside every phone's max texture size, at
+ * ~10 km per texel — finer than a far-side pixel.
  */
-export const BLUE_MARBLE_URL =
-  'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap' +
-  '&VERSION=1.3.0&LAYERS=BlueMarble_NextGeneration&CRS=EPSG:4326&BBOX=-90,-180,90,180' +
-  '&WIDTH=4096&HEIGHT=2048&FORMAT=image/jpeg';
+export const BLUE_MARBLE_TILES = { layer: 'BlueMarble_NextGeneration', matrixSet: '500m', ext: 'jpeg' } as const;
+export const BLUE_MARBLE_WIDTH = 4096;
 
 /** Brightening applied to the surface imagery unless an override asks for its own. */
 export const DEFAULT_SURFACE_GAIN = 1.4;

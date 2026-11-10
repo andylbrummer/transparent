@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { RENDER_ORDER } from '../../render/order';
 import { SurfaceShell } from '../../render/surface-shell';
-import { imagerySource, undatedStatus, type ImagerySpec } from '../surface-imagery/imagery';
+import { imagerySource, undatedStatus, type GlobeFetcher, type ImagerySpec } from '../surface-imagery/imagery';
 import type { LayerContext, LayerInstance, StatusTone } from '../types';
 import { gibsDomainUrl, gibsTime, latestInDomain, parseTimeDomain } from '../weather/gibs';
 import { cacheStore, decodeImage, fetchOk, type FetchLike, ProductWatcher, type ProductSource } from '../weather/live';
@@ -22,6 +22,8 @@ import { cacheStore, decodeImage, fetchOk, type FetchLike, ProductWatcher, type 
 export interface OverlaySpec {
   /** GIBS layer identifier. */
   readonly product: string;
+  /** The tile matrix set GIBS lists for the product, or 'wms' where it tiles the product only as vectors. */
+  readonly matrixSet: ImagerySpec['matrixSet'];
   /**
    * Which date to ask for: null for a product with only one; 'latest' for
    * the newest the product has; 'complete-day' for the newest day a polar
@@ -54,7 +56,7 @@ const DAY_MS = 24 * HOUR_MS;
 const OVERLAY_ORDER = RENDER_ORDER.surfaceShell + 0.03;
 
 export function overlayImagerySpec(spec: OverlaySpec): ImagerySpec {
-  return { product: spec.product, format: 'png', width: spec.width ?? 2048, time: spec.time, bakedAsset: spec.bakedAsset };
+  return { product: spec.product, matrixSet: spec.matrixSet, format: 'png', width: spec.width ?? 2048, time: spec.time, bakedAsset: spec.bakedAsset };
 }
 
 /**
@@ -68,9 +70,10 @@ export function overlaySource(
   storeKey: string,
   assetUrl: (path: string) => string,
   decode: (blob: Blob) => Promise<TexImageSource>,
-  fetchImpl?: FetchLike
+  fetchImpl?: FetchLike,
+  fetchGlobe?: GlobeFetcher
 ): ProductSource<TexImageSource> {
-  const source = imagerySource(overlayImagerySpec(spec), storeKey, assetUrl, decode, fetchImpl);
+  const source = imagerySource(overlayImagerySpec(spec), storeKey, assetUrl, decode, fetchImpl, fetchGlobe);
   const lagDays = spec.lagDays ?? 0;
   if (spec.time === null || lagDays === 0) return source;
   return {

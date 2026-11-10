@@ -31,7 +31,7 @@ const ENTRIES: readonly Entry[] = [
     order: 10,
     caption: 'true colour from NOAA-20 · each place at ~13:30 local time · polar night is black',
     credits: [gibs('Daily true-colour mosaic (VIIRS corrected reflectance)', 'NASA/NOAA NOAA-20 VIIRS')],
-    spec: { product: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor', format: 'jpeg', width: 4096, time: 'complete-day' },
+    spec: { product: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor', matrixSet: '250m', format: 'jpeg', width: 4096, time: 'complete-day' },
   },
   {
     id: 'surface-night-lights',
@@ -41,6 +41,8 @@ const ENTRIES: readonly Entry[] = [
     credits: [gibs('Night lights (Black Marble 2016)', 'NASA Earth Observatory, Suomi NPP VIIRS day/night band')],
     spec: {
       product: 'VIIRS_Black_Marble',
+      // Tiled only as PNG: 5.3 MB for the globe, where WMS draws a 0.4 MB JPEG.
+      matrixSet: 'wms',
       format: 'jpeg',
       width: 4096,
       time: '2016-01-01',
@@ -55,7 +57,7 @@ const ENTRIES: readonly Entry[] = [
     order: 30,
     caption: 'shaded relief with ocean depth: ridges, trenches, fracture zones',
     credits: [gibs('Shaded relief and bathymetry (Blue Marble, August 2004)', 'NASA Earth Observatory, MODIS')],
-    spec: { product: 'BlueMarble_ShadedRelief_Bathymetry', format: 'jpeg', width: 4096, time: null },
+    spec: { product: 'BlueMarble_ShadedRelief_Bathymetry', matrixSet: '500m', format: 'jpeg', width: 4096, time: null },
   },
   {
     id: 'surface-sst',
@@ -64,7 +66,7 @@ const ENTRIES: readonly Entry[] = [
     legend: 'linear-gradient(to right, #2b001a, #7a0677, #1e124e, #214b9e, #2ea3ef, #78d300, #ffb400, #e03e00, #6b0200)',
     caption: '0 – 32 °C · yesterday, 1 km analysis',
     credits: [gibs('Sea surface temperature (GHRSST Level 4 MUR)', 'NASA JPL MUR MEaSUREs project, GHRSST')],
-    spec: { product: 'GHRSST_L4_MUR_Sea_Surface_Temperature', format: 'png', width: 2048, time: 'latest' },
+    spec: { product: 'GHRSST_L4_MUR_Sea_Surface_Temperature', matrixSet: '1km', format: 'png', width: 2048, time: 'latest' },
   },
   {
     id: 'surface-sst-anomaly',
@@ -73,7 +75,7 @@ const ENTRIES: readonly Entry[] = [
     legend: 'linear-gradient(to right, #6b00db, #414be6, #03f8fa, #a4ff91, #c2cab8, #ffde43, #ff7100, #ec004a, #800000)',
     caption: '−3 – +3 °C against the MUR climatology for the day',
     credits: [gibs('Sea surface temperature anomaly (GHRSST Level 4 MUR)', 'NASA JPL MUR MEaSUREs project, GHRSST')],
-    spec: { product: 'GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies', format: 'png', width: 2048, time: 'latest' },
+    spec: { product: 'GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies', matrixSet: '1km', format: 'png', width: 2048, time: 'latest' },
   },
   {
     id: 'surface-vegetation',
@@ -82,7 +84,7 @@ const ENTRIES: readonly Entry[] = [
     legend: 'linear-gradient(to right, #f1ecec, #e1d2c6, #b4a596, #a18063, #96ba20, #56a101, #2e8000, #006400, #001801)',
     caption: 'NDVI 0 – 1, latest 16-day composite',
     credits: [gibs('Vegetation index (MODIS Terra NDVI, 16-day)', 'NASA MODIS Terra, MOD13Q1')],
-    spec: { product: 'MODIS_Terra_L3_NDVI_16Day', format: 'png', width: 2048, time: 'latest' },
+    spec: { product: 'MODIS_Terra_L3_NDVI_16Day', matrixSet: '250m', format: 'png', width: 2048, time: 'latest' },
   },
   {
     id: 'surface-population',
@@ -97,7 +99,7 @@ const ENTRIES: readonly Entry[] = [
         'CC BY 4.0'
       ),
     ],
-    spec: { product: 'GPW_Population_Density_2020', format: 'png', width: 2048, time: null },
+    spec: { product: 'GPW_Population_Density_2020', matrixSet: '1km', format: 'png', width: 2048, time: null },
   },
 ];
 
@@ -107,5 +109,8 @@ const SURFACE_LAYERS: readonly LayerDefinition[] = ENTRIES.map(({ spec, ...defin
   exclusiveGroup: GROUP,
   load: async (context) => (await import('./imagery')).createImageryLayer(context, definition.id, spec),
 }));
+
+/** Each layer's product, by layer id. */
+export const IMAGERY_SPECS: Readonly<Record<string, ImagerySpec>> = Object.fromEntries(ENTRIES.map((entry) => [entry.id, entry.spec]));
 
 export default SURFACE_LAYERS;
