@@ -26,3 +26,6 @@ worktrack-mcp.db
 # Generated pipeline outputs and Python bytecode
 /tools/pipeline/output/
 __pycache__/
+
+# Raw pipeline downloads (see tools/pipeline/fetch_cache.py)
+/tools/pipeline/.cache/
