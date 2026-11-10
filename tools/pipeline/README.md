@@ -110,6 +110,25 @@ times and magnitudes (to the file's quantisation, under 1 km) and to the
 ISC Bulletin's independent locations (within 30 km), and checks the edges:
 the antimeridian, the poles, events above sea level, the excluded types.
 
+## Recent and Notable Earthquakes
+
+`generate_quake_sets.py` writes two small files from USGS:
+
+- `app/public/geo/quakes-recent-snapshot.json` — the real-time feeds the
+  "Recent earthquakes (live)" layer reads (M4.5+ past 30 days, M2.5+ past
+  7 days), merged, as they stood at bake time, in the feeds' own GeoJSON
+  shape. The app falls back on it, marked stale with its date, when USGS
+  cannot be reached. Re-run before a release so the fallback is not ancient.
+- `app/public/geo/quakes-notable.json` — every M8.5+ earthquake since 1900
+  and the smaller presets of `spec/seismic.md` (San Francisco 1906,
+  Türkiye 2023), from ComCat by event id. Pre-1973 locations are ISC-GEM's
+  (CC BY-SA 3.0); each event records its location source.
+
+```bash
+python3 tools/pipeline/generate_quake_sets.py            # or --only recent / --only notable
+python3 tools/pipeline/test_quake_sets.py
+```
+
 ## Plate Motion
 
 `generate_plate_motion.py` writes `app/public/geo/plate-motion.json`: an
