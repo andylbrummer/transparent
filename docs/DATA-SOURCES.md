@@ -57,6 +57,7 @@ files and can be removed without touching other layers.
 
 | Layer | Default | What | Source | Licence |
 | --- | --- | --- | --- | --- |
+| Earth right now (GOES) (`earth-now`) | off | GeoColor imagery from GOES East and GOES West (Advanced Baseline Imager) | [NOAA/NESDIS and CIRA (Colorado State University); imagery by NASA GIBS](https://www.star.nesdis.noaa.gov/goes/) | free use; credit NOAA/CIRA requested (GOES data are a U.S. Government work) |
 | Clouds (infrared) (`clouds`) | off | Global infrared cloud mosaic (GMGSI longwave) | [NOAA/NESDIS Global Mosaic of Geostationary Satellite Imagery, served by NOAA nowCOAST](https://nowcoast.noaa.gov/) | public domain (U.S. Government work) |
 | Rain and snow (`precipitation`) | off | Precipitation rate (GPM IMERG half-hourly, early run) | [NASA Global Precipitation Measurement mission, IMERG; imagery by NASA GIBS](https://gpm.nasa.gov/data/imerg) | public domain (U.S. Government work) |
 | Wind at the surface (10 m) (`wind-10m`) | off | Wind and air temperature (GFS 1° forecast, GRIB2 by byte range) | [NOAA/NCEP Global Forecast System, via the NOAA Open Data Dissemination programme](https://registry.opendata.aws/noaa-gfs-bdp-pds/) | public domain (U.S. Government work) |

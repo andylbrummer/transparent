@@ -120,3 +120,61 @@ generated from the same table the shader uses.
    and `terminator` modules that the removed `app/src/weather/` scaffolding
    used; nothing in the app imports them now. `tiles` names RainViewer as a
    provider. Removing them touches core's shared index.
+
+## Earth right now (added 2026-11-10)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Earth right now (`earth-now`, lazy, off by default) | GeoColor images from GOES East (75.2°W) and GOES West (137.2°W), a new one every 10 minutes: true colour by day; by night infrared cloud over a **fixed** picture of city lights | NOAA/NESDIS GOES-R Advanced Baseline Imager; GeoColor by CIRA, Colorado State University (Miller et al. 2020, J. Atmos. Oceanic Technol. 37:429); served as map tiles by NASA GIBS | GOES data are a U.S. Government work (public domain). GeoColor is CIRA's product; NOAA distributes it freely and asks for the credit NOAA/CIRA. **No formal licence text was found for GeoColor itself.** | https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/GOES-East_ABI_GeoColor/… and GOES-West | Live (WMTS tiles, composed in the browser), last download kept in the Cache API, baked snapshot `app/public/weather/earth-now.webp` (88 kB) from `generate_earth_now_snapshot.py` | NOAA/CIRA; imagery by NASA GIBS |
+
+What it is and is not:
+
+- **Coverage is the two satellites' view**: about half the planet, the
+  Americas and the eastern Pacific out to New Zealand. Europe, Africa and
+  Asia are transparent and the base map shows there; GIBS carries no
+  GeoColor for Meteosat or Himawari. The caption says "the half of the
+  planet two weather satellites see".
+- **The night side's city lights are not live.** GeoColor paints infrared
+  cloud over a static lights picture at night. The caption says so.
+- **The two pictures are joined** at 106.2°W, midway between the
+  satellites, cross-faded over 8° of longitude. They can be up to ten
+  minutes apart; the chip gives the older time.
+- **Near each disc's edge** the satellite looks along the ground: the
+  picture is stretched and hazy there. That is the data.
+- The app's own time: with `?time=` pinned, the layer asks GIBS for the
+  newest picture in the day before that time (GIBS keeps an archive with
+  gaps back to 2021); if there is none the chip reads "latest" with the date
+  of what is shown.
+
+How it is fetched:
+
+- The newest time comes from a `DescribeDomains` request limited to one day
+  (about 370 bytes each; unlimited it is 580 kB per satellite).
+- Tiles: level 2 (2560 px round the globe, 18 tiles, ~4.5 MB) on a pointer
+  device; level 1 (1280 px, 8 tiles, ~1.3 MB) on touch devices. Re-checked
+  every 10 minutes while the layer is on; a new picture is fetched only when
+  GIBS has one.
+- On 2026-11-10 GIBS's WMS endpoint (which the older GIBS layers here use for
+  whole-globe images) was not answering at all, while the tile endpoint
+  answered in 0.2–0.4 s. This layer uses tiles for that reason. **The older
+  GIBS layers (satellite view of the latest full day, sea temperature,
+  vegetation, rain) still depend on WMS** and fell back to their caches or
+  snapshots that day; moving them to tiles is not done.
+
+Checked:
+
+- `geostationary.test.ts` (15): which tiles each satellite needs (East columns
+  0–2, West 0, 1 and 4 across the date line), tile and domain addresses, the
+  newest time from a domain clipped as GIBS clips it, one satellite missing,
+  both missing.
+- `tools/pipeline/test_earth_now_snapshot.py` (21): opaque at Austin, Quito,
+  Hawaii, Buenos Aires, New Zealand and on the seam; transparent at Nairobi,
+  Delhi, Berlin, Perth and the pole; 40–60% of the map covered; no hard step
+  at the seam.
+- In the app (`~/review-loop/shots/earth-now/`, 4 shots): chip "live · 10 Nov
+  15:10 UTC"; South America in daylight and the Pacific at night seen through
+  the Earth from Austin; phone-sized view 17.6 ms, desktop 16.8 ms. With
+  `gibs.earthdata.nasa.gov` blocked the chip reads "offline · snapshot 10 Nov
+  2026" and three requests are made in all.
+- Not checked: a refresh arriving while the layer is shown (the ten-minute
+  timer), the Cache API path on a second visit, a real phone.

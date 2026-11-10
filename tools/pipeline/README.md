@@ -271,6 +271,7 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_craters.py` | Impact craters | `app/public/geo/craters.json` | `test_craters.py` |
 | `generate_cyclones.py` | Bake the tracks of the world's major tropical cyclones for the app | `app/public/geo/cyclone-live-snapshot.json`, `app/public/geo/cyclone-tracks.bin`, `app/public/geo/cyclone-tracks.json` | `test_cyclones.py` |
 | `generate_deep_time.py` | The continents through deep time | `app/public/geo/deep-time/plates.bin`, `app/public/geo/deep-time/timescale.json` | `test_deep_time.py` |
+| `generate_earth_now_snapshot.py` | Offline stand-in for "Earth right now": GOES East and West GeoColor | `app/public/weather/earth-now.webp`, `earth-now.json` | `test_earth_now_snapshot.py` |
 | `generate_deepsky.py` | The faint and invisible sky | `app/public/sky/deep/` | `test_deepsky.py` |
 | `generate_depth_ladder.py` | The depth ladder | `app/public/geo/depth-ladder.json` | `test_depth_ladder.py` |
 | `generate_earth_fields.py` | Global geophysical fields | `app/public/geo/fields/` | `test_earth_fields.py` |
