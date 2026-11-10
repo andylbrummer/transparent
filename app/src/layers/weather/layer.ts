@@ -20,6 +20,23 @@ const PRECIPITATION_LEGEND =
 
 const WEATHER_LAYERS: readonly LayerDefinition[] = [
   {
+    id: 'earth-now',
+    label: 'Earth right now (GOES)',
+    section: 'Weather',
+    order: 5,
+    caption:
+      'the half of the planet two weather satellites see, a new picture every 10 minutes · true colour by day; by night infrared cloud over a fixed map of city lights · elsewhere the base map',
+    credits: [
+      {
+        what: 'GeoColor imagery from GOES East and GOES West (Advanced Baseline Imager)',
+        source: 'NOAA/NESDIS and CIRA (Colorado State University); imagery by NASA GIBS',
+        licence: 'free use; credit NOAA/CIRA requested (GOES data are a U.S. Government work)',
+        url: 'https://www.star.nesdis.noaa.gov/goes/',
+      },
+    ],
+    load: async (context) => (await import('./shells')).createEarthNowLayer(context),
+  },
+  {
     id: 'clouds',
     label: 'Clouds (infrared)',
     section: 'Weather',

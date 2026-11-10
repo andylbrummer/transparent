@@ -8,6 +8,7 @@ import { subsolarPoint } from '@transparent-earth/core';
 import { RENDER_ORDER } from '../../render/order';
 import { SurfaceShell, type SurfaceShellOptions } from '../../render/surface-shell';
 import type { LayerContext, LayerInstance } from '../types';
+import { geoColorSource } from './geostationary';
 import { GFS_NI, GFS_NJ, type GfsGrid } from './gfs';
 import { cacheStore, ProductWatcher, type ProductSource } from './live';
 import { TEMPERATURE_RAMP, rampColor } from './ramps';
@@ -24,6 +25,7 @@ const DEG = Math.PI / 180;
  * shades it into the surface itself.
  */
 export const WEATHER_ORDER = {
+  earthNow: RENDER_ORDER.surfaceShell + 0.02,
   temperature: RENDER_ORDER.surfaceShell + 0.05,
   clouds: RENDER_ORDER.surfaceShell + 0.1,
   precipitation: RENDER_ORDER.surfaceShell + 0.15,
@@ -101,6 +103,29 @@ export function createCloudLayer(context: LayerContext): Promise<LayerInstance> 
     // Hourly product: look three times an hour so a new mosaic shows within 20 minutes.
     refreshMs: 20 * MINUTE_MS,
     freshMs: 4 * HOUR_MS,
+  });
+}
+
+/** Tile level of the "Earth right now" picture: 2560 px round the globe on a desk, 1280 on a phone or headset. */
+export function earthNowLevel(coarsePointer: boolean): number {
+  return coarsePointer ? 1 : 2;
+}
+
+/**
+ * The Earth as GOES East and West see it now, on the surface itself, under
+ * every other weather layer. Where neither satellite sees, the picture is
+ * transparent and the base map shows.
+ */
+export function createEarthNowLayer(context: LayerContext): Promise<LayerInstance> {
+  // A phone on mobile data fetches 1.3 MB a picture rather than 4.5.
+  const level = earthNowLevel(window.matchMedia?.('(pointer: coarse)').matches ?? false);
+  return createLiveShell(context, {
+    source: geoColorSource(context, level),
+    shell: { name: 'earth-now', renderOrder: WEATHER_ORDER.earthNow },
+    toTexture: imageTexture,
+    // A new picture every ten minutes; asking costs a few hundred bytes.
+    refreshMs: 10 * MINUTE_MS,
+    freshMs: HOUR_MS,
   });
 }
 
