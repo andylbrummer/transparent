@@ -175,3 +175,84 @@ describe('labelText', () => {
     );
   });
 });
+
+describe('LabelLayer groups', () => {
+  /** ECEF point on the surface at (lon, lat). */
+  function surface(lon: number, lat: number): THREE.Vector3 {
+    const u = enuBasis({ lat, lon, alt: 0 }).u;
+    return new THREE.Vector3(u.x, u.y, u.z).multiplyScalar(EARTH_RADIUS_M);
+  }
+  const style = { fontPx: 10, color: '#fff' };
+
+  it('ranks a group among the kinds and hides and removes it by its handle', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, [{ labels: [label('Fresno', -119.6, 37.0, 5, 'city')] }]);
+    const camera = cameraAimedAt(-119.5, 37.0);
+    // Rank 0.5 beats a city (rank 8) at the same spot.
+    const group = layer.addGroup({
+      rank: 0.5,
+      style,
+      frame: 'earth',
+      labels: [{ text: 'ISS', priority: 0, position: surface(-119.5, 37.0) }],
+    });
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['ISS']);
+
+    group.setVisible(false);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['Fresno']);
+
+    group.setVisible(true);
+    group.remove();
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['Fresno']);
+    expect(parent.querySelectorAll('.place-label')).toHaveLength(1);
+    layer.dispose();
+  });
+
+  it('follows a label whose position the layer moves', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    const position = surface(121.6, -25.8);
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Mover', priority: 0, position }] });
+    const camera = cameraAimedAt(-119.5, 37.0);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual([]);
+    position.copy(surface(-119.5, 37.0));
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['Mover']);
+    layer.dispose();
+  });
+
+  it('places a sky label along its direction turned by the sky rotation', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    // The ICRS pole, and a sky turned so that the pole lies where the camera looks.
+    layer.addGroup({
+      rank: 1,
+      style,
+      frame: 'sky',
+      labels: [{ text: 'Pole', priority: 0, position: new THREE.Vector3(0, 0, 1) }],
+    });
+    const camera = cameraAimedAt(-119.5, 37.0);
+    const lookDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const identity = new THREE.Matrix4();
+    layer.update(camera, WIDTH, HEIGHT, undefined, identity);
+    expect(layer.visibleNames()).toEqual([]);
+    const turned = new THREE.Matrix4().makeRotationFromQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), lookDirection)
+    );
+    layer.update(camera, WIDTH, HEIGHT, undefined, turned);
+    expect(layer.visibleNames()).toEqual(['Pole']);
+    layer.dispose();
+  });
+
+  it('gives a group added in stereo its right-eye twins', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    layer.setStereo(true);
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Twin', priority: 0, position: surface(0, 0) }] });
+    expect(parent.querySelectorAll('.place-labels--right-eye .place-label')).toHaveLength(1);
+    layer.dispose();
+  });
+});
