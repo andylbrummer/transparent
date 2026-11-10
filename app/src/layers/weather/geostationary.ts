@@ -13,6 +13,7 @@
  */
 
 import { GIBS_WMTS, gibsTime, latestInDomain, parseTimeDomain } from './gibs';
+import { GIBS_TILE_PX, canvasBlob, gibsTileUrl, tileSpanDeg } from './gibs-tiles';
 import { decodeImage, fetchOk, type FetchLike, type ProductSource } from './live';
 
 export interface GeoSatellite {
@@ -30,9 +31,7 @@ export const GEO_SATELLITES: readonly GeoSatellite[] = [
 ];
 
 export const GEO_TILE_MATRIX_SET = '1km';
-export const GEO_TILE_PX = 512;
-/** GIBS's geographic tiling: one tile of level 0 spans 288°, halving each level; the grid starts at 180°W, 90°N. */
-const LEVEL0_SPAN_DEG = 288;
+export const GEO_TILE_PX = GIBS_TILE_PX;
 /** How far round the planet from under a satellite its picture is asked for: the limb is at 81.3°. */
 const REACH_DEG = 82;
 /** The two pictures are joined midway between the satellites, cross-faded over this many degrees. */
@@ -40,8 +39,6 @@ export const SEAM_LONGITUDE = (GEO_SATELLITES[0].longitude + GEO_SATELLITES[1].l
 export const SEAM_FEATHER_DEG = 8;
 const TEN_MINUTES_MS = 600_000;
 const DAY_MS = 86_400_000;
-
-export const tileSpanDeg = (level: number): number => LEVEL0_SPAN_DEG / 2 ** level;
 
 /** Size of the whole-globe canvas at a tile level: 360° by 180° at the tiles' own scale. */
 export function geoCanvasSize(level: number): { width: number; height: number } {
@@ -71,7 +68,7 @@ export function geoTiles(level: number, satelliteLongitude: number): GeoTile[] {
 }
 
 export function geoTileUrl(layer: string, time: string, level: number, tile: GeoTile): string {
-  return `${GIBS_WMTS.replace(/\/wmts\.cgi$/, '')}/${layer}/default/${time}/${GEO_TILE_MATRIX_SET}/${level}/${tile.row}/${tile.col}.png`;
+  return gibsTileUrl({ layer, matrixSet: GEO_TILE_MATRIX_SET, ext: 'png' }, time, level, tile);
 }
 
 /** The product's times in the day up to `now`: a few hundred bytes, where the whole domain is half a megabyte. */
@@ -170,10 +167,8 @@ async function compose(tag: GeoTag, fetchImpl?: FetchLike): Promise<Blob> {
     }
     for (const { image } of tiles) if ('close' in image) image.close();
   }
-  return new Promise((resolve, reject) => {
-    // WebP keeps the transparency at a tenth of a PNG's size; a browser that cannot write it gives a PNG.
-    whole.canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('canvas would not encode'))), 'image/webp', 0.9);
-  });
+  // WebP keeps the transparency at a tenth of a PNG's size; a browser that cannot write it gives a PNG.
+  return canvasBlob(whole.canvas, 'image/webp', 0.9);
 }
 
 /**

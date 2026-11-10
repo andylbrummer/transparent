@@ -10,7 +10,6 @@ import {
   geoTileUrl,
   geoTiles,
   parseGeoTag,
-  tileSpanDeg,
 } from './geostationary';
 import { earthNowLevel } from './shells';
 
@@ -18,12 +17,6 @@ const west = GEO_SATELLITES[0];
 const east = GEO_SATELLITES[1];
 
 describe('the tiling', () => {
-  it('halves the tile span each level from 288°', () => {
-    expect(tileSpanDeg(0)).toBe(288);
-    expect(tileSpanDeg(1)).toBe(144);
-    expect(tileSpanDeg(2)).toBe(72);
-  });
-
   it('makes a canvas twice as wide as tall, at the tiles’ own scale', () => {
     expect(geoCanvasSize(1)).toEqual({ width: 1280, height: 640 });
     expect(geoCanvasSize(2)).toEqual({ width: 2560, height: 1280 });
