@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
-import { GlobeRenderer } from './globe';
+import { DEFAULT_SURFACE_GAIN, GlobeRenderer } from './globe';
 import { PREM_LAYERS } from './prem';
 
 describe('GlobeRenderer', () => {
@@ -59,5 +59,34 @@ describe('GlobeRenderer', () => {
     expect(texture.generateMipmaps).toBe(false);
     // The raw shader writes no output encoding, so samples must not be linearised.
     expect(texture.colorSpace).toBe(THREE.NoColorSpace);
+  });
+
+  it('shows an override in place of the base imagery and goes back to the base', () => {
+    const globe = new GlobeRenderer();
+    const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
+    const base = new THREE.Texture();
+    const nightLights = new THREE.Texture();
+
+    // An override can arrive before the base has loaded, or when it never does.
+    globe.setSurfaceOverride(nightLights, 3);
+    expect(uniforms.uSurface.value).toBe(nightLights);
+    expect(uniforms.uSurfaceReady.value).toBe(1);
+    expect(uniforms.uSurfaceGain.value).toBe(3);
+    expect(nightLights.generateMipmaps).toBe(false);
+
+    globe.setSurfaceImagery(base);
+    expect(uniforms.uSurface.value).toBe(nightLights);
+
+    globe.setSurfaceOverride(null);
+    expect(uniforms.uSurface.value).toBe(base);
+    expect(uniforms.uSurfaceGain.value).toBe(DEFAULT_SURFACE_GAIN);
+  });
+
+  it('falls back to the flat surface colour when an override is cleared with no base', () => {
+    const globe = new GlobeRenderer();
+    const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
+    globe.setSurfaceOverride(new THREE.Texture());
+    globe.setSurfaceOverride(null);
+    expect(uniforms.uSurfaceReady.value).toBe(0);
   });
 });

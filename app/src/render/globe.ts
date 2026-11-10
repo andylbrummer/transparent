@@ -21,6 +21,9 @@ export const BLUE_MARBLE_URL =
   '&VERSION=1.3.0&LAYERS=BlueMarble_NextGeneration&CRS=EPSG:4326&BBOX=-90,-180,90,180' +
   '&WIDTH=4096&HEIGHT=2048&FORMAT=image/jpeg';
 
+/** Brightening applied to the surface imagery unless an override asks for its own. */
+export const DEFAULT_SURFACE_GAIN = 1.4;
+
 const LAYER_COUNT = PREM_LAYERS.length;
 
 const VERTEX_SHADER = `
@@ -51,6 +54,7 @@ const FRAGMENT_SHADER = `
   uniform float uLayerAlphas[LAYERS];
   uniform sampler2D uSurface;
   uniform float uSurfaceReady;
+  uniform float uSurfaceGain;
   // Sine of the horizon's elevation (negative: a dip below level), from the
   // CPU - in float32, 1 - (R / |camera|)^2 at eye height rounds to zero.
   uniform float uHorizonSin;
@@ -58,7 +62,6 @@ const FRAGMENT_SHADER = `
   uniform float uPixelAngle;
 
   const vec3 SPACE = vec3(0.01, 0.012, 0.03);
-  const float SURFACE_GAIN = 1.4;
   const vec3 HORIZON_COLOR = vec3(0.75, 0.85, 1.0);
   const float HORIZON_ALPHA = 0.55;
 
@@ -92,7 +95,7 @@ const FRAGMENT_SHADER = `
       vec3 albedo = uSurfaceReady > 0.5 ? texture2D(uSurface, equirectUv(n)).rgb : uLayerColors[i];
       // Unlit and boosted: this is a geology view, not a photo, so land
       // masses must read clearly through the shells.
-      tint = min(albedo * SURFACE_GAIN, vec3(1.0));
+      tint = min(albedo * uSurfaceGain, vec3(1.0));
       // Only ever reached on exit: the far side, the destination of the
       // view, shown nearly opaque.
       a = 0.9;
@@ -149,6 +152,9 @@ export class GlobeRenderer {
   private mesh: THREE.Mesh;
   private readonly rotation = new THREE.Matrix4();
   private readonly layerRadii = premRadiiToMeters();
+  private baseImagery: THREE.Texture | null = null;
+  private overrideImagery: THREE.Texture | null = null;
+  private overrideGain = DEFAULT_SURFACE_GAIN;
 
   constructor() {
     const uniforms = {
@@ -161,6 +167,7 @@ export class GlobeRenderer {
       uLayerAlphas: { value: premAlphas() },
       uSurface: { value: null as THREE.Texture | null },
       uSurfaceReady: { value: 0 },
+      uSurfaceGain: { value: DEFAULT_SURFACE_GAIN },
       uHorizonSin: { value: 0 },
       uPixelAngle: { value: 0.002 },
     };
@@ -193,13 +200,37 @@ export class GlobeRenderer {
    * linear-decoded sample would be shown as if sRGB, crushing mid-tones.
    */
   setSurfaceImagery(texture: THREE.Texture): void {
+    this.baseImagery = this.prepareImagery(texture);
+    this.applyImagery();
+  }
+
+  /**
+   * Show `texture` in place of the base imagery - another map of the same
+   * surface, chosen in the layers panel - or pass null to go back to the
+   * base. The base stays loaded, so going back costs nothing. The caller
+   * owns the texture and disposes of it after replacing or clearing it.
+   * `gain` multiplies its colours; dim maps such as night lights want more.
+   */
+  setSurfaceOverride(texture: THREE.Texture | null, gain: number = DEFAULT_SURFACE_GAIN): void {
+    this.overrideImagery = texture ? this.prepareImagery(texture) : null;
+    this.overrideGain = gain;
+    this.applyImagery();
+  }
+
+  private prepareImagery(texture: THREE.Texture): THREE.Texture {
     texture.generateMipmaps = false;
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
     texture.wrapS = THREE.RepeatWrapping;
     texture.needsUpdate = true;
-    this.material.uniforms.uSurface.value = texture;
-    this.material.uniforms.uSurfaceReady.value = 1;
+    return texture;
+  }
+
+  private applyImagery(): void {
+    const shown = this.overrideImagery ?? this.baseImagery;
+    this.material.uniforms.uSurface.value = shown;
+    this.material.uniforms.uSurfaceReady.value = shown ? 1 : 0;
+    this.material.uniforms.uSurfaceGain.value = this.overrideImagery ? this.overrideGain : DEFAULT_SURFACE_GAIN;
   }
 
   /** viewportHeightPx: drawing-buffer height, which sets the horizon line's width. */
