@@ -1,0 +1,73 @@
+{
+ "shoreDepthM": 125,
+ "iceAreaKm2": 26170000.0,
+ "emergedAreaKm2": 17660000.0,
+ "names": [
+  {
+   "name": "Laurentide Ice Sheet",
+   "kind": "ice",
+   "lon": -85.0,
+   "lat": 57.0
+  },
+  {
+   "name": "Cordilleran Ice Sheet",
+   "kind": "ice",
+   "lon": -126.0,
+   "lat": 56.0
+  },
+  {
+   "name": "Innuitian Ice Sheet",
+   "kind": "ice",
+   "lon": -92.0,
+   "lat": 78.5
+  },
+  {
+   "name": "Greenland Ice Sheet",
+   "kind": "ice",
+   "lon": -41.0,
+   "lat": 73.0
+  },
+  {
+   "name": "Scandinavian Ice Sheet",
+   "kind": "ice",
+   "lon": 20.0,
+   "lat": 64.0
+  },
+  {
+   "name": "British-Irish Ice Sheet",
+   "kind": "ice",
+   "lon": -4.5,
+   "lat": 55.5
+  },
+  {
+   "name": "Barents-Kara Ice Sheet",
+   "kind": "ice",
+   "lon": 45.0,
+   "lat": 76.0
+  },
+  {
+   "name": "Beringia",
+   "kind": "land",
+   "lon": -170.0,
+   "lat": 62.5
+  },
+  {
+   "name": "Southern North Sea plain",
+   "kind": "land",
+   "lon": 3.0,
+   "lat": 52.8
+  },
+  {
+   "name": "Sunda Shelf (Sundaland)",
+   "kind": "land",
+   "lon": 107.5,
+   "lat": 3.0
+  },
+  {
+   "name": "Sahul Shelf",
+   "kind": "land",
+   "lon": 136.0,
+   "lat": -10.0
+  }
+ ]
+}
