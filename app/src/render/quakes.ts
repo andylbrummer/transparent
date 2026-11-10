@@ -73,12 +73,16 @@ const VERTEX_SHADER = `
   attribute vec3 aColor;
   uniform float uPixelRatio;
   varying vec3 vColor;
-  varying float vViewDistance;
+  ${SLAB_DEPTH_GLSL}
   void main() {
     vColor = aColor;
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-    vViewDistance = -viewPosition.z;
     gl_Position = projectionMatrix * viewPosition;
+    // On the slabs' own depth scale, to be tested against what they wrote. A
+    // point has one depth, so it is set here and not per fragment: the GPU
+    // can then reject a point's pixels before shading them, and drawing the
+    // quakes twice costs no more pixels than drawing them once.
+    gl_Position.z = (2.0 * slabDepth(-viewPosition.z) - 1.0) * gl_Position.w;
     gl_PointSize = aSize * uPixelRatio;
   }
 `;
@@ -86,15 +90,11 @@ const VERTEX_SHADER = `
 const FRAGMENT_SHADER = `
   uniform float uStrength;
   varying vec3 vColor;
-  varying float vViewDistance;
-  ${SLAB_DEPTH_GLSL}
   void main() {
     // Round, with a soft edge so 2 px points do not alias into squares.
     float r = length(gl_PointCoord - 0.5) * 2.0;
     float alpha = 0.8 * uStrength * (1.0 - smoothstep(0.7, 1.0, r));
     if (alpha <= 0.0) discard;
-    // On the slabs' own depth scale, to be tested against what they wrote.
-    gl_FragDepth = slabDepth(vViewDistance);
     gl_FragColor = vec4(vColor, alpha);
     // THREE.Color holds DEPTH_RAMP in linear light; without this the points
     // come out darker and more saturated than the legend and the slab lines.
@@ -104,6 +104,8 @@ const FRAGMENT_SHADER = `
 
 /** The fragment shader, for the test that it encodes its colours for the screen. */
 export const QUAKE_FRAGMENT_SHADER = FRAGMENT_SHADER;
+/** The vertex shader, for the test that it shares the slabs' depth scale. */
+export const QUAKE_VERTEX_SHADER = VERTEX_SHADER;
 
 /** The two draws of the quakes: behind the slabs, then in front of them. */
 export const QUAKE_PASSES = [

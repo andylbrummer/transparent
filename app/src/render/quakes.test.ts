@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { DEPTH_RAMP, depthColor, depthRampGradient, ecefAtDepth } from './interior';
 import { LABEL_KIND_ORDER, LabelLayer, type LabelData } from './labels';
-import { QUAKE_BEHIND_SLAB_STRENGTH, QUAKE_FRAGMENT_SHADER, QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
+import { QUAKE_BEHIND_SLAB_STRENGTH, QUAKE_FRAGMENT_SHADER, QUAKE_VERTEX_SHADER, QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
 import { SLAB_DEPTH_GLSL } from './slab-depth';
 import { SLAB_FRAGMENT_SHADER } from '../layers/slabs/slabs';
 
@@ -142,8 +142,10 @@ describe('QuakeLayer', () => {
     expect(front.uniforms.uStrength.value).toBe(1);
     expect(passes[0].renderOrder).toBeLessThan(passes[1].renderOrder);
     // The same depth scale as the slabs, or the comparison means nothing.
-    expect(QUAKE_FRAGMENT_SHADER).toContain(SLAB_DEPTH_GLSL);
-    expect(QUAKE_FRAGMENT_SHADER).toContain('gl_FragDepth = slabDepth(vViewDistance)');
+    expect(QUAKE_VERTEX_SHADER).toContain(SLAB_DEPTH_GLSL);
+    expect(QUAKE_VERTEX_SHADER).toContain('gl_Position.z = (2.0 * slabDepth(-viewPosition.z) - 1.0) * gl_Position.w');
+    // Depth from the vertex, never the fragment: writing it there would stop the GPU rejecting pixels early.
+    expect(QUAKE_FRAGMENT_SHADER).not.toContain('gl_FragDepth');
     expect(SLAB_FRAGMENT_SHADER).toContain(SLAB_DEPTH_GLSL);
   });
 
