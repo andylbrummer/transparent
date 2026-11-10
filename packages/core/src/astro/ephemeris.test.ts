@@ -173,6 +173,41 @@ describe('the Moon against JPL Horizons, 1900-2100', () => {
   });
 });
 
+describe('the total solar eclipse of 2026 August 12, from Burgos', () => {
+  // JPL Horizons, observer at 42.34°N 3.70°W, 18:29:00 UTC, astrometric ICRF place and angular diameter.
+  // Fetched 2026-11-09 from https://ssd.jpl.nasa.gov/api/horizons.api.
+  const date = new Date('2026-08-12T18:29:00Z');
+  const horizonsSun = { ra: 142.1106, dec: 14.90555, diameterArcsec: 1893.318 };
+  const horizonsMoon = { ra: 142.10709, dec: 14.90561, diameterArcsec: 1957.698 };
+  const observer = observerIcrsM(42.34, -3.7, 0, date);
+  const sun = minus(times(sunGeocentricAu(date), AU_KM * 1000), observer);
+  const moon = minus(times(moonGeocentricKm(date), 1000), observer);
+
+  it('has both bodies where Horizons has them', () => {
+    expect(separationDeg(sun, raDecToUnit(horizonsSun.ra, horizonsSun.dec))).toBeLessThan(0.3 * ARCSEC);
+    expect(separationDeg(moon, raDecToUnit(horizonsMoon.ra, horizonsMoon.dec))).toBeLessThan(6 * ARCSEC);
+  });
+
+  it('puts the Moon wholly over the Sun: totality', () => {
+    const sunRadius = Math.asin((SUN_RADIUS_KM * 1000) / Math.hypot(...sun)) / DEG;
+    const moonRadius = Math.asin((MOON_RADIUS_KM * 1000) / Math.hypot(...moon)) / DEG;
+    expect(sunRadius / ARCSEC).toBeCloseTo(horizonsSun.diameterArcsec / 2, 0);
+    expect(moonRadius / ARCSEC).toBeCloseTo(horizonsMoon.diameterArcsec / 2, 0);
+    // Horizons: centres 12″ apart, the Moon's disc 32″ wider in radius than the Sun's.
+    const separation = separationDeg(sun, moon);
+    expect(separation).toBeLessThan(moonRadius - sunRadius);
+    expect(separation / ARCSEC).toBeLessThan(20);
+  });
+
+  it('is only partial ten minutes earlier', () => {
+    const earlier = new Date('2026-08-12T18:19:00Z');
+    const at = observerIcrsM(42.34, -3.7, 0, earlier);
+    const s = minus(times(sunGeocentricAu(earlier), AU_KM * 1000), at);
+    const m = minus(times(moonGeocentricKm(earlier), 1000), at);
+    expect(separationDeg(s, m) / ARCSEC).toBeGreaterThan(300);
+  });
+});
+
 describe('moonPhaseName', () => {
   it('names the eight phases by how far the Moon has run ahead of the Sun', () => {
     expect(moonPhaseName(2)).toBe('New Moon');
