@@ -60,8 +60,11 @@ const VERTEX_SHADER = `
  * everything below it, so close to, the plate thins to a tint and its
  * lines carry the shape; below half presence it no longer hides the slabs
  * behind it either.
+ *
+ * Exported for the other solids in the mantle (the tomography bodies):
+ * writing the same depth is what lets them and the slabs hide each other.
  */
-const SLAB_DEPTH_GLSL = `
+export const SLAB_DEPTH_GLSL = `
   float slabDepth(float viewDistance) {
     return clamp(log2(max(viewDistance, 1.0e3) / 1.0e3) / log2(4.0e4), 0.0, 1.0);
   }
