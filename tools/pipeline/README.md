@@ -286,6 +286,11 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_meteorites.py` | Meteorites | `app/public/geo/meteorites.json` | `test_meteorites.py` |
 | `generate_milkyway.py` | The Milky Way | `app/public/sky/milkyway.jpg` | `test_milkyway.py` |
 | `generate_moon.py` | The face of the Moon | `app/public/sky/moon.jpg` | `test_moon.py` |
+| `generate_planet_constants.py` | Shapes, poles and rotations of the planets (IAU 2015) | `packages/core/src/astro/planet-rotation-data.ts` | core `planet-discs.test.ts` |
+| `generate_planet_moons.py` | Orbits of ten moons of Jupiter, Saturn and Neptune, fitted to Horizons | `packages/core/src/astro/planet-moons-data.ts` | `test_planet_moons.py` |
+| `generate_planet_maps.py` | Faces of Mars, Jupiter, Saturn and Neptune | `app/public/sky/planets/*.jpg` | `test_planet_maps.py` |
+| `fetch_planet_disc_fixture.py` | Horizons' values for the planets' discs (test fixture) | `packages/core/src/astro/planet-discs.fixture.ts` | — |
+| `fetch_planet_moon_fixture.py` | Horizons' values for the moons (test fixture) | `packages/core/src/astro/planet-moons.fixture.ts` | — |
 | `generate_neo_approaches.py` | Asteroids passing close to the Earth - every known approach within 10 lunar distances from PAST_DAYS before the bake to FUTURE_DAYS after it, each with a short table of where it is around its closest approach | `app/public/sky/neo-approaches.json` | `test_neo_approaches.py` |
 | `generate_ocean_currents.py` | Ocean surface currents | `app/public/geo/ocean-currents.bin` | `test_ocean_currents.py` |
 | `generate_overlay_snapshot.py` | Bake the one Earth overlay that never changes, for when NASA GIBS cannot be reached | `app/public/geo/overlay-lightning.png` | `test_overlay_snapshot.py` |
