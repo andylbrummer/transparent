@@ -152,8 +152,21 @@ export function init(): App | null {
     },
     undefined,
     () => {
-      imageryStatus = 'failed';
-      renderHud();
+      // Offline, or GIBS failing: the baked 2048-wide copy (tools/pipeline/
+      // generate_base_map.py) instead of a planet of one flat colour.
+      new THREE.TextureLoader().load(
+        `${import.meta.env.BASE_URL}geo/blue-marble.jpg`,
+        (texture) => {
+          globe.setSurfaceImagery(texture);
+          imageryStatus = 'offline';
+          renderHud();
+        },
+        undefined,
+        () => {
+          imageryStatus = 'failed';
+          renderHud();
+        }
+      );
     }
   );
 

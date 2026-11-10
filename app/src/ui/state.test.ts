@@ -18,6 +18,10 @@ describe('surfaceImageryNote', () => {
     expect(surfaceImageryNote('failed', false)).toBe(' · surface imagery failed');
   });
 
+  it('says so when the baked copy stands in for the live base map', () => {
+    expect(surfaceImageryNote('offline', true)).toBe(' · surface imagery: offline copy');
+  });
+
   it('says nothing about a failed base map while another map is showing', () => {
     expect(surfaceImageryNote('failed', true)).toBe('');
     expect(surfaceImageryNote('loading', true)).toBe('');

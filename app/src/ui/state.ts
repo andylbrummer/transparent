@@ -36,7 +36,8 @@ export async function probeCapabilities(): Promise<RenderMode[]> {
   return modes;
 }
 
-export type ImageryStatus = 'loading' | 'ready' | 'failed';
+/** 'offline': the live base map failed and the baked low-resolution copy is in its place. */
+export type ImageryStatus = 'loading' | 'ready' | 'offline' | 'failed';
 
 /**
  * What the HUD says about the surface image, if anything. `status` is the
@@ -45,6 +46,8 @@ export type ImageryStatus = 'loading' | 'ready' | 'failed';
  * failing behind it is not the user's problem: they are looking at a map.
  */
 export function surfaceImageryNote(status: ImageryStatus, shown: boolean): string {
+  // The baked copy counts as an image showing, but it is a stand-in and the HUD says so.
+  if (status === 'offline') return ' · surface imagery: offline copy';
   return status === 'ready' || shown ? '' : ` · surface imagery ${status}`;
 }
 
