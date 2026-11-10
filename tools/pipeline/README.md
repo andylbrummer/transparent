@@ -64,7 +64,12 @@ volcanoes, adds a short curated list of deep-Earth structures, and writes:
   `subduction`, `ridge` (spreading ridges and rifts), `transform` and
   `collision`, plus GEM active faults by mechanism (`fault-normal`,
   `fault-reverse`, `fault-strike-slip`), simplified to 0.02°. Same encoding
-  as `outlines.json`.
+  as `outlines.json`. Beside the lines it carries what PB2002 says of them:
+  `ridgeSteps` (per step of each `ridge` polyline, the plates' relative
+  speed in tenths of mm/yr and its azimuth - the app's spreading ribbons
+  and arrows) and `subductionOverriding` (per `subduction` polyline, +1 if
+  the overriding plate is on the left of its direction, -1 if on the right
+  - the side the trench's teeth go).
 - `app/public/geo/geology.json` — labels for plates, deep structures (with a
   `depthKm`), hotspots, subduction zones and volcanoes, sorted by kind and
   then priority.
@@ -78,16 +83,57 @@ Licences differ per source; `app/public/geo/ATTRIBUTION.md` carries them.
 
 ```bash
 python3 tools/pipeline/generate_geology.py
-python3 tools/pipeline/test_geology.py
+python3 tools/pipeline/test_geology.py      # reads slabs.bin too: teeth against Slab2
 ```
 
-## Slabs and Earthquakes
+`test_geology.py` also pins spreading rates to PB2002's own figures (22.6
+mm/yr on the Mid-Atlantic Ridge at 30 N, 148 on the East Pacific Rise at
+20 S) and checks every trench's polarity against Slab2: wherever a slab
+lies shallow on just one side of a trench, the teeth must point to it.
 
-`generate_seismicity.py` downloads Slab2 (Hayes et al. 2018) and the USGS
-ComCat catalogue and writes:
+## Slabs
 
-- `app/public/geo/slabs.json` — slab-surface depth contours every 40 km down
-  to 700 km, grouped by depth, same polyline encoding as `outlines.json`.
+`generate_slabs.py` downloads Slab2 (Hayes et al. 2018; 140 MB, kept in
+`.cache/slab2/`) and writes `app/public/geo/slabs.bin`: for each of the 27
+slabs its depth grid sampled every 0.2° (0.1° for the eight the coarser
+step would bend by more than 2.5 km at the 99th percentile or 5 km
+anywhere), with the plate's thickness and each node's distance from the
+slab's edge, from which the app builds closed plates. The layout is in the
+script's docstring. The bake measures its own error against every source
+node and writes it into the header: at worst 0.9 km rms, 2.3 km at the
+99th percentile, 6.7 km at one node on a near-vertical edge.
+
+Needs h5py and scipy, which the system Python lacks:
+
+```bash
+python3 -m venv tools/pipeline/.cache/venv
+tools/pipeline/.cache/venv/bin/pip install numpy h5py scipy pillow
+tools/pipeline/.cache/venv/bin/python tools/pipeline/generate_slabs.py
+python3 tools/pipeline/test_slabs.py
+```
+
+`test_slabs.py` pins the baked depths and thicknesses to values read from
+the source grids (the slab 68 km under Tokyo, 50 km under Seattle, 578 km
+under the Lau Basin) and checks the layout through its own reader,
+`slab_file.py`.
+
+## Seafloor Age
+
+`generate_seafloor_age.py` (same venv) downloads the 6-arc-minute age grid
+of Seton et al. (2020) from EarthByte (CC BY 4.0) and writes
+`app/public/geo/seafloor-age.png`, 2048×1024 equirectangular: red is
+`255 * sqrt(age / 340 Myr)`, green the share of the pixel that is ocean
+crust, no alpha channel. The app colours it in the shader.
+
+```bash
+tools/pipeline/.cache/venv/bin/python tools/pipeline/generate_seafloor_age.py
+python3 tools/pipeline/test_seafloor_age.py
+```
+
+## Earthquakes
+
+`generate_seismicity.py` downloads the USGS ComCat catalogue and writes:
+
 - `app/public/geo/quakes.json` — every M5+ earthquake since 1973 at its
   hypocentre and origin time, as columns, oldest first (`minute` as deltas,
   `lon`, `lat` in quanta, `depthKm`, `magnitude10`), plus `quake` labels for
@@ -96,9 +142,8 @@ ComCat catalogue and writes:
   left out are in the file (`excluded`). See the script's docstring for the
   licence note on its ISC-GEM records.
 
-The Slab2 archive is 140 MB; `--source-dir` takes its extracted
-`Slab2_CONTOURS/` directory and a `usgs_quakes.csv` instead, and
-`--only quakes` (or `slabs`) writes just one of the two files.
+`--source-dir` takes a `usgs_quakes.csv` instead of fetching. `--only
+quakes` is still accepted, from when this script baked the slabs too.
 
 ```bash
 python3 tools/pipeline/generate_seismicity.py
