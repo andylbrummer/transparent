@@ -18,7 +18,14 @@ import { StereoRig } from './render/stereo';
 import { icrsToEcefMatrix } from '@transparent-earth/core';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, type SensorState } from './sensors';
-import { probeCapabilities, DEFAULT_STATE, type AppState, type RenderMode } from './ui/state';
+import {
+  probeCapabilities,
+  surfaceImageryNote,
+  DEFAULT_STATE,
+  type AppState,
+  type ImageryStatus,
+  type RenderMode,
+} from './ui/state';
 import {
   LayersPanel,
   LAYER_SWITCHES,
@@ -130,7 +137,9 @@ export function init(): App | null {
   const globe = new GlobeRenderer();
   scene.add(globe.getMesh());
 
-  let imageryStatus: 'loading' | 'ready' | 'failed' = 'loading';
+  let imageryStatus: ImageryStatus = 'loading';
+  // What the HUD last said about it, to say so again when another map takes over or goes.
+  let imageryShown = false;
   new THREE.TextureLoader().load(
     BLUE_MARBLE_URL,
     (texture) => {
@@ -292,7 +301,8 @@ export function init(): App | null {
 
   function renderHud(): void {
     const modes = availableModes.length > 0 ? availableModes.join('/') : 'probing…';
-    const imagery = imageryStatus === 'ready' ? '' : ` · surface imagery ${imageryStatus}`;
+    imageryShown = globe.hasSurfaceImagery();
+    const imagery = surfaceImageryNote(imageryStatus, imageryShown);
     const geo = geoStatus === 'ready' ? '' : ` · map data ${geoStatus}`;
     hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${formatScreen()} · ${appState.mode} · ${modes}${imagery}${geo}`;
   }
@@ -394,6 +404,8 @@ export function init(): App | null {
       lazyLayers.update({ date, camera, position, deltaMs: nowMs - lastFrameMs });
     }
     lastFrameMs = nowMs;
+    // A layer swaps the surface map without telling anyone: the HUD's note about it follows.
+    if (imageryStatus !== 'ready' && globe.hasSurfaceImagery() !== imageryShown) renderHud();
     labels.setSkyThroughEarth(skyUniforms.uBelowHorizon.value > 0);
     if (stereo) {
       const eyeWidth = Math.floor(width / 2);

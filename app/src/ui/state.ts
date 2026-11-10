@@ -35,3 +35,15 @@ export async function probeCapabilities(): Promise<RenderMode[]> {
 
   return modes;
 }
+
+export type ImageryStatus = 'loading' | 'ready' | 'failed';
+
+/**
+ * What the HUD says about the surface image, if anything. `status` is the
+ * base map's (Blue Marble); `shown` is whether the globe has an image to
+ * show at all. With another base map chosen and showing, the Blue Marble
+ * failing behind it is not the user's problem: they are looking at a map.
+ */
+export function surfaceImageryNote(status: ImageryStatus, shown: boolean): string {
+  return status === 'ready' || shown ? '' : ` · surface imagery ${status}`;
+}
