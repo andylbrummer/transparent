@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-Checks for the slab and earthquake pipeline.
+Checks for the earthquake pipeline (the slabs' are test_slabs.py).
 
-Slabs: the generated contours against known subduction geometry - the
-Pacific slab under northeast Japan, the Nazca slab under the central Andes.
-
-Earthquakes: quakes.json against the catalogues themselves. Every reference
+quakes.json against the catalogues themselves. Every reference
 below was read from a catalogue response on 2026-11-10, not from memory:
 
     COMCAT  the USGS event the bake drew on, by ComCat event id
@@ -27,21 +24,13 @@ from datetime import datetime, timezone
 
 from generate_geo import OUTPUT_DIR
 from generate_seismicity import drop_cross_network_duplicates, half_up, quake_region
-from geo_test_support import check, finish, nearest_point_deg
+from geo_test_support import check, finish
 
 EARTH_RADIUS_KM = 6371.0
 
 check(quake_region("near the east coast of Honshu, Japan") == "Japan", "regions come from the place's last part")
 check(quake_region("2004 Sumatra - Andaman Islands Earthquake") == "Sumatra - Andaman Islands",
       "named events lose their year and 'Earthquake'")
-
-slabs = json.loads((OUTPUT_DIR / "slabs.json").read_text(encoding="utf-8"))
-by_depth = {c["depthKm"]: c["polylines"] for c in slabs["contours"]}
-check(nearest_point_deg(by_depth[120], 140.5, 38.5) < 1.5, "the Pacific slab is 120 km under northeast Japan")
-check(nearest_point_deg(by_depth[120], -68.5, -24.0) < 1.5, "the Nazca slab is 120 km under the central Andes")
-check(max(by_depth) >= 600, "slabs reach 600 km")
-# The nearest is the Cocos slab under central Mexico, ~10 degrees south.
-check(min(nearest_point_deg(lines, -97.74, 30.27) for lines in by_depth.values()) > 8, "no slab under Austin")
 
 # --- helpers of the bake ---------------------------------------------------
 
