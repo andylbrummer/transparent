@@ -47,3 +47,15 @@ export type ImageryStatus = 'loading' | 'ready' | 'failed';
 export function surfaceImageryNote(status: ImageryStatus, shown: boolean): string {
   return status === 'ready' || shown ? '' : ` · surface imagery ${status}`;
 }
+
+/**
+ * Whether to ask for a multisampled canvas. On a screen of one device pixel
+ * to the CSS pixel it is what keeps line and plate edges from stair-
+ * stepping. A phone draws two or three device pixels to the CSS pixel
+ * already - the steps are too small to see - and there four samples a
+ * pixel are the most expensive thing in the frame: with them the Cardboard
+ * default view ran at 20 to 24 ms on the reference GPU, without at 16.7.
+ */
+export function wantsMultisampling(devicePixelRatio: number): boolean {
+  return devicePixelRatio < 2;
+}

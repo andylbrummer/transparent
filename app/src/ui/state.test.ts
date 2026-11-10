@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { probeCapabilities, surfaceImageryNote } from './state';
+import { probeCapabilities, surfaceImageryNote, wantsMultisampling } from './state';
 
 describe('probeCapabilities', () => {
   it('returns at least gyro in jsdom', async () => {
@@ -21,5 +21,14 @@ describe('surfaceImageryNote', () => {
   it('says nothing about a failed base map while another map is showing', () => {
     expect(surfaceImageryNote('failed', true)).toBe('');
     expect(surfaceImageryNote('loading', true)).toBe('');
+  });
+});
+
+describe('wantsMultisampling', () => {
+  it('multisamples a desktop screen and leaves a dense phone screen alone', () => {
+    expect(wantsMultisampling(1)).toBe(true);
+    expect(wantsMultisampling(1.5)).toBe(true);
+    expect(wantsMultisampling(2)).toBe(false);
+    expect(wantsMultisampling(2.625)).toBe(false);
   });
 });

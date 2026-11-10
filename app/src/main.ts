@@ -21,6 +21,7 @@ import { createSensorController, type SensorState } from './sensors';
 import {
   probeCapabilities,
   surfaceImageryNote,
+  wantsMultisampling,
   DEFAULT_STATE,
   type AppState,
   type ImageryStatus,
@@ -131,7 +132,7 @@ export function init(): App | null {
     1e9
   );
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: wantsMultisampling(window.devicePixelRatio) });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
