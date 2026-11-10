@@ -1,0 +1,55 @@
+{
+ "generated": "2026-11-10T00:30:20Z",
+ "clouds": {
+  "file": "clouds.jpg",
+  "validTime": "2026-11-09T23:00:00Z",
+  "source": "NOAA/NESDIS Global Mosaic of Geostationary Satellite Imagery (GMGSI), longwave infrared, via NOAA nowCOAST"
+ },
+ "precipitation": {
+  "file": "precipitation.png",
+  "validTime": "2026-11-09T18:30:00Z",
+  "source": "NASA GPM IMERG half-hourly precipitation rate (early run), via NASA GIBS"
+ },
+ "gfs": {
+  "source": "NOAA/NCEP Global Forecast System, 1 degree, via NOAA Open Data Dissemination",
+  "cycle": "2026-11-09T18:00:00Z",
+  "forecastHours": 6,
+  "validTime": "2026-11-10T00:00:00Z",
+  "grid": {
+   "ni": 360,
+   "nj": 181,
+   "latFirst": 90,
+   "latStep": -1,
+   "lonFirst": 0,
+   "lonStep": 1
+  },
+  "wind-10m": {
+   "file": "wind-10m.bin",
+   "scale": 0.21,
+   "units": "m/s",
+   "components": [
+    "u",
+    "v"
+   ]
+  },
+  "wind-250hpa": {
+   "file": "wind-250hpa.bin",
+   "scale": 0.81,
+   "units": "m/s",
+   "components": [
+    "u",
+    "v"
+   ]
+  },
+  "temperature": {
+   "file": "temperature.bin",
+   "scale": 0.75,
+   "units": "degC"
+  }
+ },
+ "nightLights": {
+  "file": "night-lights.jpg",
+  "year": 2016,
+  "source": "NASA Earth Observatory Black Marble 2016 (Suomi NPP VIIRS day/night band), via NASA GIBS"
+ }
+}
