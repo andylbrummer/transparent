@@ -1,0 +1,291 @@
+# Earth extras: data sources and verification
+
+What the "earth-extras" layers draw - mantle tomography and the bodies and
+patches of the deep mantle, volcanoes, impact craters, the geophysical
+fields, ocean currents, the named seabed, and the depth ladder - where each
+comes from, under what terms, and what was checked against what. All of it
+is baked; nothing here is fetched at run time, so there is no CORS or
+privacy question. All layers are lazy and off by default. Numbers are as
+measured on 2026-11-09/10 (UTC).
+
+## Datasets shipped
+
+| Layer | What | Source and citation | Licence, as the source states it | URL fetched | Baked by → file (size) | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mantle at 150 / 400 / 700 / 1,250 / 2,050 / 2,850 km (`tomography-<depth>`, one at a time) | Shear-velocity anomaly dVs/Vs at six depth layers of the model, coloured slow red … fast blue; coastlines projected down for bearings | SEMUCB-WM1: French, S.W. & Romanowicz, B.A. (2014), Whole-mantle radially anisotropic shear velocity structure from spectral-element waveform tomography, Geophys. J. Int. 199, 1303–1327, doi:10.1093/gji/ggu334. Read as the spherical-harmonic expansion to degree 31 (`tomography/semucb-wm1.31.m.ab`, 41 layers) distributed with hc (Becker, O'Neill & Steinberger), pinned to commit 7bb6d03 | **No licence stated for the model.** The EarthScope EMC record gives only "To cite the original work behind this Earth model: French & Romanowicz (2014)"; the authors' own repository has no licence file. hc's README: "All of the HC code is distributed under the GNU General Public License" (GPL-2.0) - the code, which is neither run nor shipped | https://raw.githubusercontent.com/geodynamics/hc/7bb6d0385d88e25510f5e4646e835d8b018f2073/tomography/semucb-wm1.31.m.ab | `generate_tomography.py` → `geo/tomography/dvs-*.png` (6 × 55–68 kB), `geo/tomography.json` (1 kB) | SEMUCB-WM1, French & Romanowicz (2014), doi:10.1093/gji/ggu334; expansion as distributed with hc |
+| Deep mantle in 3-D: slow provinces (`tomography-slow-bodies`) | The −0.8 % surface of the same model from 1,050 km to the core-mantle boundary, as a closed mesh: the African and Pacific large low-shear-velocity provinces (LLSVPs) and the columns on them | as above | as above | as above | `generate_tomography_bodies.py` → `geo/tomography-bodies-slow.bin` (241 kB), `geo/tomography-bodies.json` (1 kB) | as above |
+| Ultra-low velocity zones on the core (`ulvz`) | Every location of the compilation's "Raw" database: 4,973 pierce points, 456 paths and 62 outlines on the core-mantle boundary, each as found / not found / uncertain; four mega-ULVZs named | Yu, S. & Garnero, E.J. (2018), Ultralow Velocity Zone Locations: A Global Assessment, Geochem. Geophys. Geosyst. 19, 396–414, doi:10.1002/2017GC007281; data set "ULVZ Distribution Database from 54 studies" v1.0.1, Zenodo, doi:10.5281/zenodo.1064217. Galápagos mega-ULVZ: Cottaar, S., Martin, C., Li, Z. & Parai, R. (2022), The root to the Galápagos mantle plume on the core-mantle boundary, Seismica 1(1), doi:10.26443/seismica.v1i1.197 | **No named licence.** Zenodo: "Rights: License: Other (Open). No further description." No licence file in the archive. Seismica paper: CC BY 4.0 | https://zenodo.org/api/records/1064217/files/ULVZ-Database-1.0.1.zip/content | `generate_ulvz.py` → `geo/ulvz.json` (191 kB) | Yu & Garnero (2018), doi:10.1002/2017GC007281; ULVZ Distribution Database v1.0.1, doi:10.5281/zenodo.1064217 |
+| Volcanoes by last eruption (`volcanoes`); Greatest eruptions (`eruptions-great`) | 1,214 Holocene and 1,452 Pleistocene volcanoes with type, height and last eruption year; the 59 confirmed Holocene eruptions of VEI 6 and 7 | Global Volcanism Program (2026), [Database] Volcanoes of the World (v. 5.4.0; 7 Aug 2026), distributed by Smithsonian Institution, compiled by Venzke, E., doi:10.5479/si.GVP.VOTW5-2026.5.4 | **Non-commercial.** Smithsonian terms of use: "The Smithsonian invites visitors to use its online content for personal, educational and other non-commercial purposes"; "You may not use the Content for commercial purposes … you must obtain prior written permission"; "You must cite the author and source of the Content" | https://webservices.volcano.si.edu/geoserver/GVP-VOTW/ows (WFS 1.0.0; `Smithsonian_VOTW_Holocene_Volcanoes`, `_Pleistocene_Volcanoes`, `_Holocene_Eruptions`) | `generate_volcanoes.py` → `geo/volcanoes.json` (105 kB) | the citation above, in full, with a link to volcano.si.edu |
+| Impact craters (`impact-craters`) | The 187 proven impact structures of 100 m and more: position, diameter, recommended age | Schmieder, M. & Kring, D.A. (2020), Earth's Impact Events Through Geologic Time: A List of Recommended Ages for Terrestrial Impact Structures and Deposits, Astrobiology 20(1), 91–141, doi:10.1089/ast.2019.2085, Table 1 | CC BY 4.0 ("distributed under the terms of the Creative Commons License (http://creativecommons.org/licenses/by/4.0)", in the article) | https://www.ebi.ac.uk/europepmc/webservices/rest/PMC6987741/fullTextXML | `generate_craters.py` → `geo/craters.json` (27 kB) | Schmieder & Kring (2020), Astrobiology 20, 91, doi:10.1089/ast.2019.2085 |
+| Magnetic anomaly of the crust (`magnetic-anomaly`) | Crustal magnetic anomaly, ±400 nT on a square-root scale | Meyer, B., Saltus, R. & Chulliat, A. (2017), EMAG2v3: Earth Magnetic Anomaly Grid (2-arc-minute resolution), Version 3, NOAA National Centers for Environmental Information, doi:10.7289/V5H70CVX | Public domain: "Produced by the NOAA National Centers for Environmental Information. Not subject to copyright protection within the United States." | https://gis.ngdc.noaa.gov/arcgis/rest/services/EMAG2v3/ImageServer/exportImage | `generate_earth_fields.py` → `geo/fields/magnetic-anomaly.jpg` (503 kB, 2048 × 1024) | Meyer, Saltus & Chulliat (2017), EMAG2v3, NOAA NCEI, doi:10.7289/V5H70CVX |
+| Geoid height (`geoid`) | Height of the geoid above the ellipsoid, −107 … +85 m | EGM96: Lemoine, F.G. et al. (1998), The Development of the Joint NASA GSFC and NIMA Geopotential Model EGM96, NASA/TP-1998-206861; the 15-arc-minute grid as packaged by PROJ | Public domain, per PROJ-data's `us_nga_README.txt` ("Source: NGA … License: Public Domain") - the packager's statement; no NGA page was fetched | https://cdn.proj.org/us_nga_egm96_15.tif | same script → `geo/fields/geoid.png` (72 kB) | EGM96, NASA GSFC / NIMA (Lemoine et al. 1998) |
+| Crust: depth of the Moho (`moho-depth`); Sediment thickness (`sediment-thickness`) | Depth of the base of the crust; thickness of the three sediment layers; 1° cells (both from the model's `crust1.bnds`) | CRUST1.0: Laske, G., Masters, G., Ma, Z. & Pasyanos, M. (2013), Update on CRUST1.0 - A 1-degree Global Model of Earth's Crust, Geophys. Res. Abstracts 15, Abstract EGU2013-2658 | **No licence stated.** The model's page says only "Please refer to the REM web site if you use this model … or to Laske, G., Masters, G., Ma, Z. and Pasyanos, M., Update on CRUST1.0 …"; the readme in the archive has no terms | https://igppweb.ucsd.edu/~gabi/crust1/crust1.0.tar.gz | same script → `geo/fields/moho-depth.png` (37 kB), `sediment-thickness.png` (50 kB) | Laske, Masters, Ma & Pasyanos (2013), CRUST1.0, EGU2013-2658 |
+| Heat flow, measured (`heat-flow`) | Median of the measurements in each 1° cell: 91,058 measurements in 10,214 cells | Global Heat Flow Data Assessment Group et al. (2024), The Global Heat Flow Database: Release 2024, v. 2026.03, GFZ Data Services, doi:10.5880/fidgeo.2024.014 | CC BY 4.0 (DataCite record of the DOI) | https://datapub.gfz-potsdam.de/download/10.5880.FIDGEO.2024.014-VEueRf/GHFBD-R2024_v.2026-03.zip | same script → `geo/fields/heat-flow.png` (24 kB); all five described in `geo/fields.json` (1 kB) | Global Heat Flow Data Assessment Group (2024), Global Heat Flow Database Release 2024, doi:10.5880/fidgeo.2024.014 |
+| Ocean currents (`ocean-currents`) | Mean surface current, Dec 2011 – Sep 2014 (39 five-day composites averaged), 1° grid; names of eleven currents | OSCAR third-degree surface currents, Earth & Space Research: Bonjean, F. & Lagerloef, G.S.E. (2002), Diagnostic model and analysis of the surface currents in the tropical Pacific Ocean, J. Phys. Oceanogr. 32, 2938–2954; served by NOAA CoastWatch ERDDAP, dataset `jplOscar`. Names and positions: Wikidata | ERDDAP record: "The data may be used and redistributed for free but is not intended for legal use, since it may contain inaccuracies." Wikidata: CC0 | https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplOscar.nc ; https://query.wikidata.org/sparql | `generate_ocean_currents.py` → `geo/ocean-currents.bin` (130 kB), `ocean-currents.json` (1 kB) | OSCAR, Earth & Space Research (Bonjean & Lagerloef 2002), via NOAA CoastWatch ERDDAP; Wikidata |
+| Features of the ocean floor (`undersea-features`) | 412 named features (all trenches and deeps; the largest of each other kind) and the gazetteer's lines for trenches, fracture zones and ridges | IHO-IOC GEBCO Gazetteer of Undersea Feature Names, www.gebco.net (the citation GEBCO asks for), read from the gazetteer's API at NOAA NCEI | **No licence stated.** GEBCO's page: "Please include the following citation when data from the gazetteer are used or reproduced in reports, presentations and other products: IHO-IOC GEBCO Gazetteer of Undersea Feature Names, www.gebco.net"; the page is "Copyright © 2020-2026, GEBCO" | https://www.ngdc.noaa.gov/gazetteer/api/v1/feature | `generate_undersea.py` → `geo/undersea.json` (65 kB) | IHO-IOC GEBCO Gazetteer of Undersea Feature Names, www.gebco.net |
+| Depth ladder (`depth-ladder`) | Pressure, density and temperature at eight depths down the line under the user's feet | PREM: Dziewonski, A.M. & Anderson, D.L. (1981), Preliminary reference Earth model, Phys. Earth Planet. Inter. 25, 297–356. Geotherm: Anderson, O.L. (1982), The Earth's core and the phase diagram of iron, Phil. Trans. R. Soc. A 306, 21–35. Both as tabulated with BurnMan (`input_seismic/prem.txt`, `input_geotherm/anderson_82.txt`), pinned to commit c3b396d. The antipode's nearest city: Natural Earth | Facts from the literature. BurnMan is "released under the GNU GPL v2 or newer": only the two tables are read (see the notes). Natural Earth: public domain | https://raw.githubusercontent.com/geodynamics/burnman/c3b396d091a5985f22fb3f981dd155957e667015/burnman/data/ | `generate_depth_ladder.py` → `geo/depth-ladder.json` (1 kB) | PREM, Dziewonski & Anderson (1981); Anderson (1982) |
+
+Every source above is in the layer's `credits` (the in-app "Data credits"
+list) and in `app/public/geo/ATTRIBUTION.md`. New in this slice's second
+session: the two deep-mantle layers (`tomography-slow-bodies`, `ulvz`); the
+rest were built in the first session and audited in the second. Total
+shipped: 1.83 MB in 22 files, the largest the 503 kB magnetic-anomaly image.
+
+## Licence-sensitive items: what needs a decision
+
+None of these stops a public, non-commercial, open-source app from using
+the data with the credit given. They are listed because the repository
+cannot re-license them, and one of them forbids commercial use.
+
+1. **Volcanoes of the World (GVP) - non-commercial only.** The Smithsonian's
+   terms allow "personal, educational and other non-commercial purposes"
+   with citation and a link, and require written permission for anything
+   commercial. The same page says the database compilation "is a product of
+   employees of the United States, and falls under (2)" - content "never
+   eligible for copyright protection" - but the terms of use still bind.
+   `geo/volcanoes.json` is kept in its own file for this reason: if the
+   app is ever used commercially it must go, or permission be asked. The
+   freer alternative already in the app is NOAA NCEI's Volcano Locations
+   Database (public domain; names and positions only, in `geology.json`).
+   **Needs Andy's decision** only if the project's own licence is meant to
+   permit commercial reuse of everything in the repository.
+2. **SEMUCB-WM1 - no licence.** A published model, redistributed by
+   EarthScope and inside the hc repository, with a request to cite and no
+   grant of rights. What ships is derived (six 720 × 360 images of the
+   degree-31 expansion and one iso-surface), not the model's files. hc's
+   GPL-2.0 covers "the HC code"; the bake runs none of it (the synthesis is
+   reimplemented in numpy and pinned against hc's own `sh_syn` output), and
+   GPL-2.0 section 0 covers a program's output only "if its contents
+   constitute a work based on the Program", which a re-expression of a
+   third party's published coefficients is not. This is a reading, not
+   legal advice. `mantle-flow.json` (tectonics slice) rests on the same file.
+3. **ULVZ Distribution Database - "Other (Open)", no named licence.** Open
+   access on Zenodo; the authors name no licence and ask for no particular
+   citation. The paper and the data DOI are cited. In its own file
+   (`geo/ulvz.json`). The archive's folder of screenshots of other papers'
+   figures is not used.
+4. **CRUST1.0 - no licence.** The authors ask to be cited; nothing else is
+   said. Two small derived images.
+5. **GEBCO gazetteer - no licence; citation required.** The names are
+   approved international names; the gazetteer's own text (histories,
+   proposers) is not reproduced, only names, generic terms, label points,
+   depths and line geometry. The required citation is the credit.
+6. **BurnMan (GPL-2.0-or-later).** Checked: the bake fetches exactly two
+   data files from the BurnMan repository, both tables of numbers published
+   in the cited papers (the PREM file's header: "PREM (Dziewonski and
+   Anderson, 1981) and QL6 (Durek and Ekstrom, 1996) (without an ocean)";
+   only its depth, pressure and density columns are read). What is baked is
+   eight rows of values interpolated from them, with rung names written in
+   this repository. No BurnMan code or text is used or shipped.
+7. **OSCAR via ERDDAP** - "may be used and redistributed for free"; a
+   snapshot of 2011-2014, which is all that dataset holds, and the layer
+   says "mean, 2011-2014", not "now".
+
+No source here is share-alike.
+
+Corrected in the audit (the credits as first merged were wrong or loose):
+
+- GVP: the credit paired "(2025)" with the DOI of v. 5.2.0 (June 2024). Now
+  v. 5.4.0 (7 Aug 2026), the version the database page gave as current.
+- CRUST1.0 "freely distributed by the authors", GEBCO "freely available" and
+  SEMUCB-WM1 "published model, cited": none of the three sources says so.
+  Now "no stated licence" with what each does ask.
+- The depth ladder fetched BurnMan's `main`; now pinned to the commit whose
+  two files are byte-identical to those baked.
+- `ATTRIBUTION.md` had no rows for any earth-extras file; added.
+
+## What is derived, and what is a model
+
+- **Tomography slices** are a model - an inversion of seismograms - and each
+  caption says "a model (SEMUCB-WM1), smoothed to ~650 km". The six depths
+  are layers of the file itself; nothing is interpolated in depth.
+- **Slow provinces (3-D).** A contour, not an object: the −0.8 % surface of
+  the same degree-31 expansion on a 2.5° grid of the model's own layers
+  from 1,050 km down (every 100 km), by marching cubes. The deepest layer
+  (2,850 km) is taken to hold down to the core-mantle boundary at 2,891 km,
+  where the mesh has a flat base; at 1,050 km it is cut flat, so a column
+  that goes on up is seen cut. Another threshold or another model draws a
+  different body, and the caption and both labels ("… · −0.8 % contour
+  (model)") say so. Inside the contour: 23.1 billion km³, 2.6 % of the
+  mantle; the African piece 11.2, the Pacific 9.8, and 91 % of the volume
+  in those two. The names "African LLSVP" and "Pacific LLSVP" are attached
+  by rule to the two largest pieces from where their centres of volume fall
+  (16.6°E 17.4°S and 158.8°W 13.6°S), following Garnero, McNamara & Shim
+  (2016), Nature Geoscience 9, 481–489, doi:10.1038/ngeo2733.
+  Drawing choices that are not data: depth is shown as colour (light at the
+  cut, dark on the core) and as a line every 250 km; the base is left open
+  where it faces the viewer so the roof can be seen from below; a body seen
+  through the core is dimmed; nearer than ~4,500 km it thins.
+  The fast side (+0.8 %, old slabs) was baked and drawn and **left out**:
+  twenty-odd pieces, two of them walls across the default view from Austin
+  (the Farallon body overhead and the one under the eastern Indian Ocean at
+  the antipode). It hid more than it showed.
+- **ULVZs.** Not a map of ULVZs but of where 54 studies looked. Positions
+  are Yu & Garnero's digitisations of each study's figures, kept as given
+  (longitudes brought to −180…180): a point is a ray's pierce point, a line
+  the two ends of a diffracted path, an outline a studied region. Their
+  0.5° Fresnel-zone grids are not used, so a mark is thinner than the patch
+  of boundary a wave actually sensed. Empty means not looked at; the caption
+  says so. Mega-ULVZ labels: Hawaii and Iceland are measured from their
+  outlines in the database (centre; width from the mean radius × the core's
+  radius, 3,480 km), with height and velocity drop from the database's
+  `Details` table; Samoa's size is its paper's wording ("roughly 250 × 800 km
+  … 10–15 km thick", Thorne et al. 2013); Galápagos is later than the
+  database and is the paper's own best-fitting cylinder (105°W 2°N, 600 km,
+  20 km, −25 %; stated uncertainties at least 2°, 100 km, 5 km, 5 %), drawn
+  as a ring of that width. The Marquesas ULVZ (Kim et al. 2020) is not
+  drawn: the paper says its data "does not constrain its precise location
+  and characteristics".
+- **Volcanoes.** "Last eruption" is the database's year on the day of the
+  bake (9 Nov 2026): a snapshot, and the caption says so.
+- **Geoid, Moho, sediment** are models (EGM96, CRUST1.0) and say so; the
+  magnetic anomaly is a compilation with gaps left clear; heat flow is
+  measurements only, the unmeasured planet left clear.
+- **Ocean currents** are a satellite-derived analysis averaged over three
+  years, animated as drifting trails; the trails are an animation of that
+  mean field, not tracked water.
+- **Depth ladder.** A scale, not structures; PREM is a radial average, and
+  the temperature is one author's estimate, flagged as such.
+
+## Verification
+
+Pipeline checks, all passing on 2026-11-09: `test_tomography.py` (70
+checks), `test_tomography_bodies.py` (28), `test_ulvz.py` (25),
+`test_volcanoes.py` (90), `test_craters.py` (58), `test_earth_fields.py`
+(91), `test_ocean_currents.py` (29), `test_undersea.py` (58),
+`test_depth_ladder.py` (30). App: 652 vitest tests, lint, typecheck, build.
+
+**Slow provinces against the model and the literature.** The checks read the
+baked mesh back as the app does and ask whether points are inside it (parity
+of crossings of a ray straight up):
+
+- At 691 lattice points through the lower mantle (five depths 1,210-2,810 km,
+  19.7° × 23.3° spacing, kept off the grid's nodes and at least 0.15 % from
+  the threshold) the mesh's inside/outside equals the model's dVs < −0.8 %,
+  691 of 691.
+- Inside, on the core: under southern Africa (20°E 20°S, model −2.67 %), the
+  south-east Atlantic (5°E 25°S, −2.74 %), the central Pacific (165°W 10°S,
+  −1.54 %), the south Pacific superswell (150°W 18°S, −1.17 %); and 1,000 km
+  above the core under southern Africa (−1.64 %).
+- Outside: under east Asia (120°E 40°N, +1.11 %), northern North America
+  (95°W 60°N, +1.15 %), the Southern Ocean south-west of Australia (+0.82 %),
+  South America (−0.40 %), and in the mid mantle where the Farallon slab lies
+  under eastern North America (+0.91 % at 1,400 km) and the Tethyan slabs
+  under India (+1.11 % at 1,200 km) (van der Meer et al. 2018,
+  Tectonophysics 723, 309, doi:10.1016/j.tecto.2017.10.004).
+- The mesh is closed and consistently wound (each of 80,184 directed edges
+  has its opposite; none shared by more than two triangles), lies between
+  1,049.4 and 2,891.9 km, and is 241 kB.
+- The numpy synthesis it rests on reproduces hc's own `sh_syn` at 24 points
+  to 2 × 10⁻⁴ % (`test_tomography.py`).
+
+**ULVZ database.** The baked counts equal an independent walk of the
+unpacked archive: 121 files, 54 studies, 17,129 coordinate rows (points
+1,986 / 2,508 / 479; path ends 370 / 436 / 106; outline vertices 8,475 /
+1,142 / 1,627 for found / not found / uncertain). The first bake silently
+dropped five files whose region code has an underscore; the script now
+refuses any `Data.*` file it cannot parse. Pinned: Vidale & Benz's (1992)
+"none" outline under the Gulf of Alaska; a path of Helmberger, Ni & Wen
+(2000) under Africa; the Hawaiian outline measures 910 km across at the
+core, the paper's "~ 910 km in diameter", and its centre is 11.7° south-west
+of Kilauea, the paper's "~11° to the southwest of Hawaii" (Cottaar &
+Romanowicz 2012, abstract); Iceland's centre is under Iceland.
+
+**Licences.** Each source's own terms page was fetched and read on
+2026-11-09; the quotations in the table are from those pages. Citations of
+papers were checked against Crossref.
+
+**By eye** (headless Chromium, 412 × 892 at dpr 2, from Austin; screenshots
+in `~/review-loop/shots/earth-extras/`): see the list under "Screenshots".
+
+## Unverified, approximate, or left out
+
+- **GVP version.** The WFS has no version field. The cited v. 5.4.0 is what
+  the database page showed on 30 Oct 2026 (Wayback Machine; the live site
+  refuses scripted requests); the download is of 9 Nov. Not confirmed for
+  those ten days.
+- **Smithsonian and GVP terms** were read from Wayback snapshots (9 Jul and
+  30 Oct 2026), not the live pages, for the same reason.
+- **EGM96's public-domain status** is PROJ's statement about NGA's data.
+- **SEMUCB-WM1 terms.** Berkeley's own model page needs a login and could
+  not be read.
+- **ULVZ `Details` units** are not stated in the database; they are read as
+  per cent and km because the Hawaii row (−20, 20) and the Samoa row (−45,
+  10) match those papers' "20%", "~ 20 km", "45%" and "10-15 km". The
+  Iceland label's 15 km and −23 % rest on the table alone: the paper's
+  abstract gives no numbers and its text could not be fetched.
+- **CMB topography** (Muir, Tanaka & Tkalčić 2022, Zenodo
+  doi:10.5281/zenodo.6525050, CC BY 4.0) was downloaded and **not shipped**:
+  the record does not state the unit of the radius perturbation.
+- **D″ discontinuity observations**: no machine-readable global table was
+  found. **Inner-core facts** (anisotropy axis etc.): not attempted.
+- **ULVZ near and far side.** Marks on the near and the far half of the core
+  are drawn alike; which half a mark is on has to be read from the globe.
+- **Frame times** below are from a shared machine with other headless
+  browsers running; see the note there.
+
+## Frame times
+
+`tools/screenshot/shot.mjs`, 412 × 892 at dpr 2, Intel Iris Xe through ANGLE,
+from Austin; the vsync floor is 16.6-16.7 ms. Default layers only: 16.6-17.0
+ms over four runs. Each layer was measured alone (everything else off), added
+to the default layers looking straight down, and alone looking toward the
+horizon (yaw 60°, pitch −25°).
+
+| Layer | alone | with defaults | toward the horizon |
+| --- | --- | --- | --- |
+| `tomography-150` | 16.7 | 16.7 | 16.7 |
+| `tomography-400` | 16.7 | 16.7 | 16.7 |
+| `tomography-700` | 16.7 | 16.7 (20.4 once) | 16.7 |
+| `tomography-1250` | 16.5 | 16.7 | 16.7 |
+| `tomography-2050` | 16.4 | 16.8 | 16.7 |
+| `tomography-2850` | 16.7 | 16.7-17.6 | 16.7 |
+| `tomography-slow-bodies` | 16.7 | 16.7 | 16.7 |
+| `ulvz` | 16.5 | 16.8 | 16.7 |
+| `volcanoes` | 16.7 | 16.7 | 16.7 |
+| `eruptions-great` | 16.7 | 16.7 | 16.7 |
+| `impact-craters` | 16.7 | 16.7 | 16.7 |
+| `magnetic-anomaly` | 16.7 | 16.8 | 16.7 |
+| `geoid` | 16.7 | 16.6 | 16.7 |
+| `moho-depth` | 16.7 | 16.7 | 16.7 |
+| `sediment-thickness` | 17.0 | 16.9 | 16.7 |
+| `heat-flow` | 16.7 | 16.8 | 16.7 |
+| `ocean-currents` | 16.7 | 16.9 | 16.7 |
+| `undersea-features` | 16.7 | 16.7 | 16.7 |
+| `depth-ladder` | 16.7 | 16.7 | 16.7 |
+
+With the 2,850 km slice, the 3-D provinces, the ULVZs and the slabs all added
+to the default layers: 16.8 ms.
+
+The machine was shared with other headless browsers while these were taken:
+runs of the default layers alone read 19-23 ms at busy moments, and the one
+20.4 ms above did not repeat (16.7 twice on re-measuring). So the table shows
+that no layer leaves the vsync floor here; it cannot show a cost smaller than
+that noise, and it is not a phone measurement.
+
+## Screenshots
+
+In `~/review-loop/shots/earth-extras/` (412 × 892 at dpr 2, from Austin):
+
+- `<layer>-alone.png`, `<layer>-default.png`, `<layer>-horizon.png` for each
+  of the nineteen layers above: alone looking straight down through the
+  Earth, added to the default layers, and alone toward the horizon.
+- The slow provinces: `bodies-down-alone`, `bodies-down-2850-slice` (the
+  bodies standing on the slice's red regions), `bodies-africa-alone`,
+  `bodies-africa-2850-slice`, `bodies-africa-default-layers`,
+  `bodies-pacific-alone`, `bodies-pacific-side-horizon`,
+  `bodies-down-default-layers`, `bodies-with-slabs` (the Pacific province
+  behind the Kermadec and Vanuatu slabs).
+- ULVZs: `ulvz-down-alone`, `ulvz-hawaii-alone`, `ulvz-iceland`,
+  `ulvz-down-with-2850-slice`, `ulvz-pacific-with-bodies`,
+  `ulvz-hawaii-default-layers`, `all-deep-default` (slice, provinces and
+  ULVZs over the default layers).
+- `wip/` holds the first session's working shots.
+
+What was changed after looking: the provinces went from clear glass with
+bright edges (unreadable: every wall of every body at once) to shaded solids
+with a depth pass of their own; the depth ladder's texts were moved off the
+rings that struck them through. Left as it is: on the tomography slices the
+near half of the shell is a veil over the far half, and where a slow patch
+on one lies over a fast patch on the other the two mix to a purple that is
+not on the legend.
