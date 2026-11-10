@@ -1,0 +1,124 @@
+{
+ "source": "CelesTrak GP data (celestrak.org), from the US Space Force 18th/19th Space Defense Squadron",
+ "groups": {
+  "stations": {
+   "fetched": "2026-11-10T01:48:15Z",
+   "count": 19,
+   "epochMin": "2026-11-09T02:32:28Z",
+   "epochMedian": "2026-11-09T11:10:18Z",
+   "epochMax": "2026-11-09T15:21:57Z"
+  },
+  "visual": {
+   "fetched": "2026-11-10T01:49:27Z",
+   "count": 156,
+   "epochMin": "2026-11-08T20:50:19Z",
+   "epochMedian": "2026-11-09T12:05:52Z",
+   "epochMax": "2026-11-09T16:04:06Z"
+  },
+  "gps-ops": {
+   "fetched": "2026-11-10T01:49:30Z",
+   "count": 32,
+   "epochMin": "2026-11-07T15:28:37Z",
+   "epochMedian": "2026-11-09T06:42:47Z",
+   "epochMax": "2026-11-09T15:27:41Z"
+  },
+  "glo-ops": {
+   "fetched": "2026-11-10T01:49:35Z",
+   "count": 28,
+   "epochMin": "2026-10-15T12:01:45Z",
+   "epochMedian": "2026-11-09T02:38:41Z",
+   "epochMax": "2026-11-09T11:59:47Z"
+  },
+  "galileo": {
+   "fetched": "2026-11-10T01:49:38Z",
+   "count": 32,
+   "epochMin": "2026-11-04T00:20:22Z",
+   "epochMedian": "2026-11-08T22:49:33Z",
+   "epochMax": "2026-11-09T11:33:51Z"
+  },
+  "beidou": {
+   "fetched": "2026-11-10T01:49:41Z",
+   "count": 54,
+   "epochMin": "2026-10-29T08:22:36Z",
+   "epochMedian": "2026-11-09T04:00:40Z",
+   "epochMax": "2026-11-09T15:56:57Z"
+  },
+  "geo": {
+   "fetched": "2026-11-10T01:49:46Z",
+   "count": 568,
+   "epochMin": "2026-10-15T14:14:25Z",
+   "epochMedian": "2026-11-09T13:29:19Z",
+   "epochMax": "2026-11-09T16:04:34Z"
+  },
+  "weather": {
+   "fetched": "2026-11-10T01:49:49Z",
+   "count": 74,
+   "epochMin": "2026-11-07T20:09:22Z",
+   "epochMedian": "2026-11-09T14:16:04Z",
+   "epochMax": "2026-11-09T15:51:54Z"
+  },
+  "resource": {
+   "fetched": "2026-11-10T01:49:53Z",
+   "count": 167,
+   "epochMin": "2026-11-08T12:05:20Z",
+   "epochMedian": "2026-11-09T14:22:49Z",
+   "epochMax": "2026-11-09T16:12:24Z"
+  },
+  "science": {
+   "fetched": "2026-11-10T01:50:00Z",
+   "count": 45,
+   "epochMin": "2026-11-08T01:06:22Z",
+   "epochMedian": "2026-11-09T14:03:31Z",
+   "epochMax": "2026-11-10T22:53:33Z"
+  },
+  "iridium-NEXT": {
+   "fetched": "2026-11-10T01:50:06Z",
+   "count": 80,
+   "epochMin": "2026-11-09T01:55:38Z",
+   "epochMedian": "2026-11-09T11:07:50Z",
+   "epochMax": "2026-11-09T14:51:15Z"
+  },
+  "oneweb": {
+   "fetched": "2026-11-10T01:50:09Z",
+   "count": 651,
+   "epochMin": "2026-11-09T00:15:02Z",
+   "epochMedian": "2026-11-09T09:23:22Z",
+   "epochMax": "2026-11-09T16:00:01Z"
+  },
+  "starlink": {
+   "fetched": "2026-11-10T01:50:16Z",
+   "count": 11201,
+   "epochMin": "2026-11-06T17:46:28Z",
+   "epochMedian": "2026-11-09T08:49:48Z",
+   "epochMax": "2026-11-09T16:10:33Z"
+  },
+  "cosmos-1408-debris": {
+   "fetched": "2026-11-10T01:50:25Z",
+   "count": 2,
+   "epochMin": "2026-11-09T08:22:09Z",
+   "epochMedian": "2026-11-09T10:55:12Z",
+   "epochMax": "2026-11-09T10:55:12Z"
+  },
+  "fengyun-1c-debris": {
+   "fetched": "2026-11-10T01:50:31Z",
+   "count": 1979,
+   "epochMin": "2026-10-15T05:03:20Z",
+   "epochMedian": "2026-11-09T04:03:01Z",
+   "epochMax": "2026-11-09T15:56:19Z"
+  },
+  "iridium-33-debris": {
+   "fetched": "2026-11-10T01:50:42Z",
+   "count": 109,
+   "epochMin": "2026-10-30T10:02:33Z",
+   "epochMedian": "2026-11-09T06:29:40Z",
+   "epochMax": "2026-11-09T15:55:28Z"
+  },
+  "cosmos-2251-debris": {
+   "fetched": "2026-11-10T01:50:47Z",
+   "count": 583,
+   "epochMin": "2026-10-11T17:31:09Z",
+   "epochMedian": "2026-11-09T06:29:11Z",
+   "epochMax": "2026-11-09T15:57:50Z"
+  }
+ }
+}
