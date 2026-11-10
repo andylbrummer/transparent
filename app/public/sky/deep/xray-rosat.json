@@ -1,0 +1,1 @@
+{"source":"ROSAT All-Sky Survey Bright Source Catalogue (Voges et al. 1999, A&A 349, 389), via NASA HEASARC table rassbsc","frame":"ICRS","count":18811,"file":"xray-rosat.bin","layout":"little-endian records: uint16 ra (65536 per turn), int16 dec (32767 per 90 deg), uint16 value","value":"PSPC count rate, 0.1-2.4 keV, in 0.01 counts/s (capped at 655)"}

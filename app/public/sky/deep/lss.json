@@ -1,0 +1,1 @@
+{"source":"2MASS Redshift Survey (Huchra et al. 2012, ApJS 199, 26), via NASA HEASARC table twomassrsc","frame":"ICRS","count":43533,"file":"lss.bin","layout":"little-endian records: uint16 ra (65536 per turn), int16 dec (32767 per 90 deg), uint16 value","value":"heliocentric radial velocity cz in km/s (0 for the few approaching galaxies)"}
