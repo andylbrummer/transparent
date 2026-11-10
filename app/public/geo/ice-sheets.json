@@ -1,0 +1,168 @@
+{
+ "width": 2048,
+ "height": 1024,
+ "slices": [
+  {
+   "id": "lgm",
+   "name": "Last Glacial Maximum",
+   "youngKa": 19,
+   "oldKa": 26.5,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/lgm.png",
+   "areaKm2": 26120000.0
+  },
+  {
+   "id": "30ka",
+   "name": "30,000 years ago",
+   "youngKa": 30,
+   "oldKa": 30,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/30ka.png",
+   "areaKm2": 14280000.0
+  },
+  {
+   "id": "35ka",
+   "name": "35,000 years ago",
+   "youngKa": 35,
+   "oldKa": 35,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/35ka.png",
+   "areaKm2": 12820000.0
+  },
+  {
+   "id": "40ka",
+   "name": "40,000 years ago",
+   "youngKa": 40,
+   "oldKa": 40,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/40ka.png",
+   "areaKm2": 10690000.0
+  },
+  {
+   "id": "45ka",
+   "name": "45,000 years ago",
+   "youngKa": 45,
+   "oldKa": 45,
+   "warmPeak": true,
+   "file": "geo/ice-sheets/45ka.png",
+   "areaKm2": 7190000.0
+  },
+  {
+   "id": "mis4",
+   "name": "MIS 4",
+   "youngKa": 58,
+   "oldKa": 72,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis4.png",
+   "areaKm2": 23730000.0
+  },
+  {
+   "id": "mis5a",
+   "name": "MIS 5a",
+   "youngKa": 72,
+   "oldKa": 86,
+   "warmPeak": true,
+   "file": "geo/ice-sheets/mis5a.png",
+   "areaKm2": 6940000.0
+  },
+  {
+   "id": "mis5b",
+   "name": "MIS 5b",
+   "youngKa": 86,
+   "oldKa": 92,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis5b.png",
+   "areaKm2": 12910000.0
+  },
+  {
+   "id": "mis5c",
+   "name": "MIS 5c",
+   "youngKa": 92,
+   "oldKa": 108,
+   "warmPeak": true,
+   "file": "geo/ice-sheets/mis5c.png",
+   "areaKm2": 6940000.0
+  },
+  {
+   "id": "mis5d",
+   "name": "MIS 5d",
+   "youngKa": 108,
+   "oldKa": 117,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis5d.png",
+   "areaKm2": 12500000.0
+  },
+  {
+   "id": "mis6",
+   "name": "MIS 6",
+   "youngKa": 132,
+   "oldKa": 190,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis6.png",
+   "areaKm2": 33740000.0
+  },
+  {
+   "id": "mis8",
+   "name": "MIS 8",
+   "youngKa": 243,
+   "oldKa": 279,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis8.png",
+   "areaKm2": 23370000.0
+  },
+  {
+   "id": "mis10",
+   "name": "MIS 10",
+   "youngKa": 337,
+   "oldKa": 365,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis10.png",
+   "areaKm2": 21450000.0
+  },
+  {
+   "id": "mis12",
+   "name": "MIS 12",
+   "youngKa": 429,
+   "oldKa": 477,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis12.png",
+   "areaKm2": 32360000.0
+  },
+  {
+   "id": "mis16",
+   "name": "MIS 16",
+   "youngKa": 622,
+   "oldKa": 677,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis16.png",
+   "areaKm2": 32080000.0
+  },
+  {
+   "id": "mis20-24",
+   "name": "MIS 20\u201324",
+   "youngKa": 790,
+   "oldKa": 928,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/mis20-24.png",
+   "areaKm2": 23000000.0
+  },
+  {
+   "id": "early-matuyama",
+   "name": "early Matuyama Chron",
+   "youngKa": 1780,
+   "oldKa": 2600,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/early-matuyama.png",
+   "areaKm2": 21500000.0
+  },
+  {
+   "id": "late-gauss",
+   "name": "late Gauss Chron",
+   "youngKa": 2600,
+   "oldKa": 3590,
+   "warmPeak": false,
+   "file": "geo/ice-sheets/late-gauss.png",
+   "areaKm2": 11070000.0
+  }
+ ]
+}
