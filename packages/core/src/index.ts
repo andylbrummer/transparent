@@ -9,6 +9,7 @@ export * from './tiles';
 export * from './gfs';
 export * from './terminator';
 export * from './astro';
+export * from './astro/ephemeris';
 
 export interface Vec3 {
   readonly x: number;
