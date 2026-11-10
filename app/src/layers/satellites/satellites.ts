@@ -32,6 +32,7 @@ import { EARTH_RADIUS_M, greenwichMeanSiderealTime, precessionMatrix, sunGeocent
 import type { SatRec } from 'satellite.js';
 import type { GroupLabel, LabelGroup } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
+import { SEEN_THROUGH_EARTH, SpaceLines, skyDirectionOf } from '../../render/space-lines';
 import type { FrameState, LayerContext, LayerInstance, StatusTone } from '../types';
 import { loadGpGroup, type GpSet } from './gp-source';
 import { LAYER_SPECS, NAMED_SIZE_FACTOR, labelText, type LayerSpec, type Naming } from './groups';
@@ -54,8 +55,6 @@ const SUN_INTERVAL_MS = 1000;
 const OTHER_NAMES_RANK = 6.45;
 /** Element sets older than this against the shown time: positions are drawn dimmer and the chip says so. */
 export const STALE_AGE_DAYS = 14;
-/** How faint a satellite seen through the Earth is, against one in the sky. */
-const BELOW_HORIZON = 0.62;
 /** The Sun this far below the user's horizon (sine of 6°): dark enough to see satellites. */
 const DARK_SUN_SINE = Math.sin((-6 * Math.PI) / 180);
 
@@ -84,7 +83,7 @@ const POINT_VERTEX = `
     float above = step(0.0, dot(world.xyz - cameraPosition, uObserverUp));
     vColor = aColor * mix(0.5, 1.0, lit);
     // A satellite that never propagated (decayed, or elements too old) stays at the origin, unseen.
-    vAlpha = mix(${BELOW_HORIZON.toFixed(2)}, 1.0, above) * step(1.0, r);
+    vAlpha = mix(${SEEN_THROUGH_EARTH.toFixed(2)}, 1.0, above) * step(1.0, r);
     gl_Position = projectionMatrix * viewMatrix * world;
     gl_PointSize = aSize * uPixelRatio * (1.0 + 0.7 * above * lit * uDark);
   }
@@ -99,27 +98,6 @@ const POINT_FRAGMENT = `
     float a = (1.0 - smoothstep(0.55, 1.0, r)) * vAlpha * uOpacity;
     if (a <= 0.003) discard;
     gl_FragColor = vec4(vColor, a);
-  }
-`;
-
-const LINE_VERTEX = `
-  attribute float aAlpha;
-  attribute vec3 aColor;
-  uniform vec3 uObserverUp;
-  varying vec4 vColor;
-  void main() {
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    float above = smoothstep(-2.0e4, 2.0e4, dot(world.xyz - cameraPosition, uObserverUp));
-    vColor = vec4(aColor, aAlpha * mix(${BELOW_HORIZON.toFixed(2)}, 1.0, above));
-    gl_Position = projectionMatrix * viewMatrix * world;
-  }
-`;
-
-const LINE_FRAGMENT = `
-  uniform float uOpacity;
-  varying vec4 vColor;
-  void main() {
-    gl_FragColor = vec4(vColor.rgb, vColor.a * uOpacity);
   }
 `;
 
@@ -232,9 +210,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
     if (spec.orbit(satellite.record, satellite.naming)) orbiting.push(i);
   });
   const orbitPositions = new Float32Array(orbiting.length * ORBIT_SEGMENTS * 6);
-  const orbitAttribute = new THREE.BufferAttribute(orbitPositions, 3).setUsage(THREE.DynamicDrawUsage);
-  let lines: THREE.LineSegments | null = null;
-  let lineMaterial: THREE.ShaderMaterial | null = null;
+  let lines: SpaceLines | null = null;
   if (orbiting.length > 0) {
     const alphas = new Float32Array(orbiting.length * ORBIT_SEGMENTS * 2);
     const lineColors = new Float32Array(orbiting.length * ORBIT_SEGMENTS * 6);
@@ -249,26 +225,10 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
         lineColors.set(color, (o * ORBIT_SEGMENTS * 2 + v) * 3);
       }
     });
-    const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute('position', orbitAttribute);
-    lineGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
-    lineGeometry.setAttribute('aColor', new THREE.BufferAttribute(lineColors, 3));
-    lineMaterial = new THREE.ShaderMaterial({
-      vertexShader: LINE_VERTEX,
-      fragmentShader: LINE_FRAGMENT,
-      uniforms: { uOpacity: opacity, uObserverUp: context.skyUniforms.uObserverUp },
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-    lines = new THREE.LineSegments(lineGeometry, lineMaterial);
-    lines.name = `${id}-orbits`;
-    lines.frustumCulled = false;
-    lines.renderOrder = RENDER_ORDER.nearSpace;
-    lines.visible = false;
-    inertial.add(lines);
+    lines = new SpaceLines(orbitPositions, lineColors, alphas, context.skyUniforms, { name: `${id}-orbits`, dynamic: true });
+    lines.object.visible = false;
+    inertial.add(lines.object);
   }
-
 
   const named: number[] = [];
   satellites.forEach((satellite, i) => {
@@ -351,9 +311,10 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
       if (k < ORBIT_SEGMENTS) orbitPositions.set(world, base + k * 6);
     }
     if (!ok) orbitPositions.fill(0, base, base + ORBIT_SEGMENTS * 6);
-    orbitAttribute.clearUpdateRanges();
-    orbitAttribute.addUpdateRange(base, ORBIT_SEGMENTS * 6);
-    orbitAttribute.needsUpdate = true;
+    const attribute = lines!.positions;
+    attribute.clearUpdateRanges();
+    attribute.addUpdateRange(base, ORBIT_SEGMENTS * 6);
+    attribute.needsUpdate = true;
   }
 
   /** Where satellite `index` is at `seconds` on the shader's clock, Earth-fixed metres: the shader's arithmetic. */
@@ -409,7 +370,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
       filled = 0;
       orbitsBuilt = 0;
       geometry.setDrawRange(0, 0);
-      if (lines) lines.visible = false;
+      if (lines) lines.object.visible = false;
       lastSunMs = NaN;
     }
     if (dateMs !== lastMs) {
@@ -429,7 +390,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
       buildOrbit(orbitCursor, dateMs);
       orbitCursor = orbitCursor + 1 === orbiting.length ? 0 : orbitCursor + 1;
       orbitsSettled++;
-      if (orbitsBuilt < orbiting.length && ++orbitsBuilt === orbiting.length) lines.visible = visible;
+      if (orbitsBuilt < orbiting.length && ++orbitsBuilt === orbiting.length) lines.object.visible = visible;
     }
 
     if (!(Math.abs(dateMs - lastSunMs) < SUN_INTERVAL_MS)) {
@@ -447,6 +408,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
 
       const next = elementsStatus(origin, medianEpochMs, dateMs);
       opacity.value = Math.abs(dateMs - medianEpochMs) > STALE_AGE_DAYS * 86400000 ? 0.55 : 1;
+      lines?.setOpacity(opacity.value);
       if (next.text !== status) {
         status = next.text;
         context.setStatus(next.text, next.tone);
@@ -460,7 +422,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
       toInertial.copy(context.inertialRoot.quaternion).invert();
       for (let i = 0; i < named.length; i++) {
         placeNow(named[i], seconds, c, s, labelWorld[i]);
-        labelPoints[i].copy(labelWorld[i]).sub(frame.camera.position).normalize().applyQuaternion(toInertial);
+        skyDirectionOf(labelWorld[i], frame.camera, toInertial, labelPoints[i]);
       }
       const wall = performance.now();
       if (jumped || wall - lastLabelWall > LABEL_REFRESH_MS || labels.length === 0) {
@@ -474,7 +436,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
     setVisible(next) {
       visible = next;
       points.visible = next;
-      if (lines) lines.visible = next && orbitsBuilt >= orbiting.length;
+      if (lines) lines.object.visible = next && orbitsBuilt >= orbiting.length;
       for (const group of labels) group.setVisible(next);
     },
     update,
@@ -482,8 +444,7 @@ export async function createSatelliteLayer(context: LayerContext, id: string): P
       inertial.removeFromParent();
       geometry.dispose();
       material.dispose();
-      lines?.geometry.dispose();
-      lineMaterial?.dispose();
+      lines?.dispose();
       for (const group of labels) group.remove();
     },
   };
