@@ -9,11 +9,11 @@
  * the lines cost - and they were the most expensive thing in the default
  * view, most of all in stereo, whose wide eyes see the whole far side twice.
  *
- * So each set is cut into cells of the sphere, and each cell is kept twice:
- * as given, and simplified to SIMPLIFY_TOLERANCE_M. A cell shows its
- * simplified lines while that tolerance is under a pixel on screen - which
- * depends on its distance and on the zoom - and cells out of view are not
- * drawn at all.
+ * So each set is cut into cells of the sphere, and each cell is kept at
+ * several levels: as given, and simplified to each of
+ * SIMPLIFY_TOLERANCES_M. A cell shows the coarsest level whose error is
+ * under a pixel on screen - which depends on its distance, on the zoom and
+ * on the size of the viewport - and cells out of view are not drawn at all.
  *
  * No three.js objects here beyond the switch itself: the cutting and the
  * simplifying are plain arrays, for the tests.
@@ -21,9 +21,14 @@
 
 import * as THREE from 'three';
 
-/** How far a simplified line may stray from the real one, metres. */
-export const SIMPLIFY_TOLERANCE_M = 4_000;
-/** The simplified lines are shown while that error stays under this many CSS pixels. */
+/**
+ * How far each simplified level may stray from the real line, metres,
+ * finest first. The first serves a phone held upright, where the far side
+ * is 10 km to the pixel; the second the stereo view's small, wide eyes,
+ * where it is 30 km and more.
+ */
+export const SIMPLIFY_TOLERANCES_M: readonly number[] = [4_000, 16_000];
+/** A simplified level is shown while its error stays under this many CSS pixels. */
 export const SIMPLIFY_MAX_ERROR_PX = 0.75;
 /** A line set with fewer segments than this is drawn whole: nothing to gain. */
 export const DETAIL_MIN_SEGMENTS = 10_000;
@@ -60,10 +65,11 @@ export interface OutlineCell {
   readonly centre: readonly [number, number, number];
   /** Every point of the cell lies within this of the centre, metres. */
   readonly radiusM: number;
-  /** Segment endpoints relative to the centre, six numbers a segment: the lines as given. */
-  readonly fine: Float32Array;
-  /** The same lines simplified. */
-  readonly coarse: Float32Array;
+  /**
+   * Segment endpoints relative to the centre, six numbers a segment: first
+   * the lines as given, then simplified to each tolerance in turn.
+   */
+  readonly levels: readonly Float32Array[];
 }
 
 /** Squared distance from point p to the segment a-b, all at offsets into `points` (xyz triples). */
@@ -139,27 +145,29 @@ export function simplifyPolyline(points: ArrayLike<number>, first: number, count
 /**
  * Cut line segments (absolute ECEF endpoints, six numbers each, as
  * outlineSegmentPositions gives them) into the cells of the sphere, each
- * with its lines as given and simplified to `toleranceM`. Consecutive
- * segments that join end to start and share a cell are simplified as one
- * line; a line crossing into another cell is cut there, both parts keeping
- * the crossing point, so neighbouring cells still meet.
+ * with its lines as given and simplified to each of `tolerancesM`.
+ * Consecutive segments that join end to start and share a cell are
+ * simplified as one line; a line crossing into another cell is cut there,
+ * both parts keeping the crossing point, so neighbouring cells still meet.
  */
-export function buildOutlineCells(segments: Float32Array, toleranceM: number = SIMPLIFY_TOLERANCE_M): OutlineCell[] {
+export function buildOutlineCells(segments: Float32Array, tolerancesM: readonly number[] = SIMPLIFY_TOLERANCES_M): OutlineCell[] {
   const segmentCount = segments.length / 6;
   const fine: number[][] = Array.from({ length: CELL_COUNT }, () => []);
-  const coarse: number[][] = Array.from({ length: CELL_COUNT }, () => []);
+  const simplified: number[][][] = tolerancesM.map(() => Array.from({ length: CELL_COUNT }, () => []));
   // The run being gathered: points of one line inside one cell.
   let run: number[] = [];
   let runCell = -1;
   const flush = (): void => {
     if (run.length >= 6) {
-      const kept = simplifyPolyline(run, 0, run.length / 3, toleranceM);
-      const out = coarse[runCell];
-      for (let k = 1; k < kept.length; k++) {
-        const a = kept[k - 1] * 3;
-        const b = kept[k] * 3;
-        out.push(run[a], run[a + 1], run[a + 2], run[b], run[b + 1], run[b + 2]);
-      }
+      tolerancesM.forEach((tolerance, level) => {
+        const kept = simplifyPolyline(run, 0, run.length / 3, tolerance);
+        const out = simplified[level][runCell];
+        for (let k = 1; k < kept.length; k++) {
+          const a = kept[k - 1] * 3;
+          const b = kept[k] * 3;
+          out.push(run[a], run[a + 1], run[a + 2], run[b], run[b + 1], run[b + 2]);
+        }
+      });
     }
     run = [];
   };
@@ -211,49 +219,59 @@ export function buildOutlineCells(segments: Float32Array, toleranceM: number = S
       }
       return out;
     };
-    cells.push({ centre: [cx, cy, cz], radiusM: Math.sqrt(radiusSq), fine: relative(points), coarse: relative(coarse[cell]) });
+    cells.push({
+      centre: [cx, cy, cz],
+      radiusM: Math.sqrt(radiusSq),
+      levels: [relative(points), ...simplified.map((level) => relative(level[cell]))],
+    });
   }
   return cells;
 }
 
 /**
- * Whether a cell `distanceM` away should show its simplified lines: while
- * their error, seen at that distance, stays under SIMPLIFY_MAX_ERROR_PX.
- * `pxPerRadian` is CSS pixels per radian of view at the screen's centre.
+ * Which level a cell `distanceM` away should show: 0, the lines as given,
+ * or the coarsest simplified level whose error, seen at that distance,
+ * stays under SIMPLIFY_MAX_ERROR_PX. `pxPerRadian` is CSS pixels per radian
+ * of view at the screen's centre.
  */
-export function useSimplified(distanceM: number, pxPerRadian: number, toleranceM: number = SIMPLIFY_TOLERANCE_M): boolean {
-  return (toleranceM / Math.max(distanceM, 1)) * pxPerRadian <= SIMPLIFY_MAX_ERROR_PX;
+export function detailLevel(distanceM: number, pxPerRadian: number, tolerancesM: readonly number[] = SIMPLIFY_TOLERANCES_M): number {
+  const perMetre = pxPerRadian / Math.max(distanceM, 1);
+  let level = 0;
+  for (let i = 0; i < tolerancesM.length; i++) {
+    if (tolerancesM[i] * perMetre <= SIMPLIFY_MAX_ERROR_PX) level = i + 1;
+  }
+  return level;
 }
 
 /**
- * One cell's two versions, showing whichever suits the camera about to
- * draw it. The renderer calls update(camera) on anything marked isLOD
- * before each render - so each eye of a stereo pair chooses for itself.
- * Its parents are never moved or turned, so its position is its world
- * position.
+ * One cell's levels, showing whichever suits the camera about to draw it.
+ * The renderer calls update(camera) on anything marked isLOD before each
+ * render - so each eye of a stereo pair chooses for itself. Its parents
+ * are never moved or turned, so its position is its world position.
  */
 export class DetailSwitch extends THREE.Object3D {
   readonly isLOD = true;
   readonly autoUpdate = true;
 
+  /** `levels`: the lines as given, then each simplified level, as the cell holds them. */
   constructor(
-    private readonly fine: THREE.Object3D,
-    private readonly coarse: THREE.Object3D,
+    private readonly levels: readonly THREE.Object3D[],
     private readonly radiusM: number,
     /** CSS-pixel height of the viewport being drawn into. */
     private readonly viewportHeight: { value: number }
   ) {
     super();
-    this.add(fine, coarse);
-    coarse.visible = false;
+    levels.forEach((level, i) => {
+      level.visible = i === 0;
+      this.add(level);
+    });
   }
 
   update(camera: THREE.Camera): void {
     const fov = (camera as THREE.PerspectiveCamera).fov ?? 60;
     const pxPerRadian = this.viewportHeight.value / (2 * Math.tan((fov * Math.PI) / 360));
     // From the nearest the cell's lines can be to the eye.
-    const simplified = useSimplified(camera.position.distanceTo(this.position) - this.radiusM, pxPerRadian);
-    this.coarse.visible = simplified;
-    this.fine.visible = !simplified;
+    const shown = detailLevel(camera.position.distanceTo(this.position) - this.radiusM, pxPerRadian);
+    for (let i = 0; i < this.levels.length; i++) this.levels[i].visible = i === shown;
   }
 }

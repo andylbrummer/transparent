@@ -548,7 +548,11 @@ export class OutlineLayer {
         const cells = new THREE.Group();
         cells.name = name;
         for (const cell of buildOutlineCells(positions)) {
-          const detail = new DetailSwitch(drawLines(cell.fine, true), drawLines(cell.coarse, true), cell.radiusM, this.viewportHeight);
+          const detail = new DetailSwitch(
+            cell.levels.map((segments) => drawLines(segments, true)),
+            cell.radiusM,
+            this.viewportHeight
+          );
           detail.position.set(cell.centre[0], cell.centre[1], cell.centre[2]);
           cells.add(detail);
         }
