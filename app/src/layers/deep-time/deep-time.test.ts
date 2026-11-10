@@ -8,7 +8,7 @@ import { advancePlay, snapValue } from './time-control';
 /** The baked files themselves: what the layer will read. */
 const file = readFileSync('public/geo/deep-time/plates.bin');
 const model = parsePlateFile(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer);
-const scale = JSON.parse(readFileSync('public/geo/deep-time/timescale.json', 'utf8')) as TimeScale;
+const scale = JSON.parse(new TextDecoder().decode(readFileSync('public/geo/deep-time/timescale.json'))) as TimeScale;
 
 function placeAt(lon: number, lat: number, ageMa: number): { lon: number; lat: number } {
   const crust = crustAt(model, lon, lat);
