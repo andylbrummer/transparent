@@ -35,7 +35,7 @@ export const CACHE_KEY = 'transparent-earth.cyclones-live';
 export const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 /** After a failure, try again this soon: GDACS drops the odd request. */
 export const RETRY_INTERVAL_MS = 2 * 60 * 1000;
-const FETCH_TIMEOUT_MS = 25_000;
+const FETCH_TIMEOUT_MS = 12_000;
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
@@ -384,7 +384,14 @@ export async function createLiveCyclonesLayer(context: LayerContext): Promise<La
     }
   };
 
-  await refresh();
+  // Not awaited: GDACS takes several requests per storm and can be slow, and
+  // the switch should not sit on "loading…" for that long. The chip says
+  // what is going on until the first answer, live or fallback, is drawn.
+  context.setStatus('asking GDACS…', 'info');
+  void refresh().catch((error: unknown) => {
+    console.error('tropical cyclones: first load failed', error);
+    context.setStatus('unavailable', 'error');
+  });
   // Wall time, not the app clock: this paces requests, it dates nothing.
   const timer = setInterval(() => {
     if (visible) void refresh();
@@ -406,7 +413,8 @@ export async function createLiveCyclonesLayer(context: LayerContext): Promise<La
       if (Math.abs(nowMs - fetchedForMs) > DAY_MS && sinceAttemptMs > MINUTE_MS) void refresh();
       else if (data.source !== 'live' && sinceAttemptMs > RETRY_INTERVAL_MS) void refresh();
       // Ages in the labels, and which storms count as under way, move on by the minute.
-      else if (Math.floor(nowMs / MINUTE_MS) !== drawnMinute) draw(nowMs);
+      // Nothing to redraw, and no verdict to give, before the first answer is in.
+      else if (!Number.isNaN(fetchedForMs) && Math.floor(nowMs / MINUTE_MS) !== drawnMinute) draw(nowMs);
     },
     setResolution(widthCss, heightCss) {
       for (const line of lines) (line.material as LineMaterial).resolution.set(widthCss, heightCss);
