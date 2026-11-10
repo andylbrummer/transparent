@@ -24,7 +24,7 @@ const undersea: LayerDefinition = {
     {
       what: 'Undersea feature names, positions and depths',
       source: 'IHO-IOC GEBCO Gazetteer of Undersea Feature Names, www.gebco.net, served by NOAA NCEI',
-      licence: 'freely available; cite as given',
+      licence: 'no stated licence; citation requested, as given',
       url: 'https://www.ngdc.noaa.gov/gazetteer/',
     },
   ],

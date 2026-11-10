@@ -64,7 +64,7 @@ const CRUST1: Credit = {
   what: 'Moho depth and sediment thickness (model CRUST1.0, 1° cells)',
   source:
     'Laske, G., Masters, G., Ma, Z. & Pasyanos, M. (2013), Update on CRUST1.0 – A 1-degree Global Model of Earth’s Crust, Geophys. Res. Abstracts 15, EGU2013-2658',
-  licence: 'freely distributed by the authors; cite as given',
+  licence: 'no stated licence; the authors ask to be cited',
   url: 'https://igppweb.ucsd.edu/~gabi/crust1.html',
 };
 

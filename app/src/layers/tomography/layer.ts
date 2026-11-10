@@ -17,7 +17,7 @@ const CREDITS: readonly Credit[] = [
     what: 'Seismic tomography: shear-velocity anomaly of the mantle (model SEMUCB-WM1)',
     source:
       'French, S.W. & Romanowicz, B.A. (2014), Geophys. J. Int. 199, 1303, doi:10.1093/gji/ggu334; spherical-harmonic expansion to degree 31 as distributed with hc (Becker, O’Neill & Steinberger)',
-    licence: 'published model, cited; the expansion ships with hc (GPL-2.0)',
+    licence: 'no stated licence: a published model, cited as its authors ask; the file is from the hc repository, whose code is GPL-2.0',
     url: 'https://github.com/geodynamics/hc',
   },
   {
