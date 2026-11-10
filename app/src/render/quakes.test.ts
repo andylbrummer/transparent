@@ -4,7 +4,7 @@ import { DEPTH_RAMP, depthColor, depthRampGradient, ecefAtDepth } from './interi
 import { LABEL_KIND_ORDER, LabelLayer, type LabelData } from './labels';
 import { QUAKE_BEHIND_SLAB_STRENGTH, QUAKE_FRAGMENT_SHADER, QUAKE_VERTEX_SHADER, QuakeLayer, quakeDrawOrder, quakePointSizePx, quakeTimesMs, type QuakeData } from './quakes';
 import { SLAB_DEPTH_GLSL } from './slab-depth';
-import { SLAB_FRAGMENT_SHADER } from '../layers/slabs/slabs';
+import { SLAB_VERTEX_SHADER } from '../layers/slabs/slabs';
 
 /**
  * Six real rows of app/public/geo/quakes.json (USGS ComCat), in file order,
@@ -146,7 +146,7 @@ describe('QuakeLayer', () => {
     expect(QUAKE_VERTEX_SHADER).toContain('gl_Position.z = (2.0 * slabDepth(-viewPosition.z) - 1.0) * gl_Position.w');
     // Depth from the vertex, never the fragment: writing it there would stop the GPU rejecting pixels early.
     expect(QUAKE_FRAGMENT_SHADER).not.toContain('gl_FragDepth');
-    expect(SLAB_FRAGMENT_SHADER).toContain(SLAB_DEPTH_GLSL);
+    expect(SLAB_VERTEX_SHADER).toContain(SLAB_DEPTH_GLSL);
   });
 
   it('keeps the two draws one pixel ratio', () => {

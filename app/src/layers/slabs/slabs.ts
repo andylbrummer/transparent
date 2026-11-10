@@ -42,6 +42,8 @@ const NEAR_FACE_ALPHA = 0.06;
 
 const VERTEX_SHADER = `
   attribute vec2 aInfo;
+  uniform float uDepthBias;
+  ${SLAB_DEPTH_GLSL}
   varying vec3 vWorld;
   varying vec3 vNormal;
   varying float vDepthKm;
@@ -58,6 +60,12 @@ const VERTEX_SHADER = `
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     vViewDistance = -viewPosition.z;
     gl_Position = projectionMatrix * viewPosition;
+    // The slabs' own depth (see slab-depth.ts), set here rather than per
+    // pixel: a shader that writes depth is run before the depth test, so the
+    // colour pass would shade every hidden face in full and only then drop
+    // it. Between the vertices of a 20 km mesh the logarithm is as good as
+    // straight, and both passes interpolate alike.
+    gl_Position.z = (2.0 * (slabDepth(vViewDistance) - uDepthBias) - 1.0) * gl_Position.w;
   }
 `;
 
@@ -73,7 +81,6 @@ export { SLAB_DEPTH_GLSL };
  * half presence it no longer hides the slabs behind it either.
  */
 const SLAB_PRESENCE_GLSL = `
-  ${SLAB_DEPTH_GLSL}
   float slabPresence(float viewDistance) {
     return smoothstep(2.0e5, 1.5e6, viewDistance);
   }
@@ -84,7 +91,6 @@ const DEPTH_FRAGMENT_SHADER = `
   ${SLAB_PRESENCE_GLSL}
   void main() {
     if (slabPresence(vViewDistance) < 0.5) discard;
-    gl_FragDepth = slabDepth(vViewDistance);
     gl_FragColor = vec4(0.0);
   }
 `;
@@ -166,14 +172,14 @@ const COLOR_FRAGMENT_SHADER = `
       alpha = max(alpha, rim * 0.95 * lines);
     }
 
-    // A hair nearer than the depth pass wrote, so its own surface always passes.
-    gl_FragDepth = slabDepth(vViewDistance) - 4.0e-6;
     gl_FragColor = vec4(color, alpha * uOpacity);
   }
 `;
 
 /** The fragment shader, for the test that it colours by the shared ramp. */
 export const SLAB_FRAGMENT_SHADER = COLOR_FRAGMENT_SHADER;
+/** The vertex shader, for the test that the slabs' depth is the one the earthquakes are tested against. */
+export const SLAB_VERTEX_SHADER = VERTEX_SHADER;
 
 /** Names for the slabs, each on its plate; the bigger slabs rank first. */
 export function slabNameLabels(grids: readonly SlabGrid[]): GroupLabel[] {
@@ -210,6 +216,7 @@ export async function createSlabLayer(context: LayerContext): Promise<LayerInsta
   const depthMaterial = new THREE.ShaderMaterial({
     vertexShader: VERTEX_SHADER,
     fragmentShader: DEPTH_FRAGMENT_SHADER,
+    uniforms: { uDepthBias: { value: 0 } },
     side: THREE.DoubleSide,
     colorWrite: false,
     depthTest: true,
@@ -218,7 +225,8 @@ export async function createSlabLayer(context: LayerContext): Promise<LayerInsta
   const colorMaterial = new THREE.ShaderMaterial({
     vertexShader: VERTEX_SHADER,
     fragmentShader: COLOR_FRAGMENT_SHADER,
-    uniforms: { uOpacity: { value: 1 } },
+    // A hair nearer than the depth pass wrote, so its own surface always passes.
+    uniforms: { uOpacity: { value: 1 }, uDepthBias: { value: 4.0e-6 } },
     side: THREE.DoubleSide,
     // The shader lights both faces alike and the depth pass has already
     // chosen the surface: drawing back faces then front faces would only

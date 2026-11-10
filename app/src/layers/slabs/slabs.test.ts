@@ -3,7 +3,7 @@ import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { DEPTH_RAMP_GLSL } from '../../render/interior';
 import slabs from './layer';
 import type { SlabGrid } from './mesh';
-import { SLAB_CONTOUR_KM, SLAB_FRAGMENT_SHADER, slabDepthLabels, slabNameLabels } from './slabs';
+import { SLAB_CONTOUR_KM, SLAB_FRAGMENT_SHADER, SLAB_VERTEX_SHADER, slabDepthLabels, slabNameLabels } from './slabs';
 
 /** A slab of one row dipping east from 50 km, 50 km a node, all well inside its outline. */
 function grid(name: string, vertexCount: number): SlabGrid {
@@ -47,6 +47,11 @@ describe('the slab layer', () => {
     expect(SLAB_CONTOUR_KM.fine).toBeLessThan(SLAB_CONTOUR_KM.minor);
     expect(SLAB_FRAGMENT_SHADER).toContain(`contour(vDepthKm, ${SLAB_CONTOUR_KM.finest.toFixed(1)}`);
     expect(SLAB_FRAGMENT_SHADER).toContain('if (presence <= 0.0 && (wall || bottom)) discard;');
+  });
+
+  it('sets its depth per vertex, so that hidden faces are dropped before they are shaded', () => {
+    expect(SLAB_VERTEX_SHADER).toContain('gl_Position.z = (2.0 * (slabDepth(vViewDistance) - uDepthBias) - 1.0) * gl_Position.w');
+    expect(SLAB_FRAGMENT_SHADER).not.toContain('gl_FragDepth');
   });
 
   it('colours by the shared depth ramp, written to the screen as the legend shows it', () => {
