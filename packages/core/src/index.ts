@@ -8,6 +8,7 @@ export * from './seismic';
 export * from './tiles';
 export * from './gfs';
 export * from './terminator';
+export * from './astro';
 
 export interface Vec3 {
   readonly x: number;

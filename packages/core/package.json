@@ -36,6 +36,10 @@
     "./terminator": {
       "import": "./dist/terminator.js",
       "types": "./dist/terminator.d.ts"
+    },
+    "./astro": {
+      "import": "./dist/astro/index.js",
+      "types": "./dist/astro/index.d.ts"
     }
   },
   "scripts": {
