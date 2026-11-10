@@ -280,6 +280,7 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_geology.py` | Tectonics and geology labels | `app/public/geo/ATTRIBUTION.md`, `app/public/geo/geology.json`, `app/public/geo/tectonics.json` | `test_geology.py` |
 | `generate_hazards_snapshot.py` | Snapshot of current natural events | `app/public/geo/hazards-snapshot.json` | `test_hazards_snapshot.py` |
 | `generate_ice.py` | Bake the ice layers: where the land ice is, and where the sea ice ends | `app/public/geo/ice-mask.png`, `app/public/geo/ice.json`, `app/public/geo/sea-ice-extent.json` | `test_ice.py` |
+| `generate_ice_age.py` | The last glacial maximum: northern ice sheets and the sea floor a lower sea left dry | `app/public/geo/ice-age-mask.png`, `ice-age.json` | `test_ice_age.py` |
 | `generate_landmarks.py` | Landmarks people point at | `app/public/geo/landmarks.json` | `test_landmarks.py` |
 | `generate_magnetic_poles.py` | Where the magnetic poles have been, 1590-2025, and NOAA's forecast to 2030 | `app/public/geo/magnetic-poles.json` | `test_magnetic_poles.py` |
 | `generate_lunar_series.py` | The lunar theory's periodic terms |  | — |

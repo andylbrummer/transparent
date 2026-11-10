@@ -327,3 +327,57 @@ Checked:
   across the Arctic Ocean to the star.
 - Not checked: the southern track close up (my crop missed it; the full shot
   shows the rings and labels off Adélie Land), stereo.
+
+## Ice age: the last glacial maximum (added 2026-11-10)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ice age (`ice-age`, lazy, off by default) | Northern Hemisphere ice-sheet extent at the Last Glacial Maximum, "best estimate" (913 polygons) | Batchelor, C.L., Margold, M., Krapp, M., Murton, D.K., Dalton, A.S., Gibbard, P.L., Stokes, C.R., Murton, J.B. & Manica, A. (2019), The configuration of Northern Hemisphere ice sheets through the Quaternary, Nature Communications 10, 3713, doi:10.1038/s41467-019-11601-2; LGM outline mainly from Ehlers, Gibbard & Hughes (2011) | The article is CC BY 4.0. **The data repository (osf.io/7jen3) states no licence** (checked through the OSF API: `node_license` is empty). Flagged in the index. | https://osf.io/7jen3/ | Baked: `generate_ice_age.py` → `app/public/geo/ice-age-mask.png` (129 kB), `ice-age.json` | Batchelor et al. (2019) |
+| same | Sea-floor depths, every fourth point of ETOPO1 (1 arc-minute, ice surface) | Amante, C. & Eakins, B.W. (2009), ETOPO1 1 Arc-Minute Global Relief Model, NOAA Technical Memorandum NESDIS NGDC-24; from NOAA CoastWatch ERDDAP (`etopo180`) | U.S. Government work; ERDDAP's record: "may be used and redistributed for free" | https://coastwatch.pfeg.noaa.gov/erddap/griddap/etopo180 | Baked, same script | NOAA NGDC ETOPO1 |
+| same | The figure "sea level about 134 m lower" | Lambeck, K., Rouby, H., Purcell, A., Sun, Y. & Sambridge, M. (2014), PNAS 111, 15296–15303 — **cited from memory, the paper was not re-read this session** | — | https://doi.org/10.1073/pnas.1411762111 | — | — |
+
+What is real and what is a simplification:
+
+- **The ice is the published reconstruction**, rasterised. It is the
+  authors' "best estimate" and they say it is for the general extent, not
+  local-scale study. It covers **ice sheets over 50,000 km² in the Northern
+  Hemisphere only**: Antarctica's larger ice, the Patagonian ice sheet and
+  mountain glaciers are not in it. The caption says so.
+- **The tan "new land" is today's sea floor shallower than 125 m and joined
+  to the open ocean** — nothing more. It is *about* the land a sea 120–135 m
+  lower left dry, with three known errors, all stated in the caption or
+  here: the crust near the ice was pushed down and beyond it bulged; 20,000
+  years of sediment lie on the shelves; and 125 m is one depth chosen from a
+  range. The source paper's own maps make the same simplification.
+- "Joined to the open ocean" matters: the Caspian's floor, the Dead Sea and
+  Death Valley are below sea level too. The bake keeps only the largest
+  connected body of below-sea-level cells; at a 4-arc-minute grid the
+  Bosporus does not connect, so **the Black Sea's shelf is not drawn**
+  (it was a lake then, at a level of its own).
+- **Names are the usual ones; their positions are placed by hand** inside
+  the mapped areas (the test checks each is inside). "Doggerland" is **not**
+  used: in this reconstruction the Dogger Bank is under ice at the glacial
+  maximum — the first version of the test asserted it was dry land and
+  failed. It was dry only later.
+- Areas on the chip ("ice 26 million km² · new land 18 million km²") are of
+  the mask on a sphere.
+
+Checked:
+
+- `tools/pipeline/test_ice_age.py` (54): ice over Hudson Bay, Chicago,
+  Toronto, Seattle, Stockholm, Edinburgh, Berlin, Svalbard, Reykjavik,
+  Greenland's summit and the Dogger Bank; none at St. Louis, London, Paris,
+  Fairbanks, Yakutsk, Madrid, Austin or the central Arctic Ocean; dry then:
+  Bering Strait, southern North Sea, Sunda Shelf, Arafura Sea, Bass Strait,
+  head of the Persian Gulf, Yellow Sea, Argentine shelf, the Channel off
+  Dover; not drawn: the Caspian, the Dead Sea, Death Valley, the trenches;
+  totals within published ranges (ice 24–29, shelves 14–22 million km²).
+  Berlin under ice and London and Paris clear is the textbook limit of the
+  last glaciation, which is some check on the outline's placing.
+- `ice-age.test.ts` (8).
+- Looked at from Austin, from Madrid, straight down from Austin (the Sunda
+  and Sahul shelves joining Asia to Borneo and Australia to New Guinea) and
+  on a phone-sized screen (`~/review-loop/shots/ice-age/`, 4 shots);
+  16.7 ms.
+- Not checked: other time-slices in the same dataset (17 more, back to
+  3.6 Ma — not baked); stereo.
