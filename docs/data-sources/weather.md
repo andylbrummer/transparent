@@ -13,7 +13,7 @@ Checked from a browser on 2026-11-10: every live endpoint below answers with
 | Layer (id) | What | Source and citation | Licence | Live endpoint, cadence | Baked fallback |
 |---|---|---|---|---|---|
 | Clouds (`clouds`) | Longwave-infrared mosaic of the geostationary ring, ~73°S–73°N, greyscale, bright = cold | NOAA/NESDIS Global Mosaic of Geostationary Satellite Imagery (GMGSI), composited from Himawari-9, GOES-18, GOES-19, Meteosat-9 and Meteosat-10; served by NOAA nowCOAST | U.S. Government work, public domain (see note 1) | `https://nowcoast.noaa.gov/geoserver/satellite/wms`, layer `global_longwave_imagery_mosaic`, one 2048×1024 JPEG (~175 kB). Hourly, 1–3 h behind; only the last ~5 hours are served. The app reads the capabilities' time list every 20 min. | `app/public/weather/clouds.jpg` |
-| Rain and snow (`precipitation`) | Precipitation rate, 0.1°, half-hourly, in GIBS's `GPM_Precipitation_Rate` palette | NASA GPM IMERG V07 half-hourly, Early run (GPM_3IMERGHHE), NASA GES DISC; imagery by NASA GIBS | Public domain / CC0 per NASA's data-use guidance | GIBS WMS `IMERG_Precipitation_Rate_30min`, one 2048×1024 PNG (~300 kB); time from WMTS `DescribeDomains`, checked every 15 min. ~5–6 h behind real time; archive back to 1998, so a pinned `?time=` is honoured. | `app/public/weather/precipitation.png` |
+| Rain and snow (`precipitation`) | Precipitation rate, 0.1°, half-hourly, in GIBS's `GPM_Precipitation_Rate` palette | NASA GPM IMERG V07 half-hourly, Early run (GPM_3IMERGHHE), NASA GES DISC; imagery by NASA GIBS | Public domain / CC0 per NASA's data-use guidance | GIBS map tiles (WMTS) `IMERG_Precipitation_Rate_30min`, matrix set `2km`, level 2 (15 PNG tiles, ~260 kB) composed into one 2048×1024 PNG; time from WMTS `DescribeDomains`, checked every 15 min. ~5–6 h behind real time; archive back to 1998, so a pinned `?time=` is honoured. | `app/public/weather/precipitation.png` |
 | Wind at the surface (`wind-10m`), Jet stream (`wind-250hpa`), Air temperature (`air-temperature`) | u/v wind at 10 m and at 250 hPa, 2 m temperature, 1° grid | NOAA/NCEP Global Forecast System (GFS), `pgrb2.1p00` files, via the NOAA Open Data Dissemination programme on AWS | "open to the public and can be used as desired"; NOAA asks for attribution and that no endorsement be implied (registry.opendata.aws/noaa-gfs-bdp-pds) | `https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.YYYYMMDD/HH/atmos/gfs.tHHz.pgrb2.1p00.fFFF`: the `.idx` inventory (~40 kB), then each field by HTTP range (50–80 kB each; two per wind level, one for temperature). Runs every 6 h, published ~3.5 h later; forecast files every 3 h, so the field shown is valid within 1.5 h of the app clock. Checked every 30 min. Archive on the bucket goes back years, so a pinned `?time=` is honoured. | `wind-10m.bin`, `wind-250hpa.bin`, `temperature.bin` |
 | Day and night (`day-night`) | Night-side city lights; terminator computed from the Sun's position | NASA Earth Observatory Black Marble 2016 (Suomi NPP VIIRS day/night band); imagery by NASA GIBS, layer `VIIRS_Black_Marble` | Public domain | None at run time: the lights never change, so the baked copy is the layer's only source | `app/public/weather/night-lights.jpg` (2048×1024) |
 
@@ -24,15 +24,25 @@ GFS run 2026-11-09 18Z + 6 h (valid 2026-11-10 00:00 UTC). 0.83 MB in all.
 
 ## Surface imagery (`app/src/layers/surface-imagery/`)
 
-All from NASA GIBS WMS (`https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi`),
-one equirectangular image per product, live; dates from WMTS `DescribeDomains`.
+All from NASA GIBS, one equirectangular image per product, live; dates from WMTS `DescribeDomains`.
+Each image is composed in the browser from GIBS map tiles (`app/src/layers/weather/gibs-tiles.ts`;
+`https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/<layer>/default/<date>/<set>/<level>/<row>/<col>.<ext>`):
+every tile of the coarsest level at least as wide as the image (level 3, 50 tiles, for 4096 px; level 2,
+15 tiles, for 2048 px), drawn onto one canvas and kept as JPEG (photographs) or PNG (data, so the colours
+still match the legend). The tiles are static files behind a CDN (`cache-control: max-age=259200`,
+`access-control-allow-origin: *`); GIBS's WMS endpoint draws each picture on request and was seen to hang
+on 2026-11-10. The one exception is the night lights, which GIBS tiles only as PNG (5.3 MB for the globe
+against a 0.4 MB JPEG from WMS): they stay on WMS, with the baked copy behind them.
+
+Tile downloads measured 2026-11-10 at the levels used: Blue Marble (start-up base map) 1.2 MB, relief
+1.6 MB, true colour 2.9 MB, sea surface temperature 0.77 MB, rain 0.26 MB, ozone 0.22 MB.
 
 | Layer (id) | GIBS product | Source | Licence | Date shown | Size |
 |---|---|---|---|---|---|
-| Satellite view, latest full day (`surface-true-colour`) | `VIIRS_NOAA20_CorrectedReflectance_TrueColor` | NASA/NOAA NOAA-20 VIIRS corrected reflectance | Public domain | newest UTC day whose passes are all in (yesterday from 05:00 UTC, else the day before) | 4096×2048 JPEG, ~2 MB |
-| Earth at night (`surface-night-lights`) | `VIIRS_Black_Marble`, 2016 | NASA Earth Observatory, Suomi NPP VIIRS | Public domain | fixed | 4096×2048 JPEG, ~0.4 MB; falls back to the baked 2048×1024 copy |
-| Relief and sea floor (`surface-relief`) | `BlueMarble_ShadedRelief_Bathymetry` | NASA Earth Observatory Blue Marble (August 2004, MODIS), shaded relief and bathymetry | Public domain | fixed | 4096×2048 JPEG, ~0.9 MB |
-| Sea surface temperature (`surface-sst`) | `GHRSST_L4_MUR_Sea_Surface_Temperature` | GHRSST Level 4 MUR Global Foundation SST Analysis v4.1, NASA JPL (MUR-JPL-L4-GLOB-v4.1) | Public domain / CC0 per NASA's data-use guidance | newest day, usually yesterday | 2048×1024 PNG, ~0.7 MB |
+| Satellite view, latest full day (`surface-true-colour`) | `VIIRS_NOAA20_CorrectedReflectance_TrueColor` | NASA/NOAA NOAA-20 VIIRS corrected reflectance | Public domain | newest UTC day whose passes are all in (yesterday from 05:00 UTC, else the day before) | 4096×2048 JPEG from 50 tiles, ~2.9 MB |
+| Earth at night (`surface-night-lights`) | `VIIRS_Black_Marble`, 2016 | NASA Earth Observatory, Suomi NPP VIIRS | Public domain | fixed | 4096×2048 JPEG from WMS, ~0.4 MB; falls back to the baked 2048×1024 copy |
+| Relief and sea floor (`surface-relief`) | `BlueMarble_ShadedRelief_Bathymetry` | NASA Earth Observatory Blue Marble (August 2004, MODIS), shaded relief and bathymetry | Public domain | fixed | 4096×2048 JPEG from 50 tiles, ~1.6 MB |
+| Sea surface temperature (`surface-sst`) | `GHRSST_L4_MUR_Sea_Surface_Temperature` | GHRSST Level 4 MUR Global Foundation SST Analysis v4.1, NASA JPL (MUR-JPL-L4-GLOB-v4.1) | Public domain / CC0 per NASA's data-use guidance | newest day, usually yesterday | 2048×1024 PNG from 15 tiles, ~0.8 MB |
 | Sea temperature anomaly (`surface-sst-anomaly`) | `GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies` | as above; anomaly "derived from a MUR climatology" | as above | newest day | 2048×1024 PNG |
 | Vegetation (`surface-vegetation`) | `MODIS_Terra_L3_NDVI_16Day` | NASA MODIS/Terra Vegetation Indices 16-Day L3 Global 250 m (MOD13Q1) | Public domain | newest 16-day composite | 2048×1024 PNG |
 | Population density (`surface-population`) | `GPW_Population_Density_2020` | CIESIN, Columbia University: Gridded Population of the World v4, population density adjusted to UN WPP totals, doi:10.7927/H4HX19NJ; via NASA SEDAC | **CC BY 4.0** (attribution required; given in the in-app credits) | fixed | 2048×1024 PNG |
@@ -154,14 +164,11 @@ How it is fetched:
   device; level 1 (1280 px, 8 tiles, ~1.3 MB) on touch devices. Re-checked
   every 10 minutes while the layer is on; a new picture is fetched only when
   GIBS has one.
-- On 2026-11-10 GIBS's WMS endpoint (which the older GIBS layers here use for
-  whole-globe images) was not answering at all, while the tile endpoint
-  answered in 0.2–0.4 s. This layer uses tiles for that reason. **The older
-  GIBS layers (satellite view of the latest full day, sea temperature,
-  vegetation, rain) still depend on WMS** and fell back to their caches or
-  snapshots that day; moving them to tiles is not done. By the end of the
-  session small WMS image requests were answering again (1.5 s), its
-  capabilities document still was not.
+- On 2026-11-10 GIBS's WMS endpoint was not answering at all, while the tile
+  endpoint answered in 0.2–0.4 s. This layer uses tiles for that reason, and
+  the other GIBS layers (base map, surface imagery, rain, overlays) were moved
+  to tiles afterwards; only the night lights and the fire detections still
+  use WMS (see the surface-imagery section and events.md).
 
 Checked:
 
