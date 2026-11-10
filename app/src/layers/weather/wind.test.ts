@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { GFS_NI, GFS_NJ } from './gfs';
 import WEATHER_LAYERS from './layer';
-import { particleBudget, trailWidthCss, WIND_STYLES, WindTrails } from './wind';
+import { particleBudget, trailWidthCss, WIND_STYLES, WindTrails, setsToDraw } from './wind';
 import { POINT_STRIDE, WindParticles } from './wind-field';
 
 const field = { u: new Float32Array(GFS_NI * GFS_NJ).fill(10), v: new Float32Array(GFS_NI * GFS_NJ) };
@@ -124,5 +124,20 @@ describe('the wind legends', () => {
     const ramp = WIND_STYLES[id].ramp;
     const caption = WEATHER_LAYERS.find((layer) => layer.id === id)?.caption ?? '';
     expect(caption).toContain(`0 – ${ramp[ramp.length - 1][0]} m/s`);
+  });
+});
+
+describe('setsToDraw', () => {
+  it('draws what the load governor allows on one screen', () => {
+    expect(setsToDraw(4, 1, 1)).toBe(4);
+    expect(setsToDraw(4, 0.5, 1)).toBe(2);
+    expect(setsToDraw(4, 0.25, 1)).toBe(1);
+  });
+
+  it('draws at most half the sets in stereo, where each is drawn twice', () => {
+    expect(setsToDraw(4, 1, 2)).toBe(2);
+    expect(setsToDraw(4, 0.75, 2)).toBe(2);
+    // The governor's own limit still holds below that.
+    expect(setsToDraw(4, 0.25, 2)).toBe(1);
   });
 });

@@ -401,7 +401,7 @@ export function init(): App | null {
       skyRoot.quaternion.copy(inertialRoot.quaternion);
       skyRoot.position.copy(camera.position);
       skyUniforms.uObserverUp.value.copy(camera.position).normalize();
-      lazyLayers.update({ date, camera, position, deltaMs: nowMs - lastFrameMs });
+      lazyLayers.update({ date, camera, position, deltaMs: nowMs - lastFrameMs, eyes: stereo ? 2 : 1 });
     }
     lastFrameMs = nowMs;
     // A layer swaps the surface map without telling anyone: the HUD's note about it follows.

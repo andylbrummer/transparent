@@ -162,6 +162,18 @@ export function particleBudget(coarsePointer: boolean): number {
   return coarsePointer ? PARTICLES_TOUCH : PARTICLES_DESKTOP;
 }
 
+/**
+ * How many of the `sets` to draw: the share the load governor allows, and
+ * in stereo at most half. Each eye is a separate draw of every trail - the
+ * vertex work, which is what the trails cost, doubles - into a viewport of
+ * half the screen, where half the trails are as dense as all of them were
+ * on the whole of it.
+ */
+export function setsToDraw(sets: number, keep: number, eyes: 1 | 2): number {
+  const allowed = Math.round(keep * sets);
+  return eyes === 2 ? Math.min(allowed, Math.ceil(sets / 2)) : allowed;
+}
+
 /** The trail quads for a particle system: instanced, reading the history buffer at two offsets. */
 export class WindTrails {
   readonly object: THREE.Mesh;
@@ -304,7 +316,7 @@ export async function createWindLayer(context: LayerContext, level: Extract<GfsS
     },
     update(frame) {
       watcher.tick();
-      const keep = Math.round(governor.sample(frame.deltaMs) * SETS);
+      const keep = setsToDraw(SETS, governor.sample(frame.deltaMs), frame.eyes ?? 1);
       if (keep !== drawn) {
         drawn = keep;
         show();

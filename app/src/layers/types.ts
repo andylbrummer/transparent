@@ -50,6 +50,11 @@ export interface FrameState {
   readonly position: SurfacePosition;
   /** Wall-clock milliseconds since the previous frame. */
   readonly deltaMs: number;
+  /**
+   * How many times the scene is drawn this frame: 2 in the stereo view,
+   * where whatever a layer costs per draw it pays twice. Absent means 1.
+   */
+  readonly eyes?: 1 | 2;
 }
 
 /** Uniform objects shared by reference, so one write reaches every sky material. */
