@@ -315,5 +315,3 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_vsop87.py` | The planetary theory |  | — |
 | `generate_waters.py` | Rivers, lakes and sea ports | `app/public/geo/ports.json`, `app/public/geo/waters.json` | `test_waters.py` |
 | `generate_weather_snapshot.py` | The weather layers' offline snapshot | `app/public/weather/` | `test_weather_snapshot.py` |
-
-Tests without a script of the same name: .
