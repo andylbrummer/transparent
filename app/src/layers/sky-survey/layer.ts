@@ -11,10 +11,10 @@ const surveys: LayerDefinition[] = SURVEYS.map((spec) => ({
   section: 'Sky maps',
   order: spec.order,
   caption: spec.caption,
-  exclusiveGroup: spec.coverage ? undefined : 'sky-map',
+  exclusiveGroup: spec.fields ? undefined : 'sky-map',
   credits: spec.credits,
   load: async (context) =>
-    spec.coverage ? (await import('./closeups')).createCloseupLayer(context, spec, spec.coverage) : (await import('./survey')).createSurveyLayer(context, spec),
+    spec.fields ? (await import('./closeups')).createCloseupLayer(context, spec, spec.fields) : (await import('./survey')).createSurveyLayer(context, spec),
 }));
 
 export default surveys;

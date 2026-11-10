@@ -8,7 +8,7 @@ describe('the surveys', () => {
     expect(definitions.map((definition) => definition.id)).toEqual(SURVEYS.map((spec) => spec.id));
     for (const [i, definition] of definitions.entries()) {
       expect(definition.section).toBe('Sky maps');
-      expect(definition.exclusiveGroup).toBe(SURVEYS[i].coverage ? undefined : 'sky-map');
+      expect(definition.exclusiveGroup).toBe(SURVEYS[i].fields ? undefined : 'sky-map');
       // Fetched tile by tile over the network: never on unasked.
       expect(definition.defaultOn).toBeUndefined();
     }
@@ -35,9 +35,17 @@ describe('the surveys', () => {
     expect(spec.caption).toContain('loaded live');
   });
 
-  it('include Webb’s close-ups, limited to its coverage file', () => {
+  it('include Webb’s close-ups, ringed, and Euclid’s four fields, limited to their coverage files', () => {
     const jwst = SURVEYS.find((spec) => spec.id === 'survey-jwst')!;
-    expect(jwst.coverage).toBe('jwst');
-    expect(definitions.find((definition) => definition.id === 'survey-jwst')!.exclusiveGroup).toBeUndefined();
+    expect(jwst.fields?.map((field) => field.coverage)).toEqual(['jwst']);
+    expect(jwst.markers).toBe(true);
+    const euclid = SURVEYS.find((spec) => spec.id === 'survey-euclid')!;
+    expect(euclid.fields?.map((field) => field.coverage)).toEqual(['euclid-edfs', 'euclid-edff', 'euclid-edfn', 'euclid-egbs']);
+    expect(euclid.markers).toBe(false);
+    for (const id of ['survey-jwst', 'survey-euclid']) expect(definitions.find((definition) => definition.id === id)!.exclusiveGroup).toBeUndefined();
+  });
+
+  it.each(SURVEYS.filter((spec) => spec.fields))('$id lists each field’s server among its bases', (spec) => {
+    expect(spec.bases).toEqual(spec.fields!.map((field) => field.base));
   });
 });

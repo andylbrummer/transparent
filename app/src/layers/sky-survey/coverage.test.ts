@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { healpixUnitToNested } from '@transparent-earth/core';
-import { Coverage, decodeCells, markerOpacity, parseCloseups } from './coverage';
+import { Coverage, decodeCells, markerOpacity, mergeStatuses, parseCloseups } from './coverage';
 
 describe('decodeCells', () => {
   it('turns differences from the cell before back into cells', () => {
@@ -89,5 +89,28 @@ describe('markerOpacity', () => {
     expect(between).toBeGreaterThan(0);
     expect(between).toBeLessThan(1);
     expect(markerOpacity(2)).toBeLessThan(markerOpacity(4));
+  });
+});
+
+describe('mergeStatuses', () => {
+  const none = { text: null, tone: 'info' } as const;
+  const loading = { text: 'loading…', tone: 'info' } as const;
+  const missing = { text: 'some tiles missing', tone: 'error' } as const;
+  const offline = { text: 'no connection', tone: 'error' } as const;
+
+  it('is quiet when every field is, and says loading while any is', () => {
+    expect(mergeStatuses([none, none])).toEqual(none);
+    expect(mergeStatuses([none, loading, none])).toEqual(loading);
+  });
+
+  it('says no connection only when every field that wants tiles has none', () => {
+    expect(mergeStatuses([offline, none])).toEqual(offline);
+    expect(mergeStatuses([offline, loading])).toEqual(loading);
+    expect(mergeStatuses([offline, offline])).toEqual(offline);
+  });
+
+  it('reports missing tiles over loading, and over no connection when another field has tiles', () => {
+    expect(mergeStatuses([missing, loading])).toEqual(missing);
+    expect(mergeStatuses([offline, missing])).toEqual(missing);
   });
 });

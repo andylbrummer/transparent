@@ -26,12 +26,19 @@ export interface SurveySpec {
   readonly gain: number;
   readonly credits: readonly Credit[];
   /**
-   * For a survey of scattered patches: its name in sky/closeups.json. Only
-   * tiles touching a patch are asked for, the patches are marked, and the
-   * survey is drawn over whichever whole-sky picture is on rather than
-   * instead of it.
+   * For a survey of scattered patches: each field's tile server and its
+   * coverage's name in sky/closeups.json. Only tiles touching a field are
+   * asked for, and the survey is drawn over whichever whole-sky picture is
+   * on rather than instead of it. `bases` then lists the same servers.
    */
-  readonly coverage?: string;
+  readonly fields?: readonly CloseupField[];
+  /** Ring each covered cell from a wide view: for fields too small to find. */
+  readonly markers?: boolean;
+}
+
+export interface CloseupField {
+  readonly base: string;
+  readonly coverage: string;
 }
 
 const ESA_TILES: Credit = {
@@ -163,6 +170,8 @@ export const SURVEYS: readonly SurveySpec[] = [
       'every patch Webb’s near-infrared camera has imaged, 0.6–5 µm, about two square degrees in all · rings mark them: zoom into one · drawn over the sky map that is on · loaded live as you look',
     // The CDN, not skies.esac.esa.int: that host sends no CORS header with a 404, so an empty tile reads as a failure.
     bases: ['https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging'],
+    fields: [{ base: 'https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging', coverage: 'jwst' }],
+    markers: true,
     extension: 'png',
     // Order 3 and coarser tiles are not served (404); the patches are too small to see at those scales anyway.
     minOrder: 4,
@@ -172,13 +181,51 @@ export const SURVEYS: readonly SurveySpec[] = [
     floor: 0,
     // A dark field of small galaxies: at the scales a screen reaches, most are a few pixels, averaged down.
     gain: 2,
-    coverage: 'jwst',
     credits: [
       {
         what: 'JWST NIRCam images, all public observations since the 2022 Early Release Observations',
         source: 'NASA/ESA/CSA James Webb Space Telescope; original data from the European JWST Archive (eJWST) at ESA/ESAC',
         licence: 'no stated licence on the tiles; public archive data, the eJWST acknowledgement asked for is given here',
         url: 'https://ejwst.esac.esa.int/',
+      },
+      ESA_TILES,
+    ],
+  },
+  {
+    id: 'survey-euclid',
+    label: 'Euclid deep fields',
+    order: 16,
+    caption:
+      'Euclid’s first deep fields in colour, visible and near-infrared, 2025–26: South, Fornax and North, 30–56 square degrees each, and a patch of the Galactic bulge · millions of galaxies: zoom in · drawn over the sky map that is on · loaded live as you look',
+    bases: [
+      'https://cdn.skies.esac.esa.int/Q1-EDFS-R4-PNG-RGB_HIPS',
+      'https://cdn.skies.esac.esa.int/Q1-EDFF-R4-PNG-RGB_HIPS',
+      'https://cdn.skies.esac.esa.int/Q1-EDFN-R4-PNG-RGB_HIPS',
+      'https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS',
+    ],
+    fields: [
+      { base: 'https://cdn.skies.esac.esa.int/Q1-EDFS-R4-PNG-RGB_HIPS', coverage: 'euclid-edfs' },
+      { base: 'https://cdn.skies.esac.esa.int/Q1-EDFF-R4-PNG-RGB_HIPS', coverage: 'euclid-edff' },
+      { base: 'https://cdn.skies.esac.esa.int/Q1-EDFN-R4-PNG-RGB_HIPS', coverage: 'euclid-edfn' },
+      { base: 'https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS', coverage: 'euclid-egbs' },
+    ],
+    // Each field is several degrees across: big enough to find without a ring.
+    markers: false,
+    extension: 'png',
+    // Tiles are 0.4–0.6 MB each: none coarser than order 3, where a field still spans a tile or two.
+    minOrder: 3,
+    maxOrder: 11,
+    frame: 'equatorial',
+    // The mosaics' empty sky sits at about 15 of 255.
+    floor: 0.06,
+    gain: 1.3,
+    credits: [
+      {
+        what: 'Euclid Quick Release 1 deep fields (EDF South, Fornax, North) and the Galactic bulge outreach field, VIS and NISP colour mosaics',
+        source:
+          'ESA Euclid mission, Euclid Consortium; Euclid Science Archive at ESAC. Bulge field HiPS by J.-C. Cuillandre (U. Hawaii) and J. Espinosa (Starion for ESA)',
+        licence: 'deep-field tiles state no licence; the bulge field states copyright ESA; public release data, credit ESA/Euclid/Euclid Consortium',
+        url: 'https://www.cosmos.esa.int/web/euclid/euclid-q1-data-release',
       },
       ESA_TILES,
     ],

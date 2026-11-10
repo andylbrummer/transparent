@@ -7,6 +7,7 @@
  */
 
 import { healpixPixelPoint } from '@transparent-earth/core';
+import type { StatusTone } from '../types';
 
 /** Sorted, unique cells from their differences, the first counted from zero. */
 export function decodeCells(deltas: readonly number[]): number[] {
@@ -59,6 +60,21 @@ export class Coverage {
 export function markerOpacity(fovDeg: number): number {
   const t = Math.min(1, Math.max(0, (Math.log(fovDeg) - Math.log(1)) / (Math.log(8) - Math.log(1))));
   return t * t * (3 - 2 * t);
+}
+
+export interface FieldStatus {
+  readonly text: string | null;
+  readonly tone: StatusTone;
+}
+
+/**
+ * One chip for a survey drawn from several fields, each from its own tile server, in order: tiles missing in any
+ * field; any field loading; any field with no connection (a field with nothing in view is quiet, so this shows when
+ * the field in view is offline); else quiet.
+ */
+export function mergeStatuses(statuses: readonly FieldStatus[]): FieldStatus {
+  const has = (text: string): FieldStatus | undefined => statuses.find((status) => status.text === text);
+  return has('some tiles missing') ?? has('loading…') ?? has('no connection') ?? { text: null, tone: 'info' };
 }
 
 /** What generate_closeup_coverage.py writes. */

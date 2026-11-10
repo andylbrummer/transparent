@@ -1,6 +1,6 @@
 # Sky surveys as pictures: data sources and verification
 
-What the six `survey-*` layers draw, where it comes from and what was
+What the seven `survey-*` layers draw, where it comes from and what was
 checked. Numbers are as measured on 2026-11-10 (UTC).
 
 Before this the app's deep sky was outlines and markers over a 2048-pixel
@@ -18,7 +18,8 @@ resolution.
 | Hard X-ray sky (`survey-xray-bat`) | Swift-BAT 70-month survey image, 14–24 / 24–50 / 50–194 keV as red, green, blue, whole sky, order 6 | Baumgartner et al. 2013, ApJS 207:19; Swift-BAT team, NASA GSFC | `hips_copyright = public`; acknowledgement requested | `https://cdn.skies.esac.esa.int/swift_bat_flux` | Swift-BAT team |
 | X-ray pictures (`survey-xray-xmm`) | XMM-Newton EPIC images, colour composition, the 13% of the sky XMM has pointed at, order 7 | ESA XMM-Newton Science Archive, ESAC Science Data Centre | The properties file states no licence; ESA's usual terms are free use with credit "ESA/XMM-Newton". **Assumed, not stated — for Andy.** | `https://esdchips.esac.esa.int/XMM-Newton/EPIC-RGB` | ESA/XMM-Newton |
 | Webb close-ups (`survey-jwst`) | JWST NIRCam images, every public field since the 2022 Early Release Observations, 2.37 deg² in all (0.006% of the sky), drawn to order 11 | NASA/ESA/CSA JWST; original data from the European JWST Archive (eJWST) at ESA/ESAC | The properties file states **no licence and no copyright**; the archive data are public after their proprietary period and the eJWST acknowledgement is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging` | Original data from the European JWST Archive (eJWST) at ESA/ESAC |
-| All six | Tile service | ESASky HiPS node, ESAC Science Data Centre, ESA; HiPS: Fernique et al. 2015, A&A 578:A114 | Public service; its hipslist asks that HiPS not be **mirrored** without the owner's agreement — the app mirrors nothing, it links | https://sky.esa.int/ | ESASky / ESAC |
+| Euclid deep fields (`survey-euclid`) | Euclid VIS + NISP colour mosaics: Quick Release 1 deep fields South (56.0 deg²), Fornax (30.0), North (46.7), March 2025, and the Galactic bulge outreach field (5.2 deg², April 2026); drawn to order 11 | ESA Euclid mission and Euclid Consortium, Euclid Science Archive at ESAC; bulge HiPS by J.-C. Cuillandre (U. Hawaii) and J. Espinosa (Starion for ESA) | The three deep-field properties files state **no licence and no copyright**; the bulge field's states copyright ESA. Public release data; credit ESA/Euclid/Euclid Consortium. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/Q1-EDF{S,F,N}-R4-PNG-RGB_HIPS`, `https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS` | ESA/Euclid/Euclid Consortium |
+| All seven | Tile service | ESASky HiPS node, ESAC Science Data Centre, ESA; HiPS: Fernique et al. 2015, A&A 578:A114 | Public service; its hipslist asks that HiPS not be **mirrored** without the owner's agreement — the app mirrors nothing, it links | https://sky.esa.int/ | ESASky / ESAC |
 
 Every tile host answers cross-origin requests with
 `Access-Control-Allow-Origin: *` (checked with an `Origin` header on a tile
@@ -27,19 +28,31 @@ header with a tile but not with a 404, so in a browser an empty tile there
 reads as a network failure (seen as CORS errors in the app); the Webb layer
 uses the CDN host `cdn.skies.esac.esa.int`, which sends it with both.
 
-Baked for the Webb layer: `app/public/sky/closeups.json` (2 kB), the survey's
-coverage map (`Moc.fits`, IVOA MOC 1.1, 68,484 cells to order 15) coarsened
-to the 576 order-8 cells (13.7′) that hold any of it, by
+Baked for the Webb and Euclid layers: `app/public/sky/closeups.json` (8 kB),
+each survey's coverage map (`Moc.fits`, IVOA MOC 1.1; Webb's 68,484 cells to
+order 15) coarsened to the order-8 cells (13.7′) that hold any of it, by
 `tools/pipeline/generate_closeup_coverage.py`. Coarsening only adds sky:
-30 deg² of cells for 2.37 deg² of coverage. The app asks only for tiles
-touching a cell, and rings each cell from a wide view.
+30 deg² of cells for Webb's 2.37 deg², 6–10% more for Euclid's fields. The
+app asks each field's server only for tiles touching its cells; Webb's
+cells are ringed from a wide view (Euclid's fields are degrees across and
+show without). The four Euclid fields are four HiPS on two hosts: one
+switch runs a survey per field and merges their status chips.
+
+Webb's properties file states `moc_sky_fraction = 1.025E-5` (0.42 deg²), but
+its `Moc.fits`, written the same minute, sums to 2.37 deg²; the same sum
+agrees to 0.1% with all four Euclid files' stated fractions. The MOC is what
+the app uses; the stated fraction is taken as stale.
+
+Euclid's tiles are heavy: 0.4–0.6 MB of PNG each (Webb's 2–140 kB). A narrow
+view needs 5–25, so up to about 10 MB per screenful; the layer is off by
+default and fetches only inside its fields.
 
 Hubble: ESA's HST/ACS survey (24.6 deg², to 2015) was tried and left out.
 Its tiles are negatives — white sky, black stars — crossed by satellite
 trails and chip gaps; drawn as added light they would wash the sky white,
-and inverting them would still leave the trails. Euclid's Q1 colour fields
-(about 135 deg², ESA, CDN host with CORS) are a candidate not yet built:
-the two tiles sampled were empty, and the coverage needs the same bake.
+and inverting them would still leave the trails. (The first Euclid tiles
+sampled looked empty because they were outside the fields: picked from the
+HiPS's initial view position, not its coverage.)
 
 Looked at and left out: Gaia DR3 colour map (CC BY-NC 3.0 IGO, and 730 kB
 per tile); SDSS (36% of the sky); Fermi, H-alpha,
@@ -71,8 +84,10 @@ node serves 2MASS but did not send the cross-origin header.
   horizon it shows through the planet, dimmed; over the bright surface it
   is effectively invisible. Only one whole-sky picture is on at a time
   (the five whole-sky surveys and the twelve baked maps share an exclusive
-  group). Webb's close-ups are outside that group and add over whichever
-  is on.
+  group). Webb's and Euclid's close-ups are outside that group and add
+  over whichever is on.
+- **Euclid's stretch** is floor 0.06, gain 1.3: its mosaics' empty sky sits
+  at about 15 of 255 (median of three tiles inside EDF South).
 - **Webb's stretch** is gain 2, floor 0: its fields are dark with small
   galaxies, and at the scales a screen reaches (order 9–10 at 0.2°) most
   are a few pixels. The same patch was compared at orders 9 and 12: same
@@ -107,18 +122,24 @@ node serves 2MASS but did not send the cross-origin header.
 
 - Core: `healpix.test.ts`, 134 cases against healpy.
 - App: `hips.test.ts` (13: URL layout, order choice, tile counts, ancestor
-  windows), `surveys.test.ts` (14: every survey https, credited, off by
-  default, Webb outside the exclusive group), `coverage.test.ts` (10: cell
-  decoding, coarser/finer tiles against the cells including pixel numbers
-  past 2^31, cell centres against `healpixUnitToNested`, marker fade).
+  windows), `surveys.test.ts` (17: every survey https, credited, off by
+  default, Webb and Euclid outside the exclusive group with their fields),
+  `coverage.test.ts` (13: cell decoding, coarser/finer tiles against the
+  cells including pixel numbers past 2^31, cell centres against
+  `healpixUnitToNested`, marker fade, merged status chips).
 - Pipeline: `test_hips_orientation.py`, 16 checks on live tiles;
-  `test_closeup_coverage.py`, 12 checks: cells sorted, in range, area
-  bounds, and the SMACS 0723 deep field, Stephan's Quintet and the Pillars
-  of Creation each inside a cell, placed with healpy.
+  `test_closeup_coverage.py`, 39 checks: cells sorted, in range, area
+  bounds, each Euclid field's area against its stated sky fraction, the
+  SMACS 0723 deep field, Stephan's Quintet, the Pillars of Creation and the
+  centres of Euclid's three deep fields each inside a cell, placed with
+  healpy.
 - Webb looked at (`~/review-loop/shots/webb/`): SMACS 0723 from 40° (rings
   over DSS) to 0.2°, where both NIRCam modules and the lensing cluster show
   over the DSS stars. Off-centre by about 90″ because the shot's aim was
   worked out by hand (precession, no aberration), not an app error.
+- Euclid looked at (`~/review-loop/shots/euclid/`): EDF South at 8° (the
+  footprint shows as a speckled field over DSS), 1° and 0.2° (colour
+  galaxies, spiral arms resolved).
 - Looked at (`~/review-loop/shots/sky-survey/`, 13 shots): M31 at 8° and 1°,
   Orion Nebula at 3° and on a phone-sized screen (390×844, 3×), a 60° field,
   the Galactic centre in DSS / 2MASS / WISE, BAT with its catalogue, XMM's
@@ -130,7 +151,8 @@ node serves 2MASS but did not send the cross-origin header.
 - Not run on a phone or headset; texture memory at the cap is untested on a
   real device, and stereo was not looked at.
 - Webb's survey goes to order 15 (about 0.03″ a pixel) but the app's zoom
-  stops at 0.2°, order 9–10: Webb's resolution is not reached. Lowering the
+  stops at 0.2°, order 9–10: Webb's resolution is not reached (nor
+  Euclid's, order 12). Lowering the
   zoom limit is an app-wide choice — **for Andy**.
 - Tile seams: none seen, but edges are clamped per tile, so a faint line is
   possible at high contrast.
