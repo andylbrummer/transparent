@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decimalYear, magneticDeclination } from './index';
+import { decimalYear, geomagneticNorthPole, magneticDeclination, magneticDipPole, magneticField, magneticFieldEcef } from './index';
 
 // NOAA NCEI WMM2025_TestValues.txt: [decimal year, height km, lat, lon, declination °].
 // Declinations are published to 0.01°, so agreement is checked to half that.
@@ -132,5 +132,102 @@ describe('decimalYear', () => {
   it('counts the fraction of the UTC year elapsed', () => {
     expect(decimalYear(new Date(Date.UTC(2026, 0, 1)))).toBe(2026);
     expect(decimalYear(new Date(Date.UTC(2026, 6, 2, 12)))).toBeCloseTo(2026.5, 3);
+  });
+});
+
+// NOAA NCEI WMM2025_TEST_VALUES.txt (https://www.ncei.noaa.gov/sites/default/files/2025-02/WMM2025_TEST_VALUES.txt),
+// all twelve rows: [year, height km, lat, lon, X nT, Y nT, Z nT, H nT, F nT, inclination °, declination °].
+const NOAA_FIELD_VALUES: readonly (readonly number[])[] = [
+  [2025.0, 0.0, 80.0, 0.0, 6521.6, 145.9, 54791.5, 6523.2, 55178.5, 83.21, 1.28],
+  [2025.0, 0.0, 0.0, 120.0, 39677.8, -109.6, -10580.2, 39677.9, 41064.3, -14.93, -0.16],
+  [2025.0, 0.0, -80.0, 240.0, 6117.5, 15751.9, -52022.5, 16898.1, 54698.2, -72.0, 68.78],
+  [2025.0, 100.0, 80.0, 0.0, 6216.0, 92.4, 52598.8, 6216.7, 52964.9, 83.26, 0.85],
+  [2025.0, 100.0, 0.0, 120.0, 37688.6, -96.2, -10152.1, 37688.7, 39032.1, -15.08, -0.15],
+  [2025.0, 100.0, -80.0, 240.0, 5907.6, 14780.3, -49540.7, 15917.1, 52035.0, -72.19, 68.21],
+  [2027.5, 0.0, 80.0, 0.0, 6500.8, 294.5, 54869.4, 6507.5, 55253.9, 83.24, 2.59],
+  [2027.5, 0.0, 0.0, 120.0, 39701.6, -167.4, -10381.8, 39702.0, 41036.9, -14.65, -0.24],
+  [2027.5, 0.0, -80.0, 240.0, 6200.7, 15730.3, -51783.7, 16908.3, 54474.2, -71.92, 68.49],
+  [2027.5, 100.0, 80.0, 0.0, 6196.7, 233.8, 52670.5, 6201.1, 53034.3, 83.29, 2.16],
+  [2027.5, 100.0, 0.0, 120.0, 37711.5, -148.7, -9969.8, 37711.8, 39007.4, -14.81, -0.23],
+  [2027.5, 100.0, -80.0, 240.0, 5984.0, 14760.1, -49317.7, 15927.0, 51825.7, -72.1, 67.93],
+];
+
+describe('magneticField', () => {
+  it('reproduces every component of the NOAA WMM2025 test values', () => {
+    for (const [year, height, lat, lon, x, y, z, h, f, inclination, declination] of NOAA_FIELD_VALUES) {
+      const field = magneticField(lat, lon, height, year);
+      // Published to 0.1 nT and 0.01°.
+      expect(Math.abs(field.north - x)).toBeLessThan(0.06);
+      expect(Math.abs(field.east - y)).toBeLessThan(0.06);
+      expect(Math.abs(field.down - z)).toBeLessThan(0.06);
+      expect(Math.abs(field.horizontal - h)).toBeLessThan(0.06);
+      expect(Math.abs(field.total - f)).toBeLessThan(0.06);
+      expect(Math.abs(field.inclination - inclination)).toBeLessThan(0.006);
+      expect(Math.abs(field.declination - declination)).toBeLessThan(0.006);
+    }
+  });
+});
+
+describe('magneticFieldEcef', () => {
+  const DEG = Math.PI / 180;
+  const A = 6378.137;
+  const E2 = (1 / 298.257223563) * (2 - 1 / 298.257223563);
+
+  it('is the same vector as the NOAA test values, turned into Earth-fixed axes', () => {
+    const out = [0, 0, 0];
+    for (const [year, height, latDeg, lonDeg, x, y, z] of NOAA_FIELD_VALUES) {
+      const lat = latDeg * DEG;
+      const lon = lonDeg * DEG;
+      const n = A / Math.sqrt(1 - E2 * Math.sin(lat) ** 2);
+      const px = (n + height) * Math.cos(lat) * Math.cos(lon);
+      const py = (n + height) * Math.cos(lat) * Math.sin(lon);
+      const pz = (n * (1 - E2) + height) * Math.sin(lat);
+      magneticFieldEcef(px, py, pz, year, out);
+      // Geodetic north, east, down as Earth-fixed unit vectors.
+      const north = [-Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat)];
+      const east = [-Math.sin(lon), Math.cos(lon), 0];
+      const down = [-Math.cos(lat) * Math.cos(lon), -Math.cos(lat) * Math.sin(lon), -Math.sin(lat)];
+      const dot = (a: number[]) => a[0] * out[0] + a[1] * out[1] + a[2] * out[2];
+      expect(Math.abs(dot(north) - x)).toBeLessThan(0.06);
+      expect(Math.abs(dot(east) - y)).toBeLessThan(0.06);
+      expect(Math.abs(dot(down) - z)).toBeLessThan(0.06);
+    }
+  });
+
+  it('falls off as a dipole far from the Earth and stays finite on the axis', () => {
+    const near = [0, 0, 0];
+    const far = [0, 0, 0];
+    magneticFieldEcef(0, 0, 6371.2 * 5, 2026, near);
+    magneticFieldEcef(0, 0, 6371.2 * 10, 2026, far);
+    const ratio = Math.hypot(...near) / Math.hypot(...far);
+    expect(ratio).toBeGreaterThan(7.6);
+    expect(ratio).toBeLessThan(8.4);
+    expect(Number.isFinite(near[0] + near[1] + near[2])).toBe(true);
+  });
+
+  it('throws outside the validity window', () => {
+    expect(() => magneticFieldEcef(7000, 0, 0, 2031, [0, 0, 0])).toThrow(RangeError);
+  });
+});
+
+describe('poles', () => {
+  it('puts the geomagnetic north pole where NOAA does for 2025.0', () => {
+    // NCEI, "Wandering of the Geomagnetic Poles": 72.76°W, 80.79°N geocentric from the WMM2025 coefficients.
+    const pole = geomagneticNorthPole(2025);
+    expect(pole.lat).toBeCloseTo(80.79, 2);
+    expect(pole.lon).toBeCloseTo(-72.76, 2);
+  });
+
+  it('finds dip poles where the field is vertical', () => {
+    const north = magneticDipPole('north', 2025);
+    const south = magneticDipPole('south', 2025);
+    expect(magneticField(north.lat, north.lon, 0, 2025).horizontal).toBeLessThan(0.05);
+    expect(magneticField(south.lat, south.lon, 0, 2025).horizontal).toBeLessThan(0.05);
+    expect(magneticField(north.lat, north.lon, 0, 2025).inclination).toBeCloseTo(90, 3);
+    expect(magneticField(south.lat, south.lon, 0, 2025).inclination).toBeCloseTo(-90, 3);
+    // Not antipodes: the north one has crossed the Arctic Ocean toward Siberia, the south one lies off Adelie Land.
+    expect(north.lat).toBeGreaterThan(84);
+    expect(south.lat).toBeLessThan(-60);
+    expect(south.lat).toBeGreaterThan(-68);
   });
 });

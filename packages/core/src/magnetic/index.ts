@@ -1,5 +1,7 @@
 /**
- * Magnetic declination from the World Magnetic Model (WMM2025).
+ * The Earth's main magnetic field from the World Magnetic Model (WMM2025):
+ * declination for the compass, and the whole field vector at any point
+ * outside the core for drawing the field in space.
  *
  * Phone compasses report magnetic north: iOS fills webkitCompassHeading
  * from CLHeading.magneticHeading, and Chrome's absolute orientation comes
@@ -69,31 +71,22 @@ export function decimalYear(utc: Date): number {
   return year + (utc.getTime() - start) / (end - start);
 }
 
-/**
- * Magnetic declination in degrees, east of true north positive, at a
- * geodetic position (WGS84 degrees, height in km above the ellipsoid) and
- * decimal year. Throws outside the model's validity window rather than
- * extrapolating a stale field.
- */
-export function magneticDeclination(latDeg: number, lonDeg: number, heightKm: number, year: number): number {
+function checkYear(year: number): number {
   if (!(year >= WMM_VALID_FROM && year <= WMM_VALID_UNTIL)) {
     throw new RangeError(`WMM2025 covers ${WMM_VALID_FROM}-${WMM_VALID_UNTIL}; got ${year}`);
   }
-  const dt = year - WMM2025_EPOCH;
+  return year - WMM2025_EPOCH;
+}
 
-  // Geodetic -> geocentric spherical.
-  const lat = latDeg * DEG;
-  const sinLat = Math.sin(lat);
-  const cosLat = Math.cos(lat);
-  const primeVertical = WGS84_A_KM / Math.sqrt(1 - WGS84_E2 * sinLat * sinLat);
-  const p = (primeVertical + heightKm) * cosLat;
-  const z = (primeVertical * (1 - WGS84_E2) + heightKm) * sinLat;
-  const r = Math.hypot(p, z);
-  const latC = Math.asin(z / r);
-  // Colatitude terms: t = cos(theta) = sin(latC), u = sin(theta) = cos(latC).
-  const t = Math.sin(latC);
-  const u = Math.cos(latC);
+// Field components in the geocentric frame, written by synthesize(): north, east, down (nT).
+const NED = new Float64Array(3);
 
+/**
+ * Spherical harmonic synthesis at geocentric radius `r` km, geocentric
+ * latitude with sine `t` and cosine `u`, longitude `lon` radians, `dt`
+ * years after the epoch. Writes NED.
+ */
+function synthesize(r: number, t: number, u: number, lon: number, dt: number): void {
   // Legendre functions P(n,m)(cos theta) and their theta derivatives.
   P[0] = 1;
   DP[0] = 0;
@@ -118,13 +111,11 @@ export function magneticDeclination(latDeg: number, lonDeg: number, heightKm: nu
     }
   }
 
-  const lon = lonDeg * DEG;
   for (let m = 0; m <= MAX_DEGREE; m++) {
     COS_M[m] = Math.cos(m * lon);
     SIN_M[m] = Math.sin(m * lon);
   }
 
-  // Field components in the geocentric frame: north, east, down.
   let north = 0;
   let east = 0;
   let down = 0;
@@ -143,11 +134,151 @@ export function magneticDeclination(latDeg: number, lonDeg: number, heightKm: nu
       down -= (n + 1) * radial * cosTerm * P[i];
     }
   }
-  east /= u;
+  NED[0] = north;
+  // On the axis itself east has no direction; a hair off it, the limit is finite.
+  NED[1] = east / Math.max(u, 1e-9);
+  NED[2] = down;
+}
+
+/** The field at a geodetic position, in the local geodetic frame. */
+export interface MagneticField {
+  /** nT, toward true north (X), east (Y) and down (Z). */
+  readonly north: number;
+  readonly east: number;
+  readonly down: number;
+  /** Horizontal intensity H and total intensity F, nT. */
+  readonly horizontal: number;
+  readonly total: number;
+  /** Degrees: dip below the horizontal, and east of true north. */
+  readonly inclination: number;
+  readonly declination: number;
+}
+
+/**
+ * The field vector at a geodetic position (WGS84 degrees, height in km
+ * above the ellipsoid) and decimal year. Throws outside the model's
+ * validity window rather than extrapolating a stale field.
+ */
+export function magneticField(latDeg: number, lonDeg: number, heightKm: number, year: number): MagneticField {
+  const dt = checkYear(year);
+
+  // Geodetic -> geocentric spherical.
+  const lat = latDeg * DEG;
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const primeVertical = WGS84_A_KM / Math.sqrt(1 - WGS84_E2 * sinLat * sinLat);
+  const p = (primeVertical + heightKm) * cosLat;
+  const z = (primeVertical * (1 - WGS84_E2) + heightKm) * sinLat;
+  const r = Math.hypot(p, z);
+  const latC = Math.asin(z / r);
+  // Colatitude terms: t = cos(theta) = sin(latC), u = sin(theta) = cos(latC).
+  synthesize(r, Math.sin(latC), Math.cos(latC), lonDeg * DEG, dt);
 
   // Back to geodetic: the frames differ by a tilt in the meridian plane.
   const tilt = latC - lat;
-  const northGeodetic = north * Math.cos(tilt) - down * Math.sin(tilt);
+  const north = NED[0] * Math.cos(tilt) - NED[2] * Math.sin(tilt);
+  const down = NED[0] * Math.sin(tilt) + NED[2] * Math.cos(tilt);
+  const east = NED[1];
+  const horizontal = Math.hypot(north, east);
+  return {
+    north,
+    east,
+    down,
+    horizontal,
+    total: Math.hypot(horizontal, down),
+    inclination: Math.atan2(down, horizontal) / DEG,
+    declination: Math.atan2(east, north) / DEG,
+  };
+}
 
-  return Math.atan2(east, northGeodetic) / DEG;
+/**
+ * Magnetic declination in degrees, east of true north positive, at a
+ * geodetic position (WGS84 degrees, height in km above the ellipsoid) and
+ * decimal year. Throws outside the model's validity window.
+ */
+export function magneticDeclination(latDeg: number, lonDeg: number, heightKm: number, year: number): number {
+  return magneticField(latDeg, lonDeg, heightKm, year).declination;
+}
+
+/**
+ * The field vector in Earth-centred Earth-fixed axes at a point given in
+ * the same axes, km: writes Bx, By, Bz (nT) into `out`. For tracing field
+ * lines, so it allocates nothing.
+ *
+ * The model is a potential field with its sources in the core: the
+ * expansion is valid anywhere outside them, up through the mantle (taken
+ * as an insulator) and out into space - where, beyond a few Earth radii,
+ * the real field is increasingly the solar wind's doing and this is only
+ * the Earth's own part of it.
+ */
+export function magneticFieldEcef(xKm: number, yKm: number, zKm: number, year: number, out: Float64Array | number[]): void {
+  const dt = checkYear(year);
+  const rho = Math.hypot(xKm, yKm);
+  const r = Math.hypot(rho, zKm);
+  const t = zKm / r;
+  const u = rho / r;
+  const lon = Math.atan2(yKm, xKm);
+  synthesize(r, t, u, lon, dt);
+  const cosLon = Math.cos(lon);
+  const sinLon = Math.sin(lon);
+  // North is (-t cosLon, -t sinLon, u), east (-sinLon, cosLon, 0), down (-u cosLon, -u sinLon, -t).
+  out[0] = -t * cosLon * NED[0] - sinLon * NED[1] - u * cosLon * NED[2];
+  out[1] = -t * sinLon * NED[0] + cosLon * NED[1] - u * sinLon * NED[2];
+  out[2] = u * NED[0] - t * NED[2];
+}
+
+/**
+ * The geomagnetic north pole: where the axis of the model's centred dipole
+ * (its first three coefficients) comes out of the northern hemisphere.
+ * Geocentric latitude and longitude, degrees. The southern one is its antipode.
+ */
+export function geomagneticNorthPole(year: number): { lat: number; lon: number } {
+  const dt = checkYear(year);
+  const g10 = G[STRIDE] + dt * G_DOT[STRIDE];
+  const g11 = G[STRIDE + 1] + dt * G_DOT[STRIDE + 1];
+  const h11 = H[STRIDE + 1] + dt * H_DOT[STRIDE + 1];
+  return {
+    lat: Math.atan2(-g10, Math.hypot(g11, h11)) / DEG,
+    lon: Math.atan2(-h11, -g11) / DEG,
+  };
+}
+
+/**
+ * A magnetic (dip) pole: where the model's field is vertical at the
+ * ellipsoid's surface. Geodetic latitude and longitude, degrees. Unlike
+ * the geomagnetic poles the two are not antipodes.
+ */
+export function magneticDipPole(hemisphere: 'north' | 'south', year: number): { lat: number; lon: number } {
+  const start = geomagneticNorthPole(year);
+  const sign = hemisphere === 'north' ? 1 : -1;
+  // Walk as a unit vector, so that crossing a geographic pole is nothing special.
+  const lat0 = sign * start.lat * DEG;
+  const lon0 = (hemisphere === 'north' ? start.lon : start.lon + 180) * DEG;
+  let x = Math.cos(lat0) * Math.cos(lon0);
+  let y = Math.cos(lat0) * Math.sin(lon0);
+  let z = Math.sin(lat0);
+  for (let i = 0; i < 200; i++) {
+    const lat = Math.asin(z);
+    const lon = Math.atan2(y, x);
+    const field = magneticField(lat / DEG, lon / DEG, 0, year);
+    if (field.horizontal < 0.01) break;
+    // The horizontal field points at the north dip pole and away from the south one. On a
+    // dipole tan(dip) = 2 tan(magnetic latitude), which puts the pole atan(2H/|Z|) away;
+    // half that converges on the real, lumpier field without overshooting.
+    const step = (sign * Math.atan2(2 * field.horizontal, Math.abs(field.down))) / 2;
+    const n = (field.north / field.horizontal) * step;
+    const e = (field.east / field.horizontal) * step;
+    const sinLat = Math.sin(lat);
+    const cosLat = Math.cos(lat);
+    const sinLon = Math.sin(lon);
+    const cosLon = Math.cos(lon);
+    x += -sinLat * cosLon * n - sinLon * e;
+    y += -sinLat * sinLon * n + cosLon * e;
+    z += cosLat * n;
+    const norm = Math.hypot(x, y, z);
+    x /= norm;
+    y /= norm;
+    z /= norm;
+  }
+  return { lat: Math.asin(z) / DEG, lon: Math.atan2(y, x) / DEG };
 }
