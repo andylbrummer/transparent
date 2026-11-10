@@ -89,16 +89,26 @@ ComCat catalogue and writes:
 - `app/public/geo/slabs.json` — slab-surface depth contours every 40 km down
   to 700 km, grouped by depth, same polyline encoding as `outlines.json`.
 - `app/public/geo/quakes.json` — every M5+ earthquake since 1973 at its
-  hypocentre, as columns (`lon`, `lat` in quanta, `depthKm`,
-  `magnitude10`) sorted by magnitude, plus `quake` labels for M8+.
+  hypocentre and origin time, as columns, oldest first (`minute` as deltas,
+  `lon`, `lat` in quanta, `depthKm`, `magnitude10`), plus `quake` labels for
+  M8+. Only ComCat type `earthquake` (no nuclear tests, eruptions,
+  collapses), without the few dozen events ComCat lists twice; the counts
+  left out are in the file (`excluded`). See the script's docstring for the
+  licence note on its ISC-GEM records.
 
 The Slab2 archive is 140 MB; `--source-dir` takes its extracted
-`Slab2_CONTOURS/` directory and a `usgs_quakes.csv` instead.
+`Slab2_CONTOURS/` directory and a `usgs_quakes.csv` instead, and
+`--only quakes` (or `slabs`) writes just one of the two files.
 
 ```bash
 python3 tools/pipeline/generate_seismicity.py
 python3 tools/pipeline/test_seismicity.py
 ```
+
+`test_seismicity.py` pins known earthquakes to their ComCat hypocentres,
+times and magnitudes (to the file's quantisation, under 1 km) and to the
+ISC Bulletin's independent locations (within 30 km), and checks the edges:
+the antimeridian, the poles, events above sea level, the excluded types.
 
 ## Plate Motion
 
