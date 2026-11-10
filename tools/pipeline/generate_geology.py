@@ -4,7 +4,10 @@ Content pipeline for Transparent Earth: tectonics and geology labels.
 
 Writes the line and label data the app draws through the see-through Earth:
 
-    app/public/geo/tectonics.json  plate boundaries by kind, and active faults
+    app/public/geo/tectonics.json  plate boundaries by kind, and active faults;
+                                   per ridge step its spreading rate and
+                                   direction, per subduction boundary the
+                                   side of the overriding plate
     app/public/geo/geology.json    plates, deep-Earth structures, hotspots,
                                    subduction zones and volcanoes, plus the
                                    plume conduit under each classified hotspot
@@ -204,43 +207,92 @@ def to_degrees(points: list[tuple[int, int]]) -> list[list[float]]:
     return [[x / QUANTUM_PER_DEG, y / QUANTUM_PER_DEG] for x, y in points]
 
 
-def build_boundaries(steps: dict) -> tuple[dict[str, list[list[int]]], list[tuple[str, list[list[float]]]]]:
+def encode_steps(points: list[list[float]], values: list) -> tuple[list[int] | None, list]:
+    """encode_polyline, keeping one of `values` (one per step between points)
+    for each step that survives: a step shorter than the quantum collapses
+    onto its start and takes its value with it."""
+    kept_points: list[list[float]] = []
+    kept_values: list = []
+    for i, point in enumerate(points):
+        q = (round(point[0] * QUANTUM_PER_DEG), round(point[1] * QUANTUM_PER_DEG))
+        if kept_points and (round(kept_points[-1][0] * QUANTUM_PER_DEG), round(kept_points[-1][1] * QUANTUM_PER_DEG)) == q:
+            continue
+        if kept_points:
+            kept_values.append(values[i - 1])
+        kept_points.append(point)
+    return encode_polyline(kept_points), kept_values
+
+
+def overriding_side(boundary: str) -> int:
+    """Which side of a subduction boundary, walked in PB2002's digitising
+    direction, the overriding plate is on: +1 left, -1 right.
+
+    Bird (2003), readme of the data supplement: the name gives the plate on
+    the left, then the one on the right, looking down from outside the
+    Earth; "/" between them means the right-hand plate subducts under the
+    left-hand one, and a backslash the opposite.
+    """
+    symbol = boundary[2]
+    if symbol not in "/\\":
+        raise ValueError(f"subduction boundary {boundary!r} names no polarity")
+    return 1 if symbol == "/" else -1
+
+
+def build_boundaries(steps: dict) -> tuple[dict[str, list[list[int]]], list[tuple[str, list[list[float]]]], dict]:
     """
     Chain PB2002 steps into polylines per boundary kind. Also returns, per
     plate pair (in either order, as PB2002 names both), the boundary name
-    and its longest subduction polyline, where the pair's label goes.
+    and its longest subduction polyline, where the pair's label goes; and
+    what PB2002 says of the steps themselves, in step with the polylines:
+
+        ridgeSteps            per ridge polyline, per step: `rate10`, the
+                              relative speed of the two plates in tenths of
+                              mm/yr (the full spreading rate), and `azimuth`,
+                              the direction of that motion in degrees east
+                              of north
+        subductionOverriding  per subduction polyline: +1 if the overriding
+                              plate is on the left of the polyline's
+                              direction, -1 if on the right
     """
     layers: dict[str, list[list[int]]] = {name: [] for name in BOUNDARY_LAYERS}
+    extras: dict = {"ridgeSteps": {"rate10": [], "azimuth": []}, "subductionOverriding": []}
     longest_subduction: dict[tuple[str, str], tuple[str, list[list[float]]]] = {}
     ordered = sorted(steps["features"], key=lambda f: f["properties"]["SEQNUM"])
 
-    def flush(points: list[list[float]], layer: str, pair: str) -> None:
-        encoded = encode_polyline(points)
+    def flush(points: list[list[float]], motions: list[tuple[int, int]], layer: str, pair: str) -> None:
+        encoded, kept = encode_steps(points, motions)
         if encoded is None:
             return
         layers[layer].append(encoded)
+        if layer == "ridge":
+            extras["ridgeSteps"]["rate10"].append([rate for rate, _ in kept])
+            extras["ridgeSteps"]["azimuth"].append([azimuth for _, azimuth in kept])
         if layer != "subduction":
             return
+        extras["subductionOverriding"].append(overriding_side(pair))
         key = tuple(sorted(plate_pair_codes(pair)))
         if len(points) > len(longest_subduction.get(key, ("", []))[1]):
             longest_subduction[key] = (pair, points)
 
     current: list[list[float]] = []
+    motions: list[tuple[int, int]] = []
     current_key = None
     for feature in ordered:
         props = feature["properties"]
         key = (BOUNDARY_CLASSES[props["STEPCLASS"]], props["PLATEBOUND"])
         start = [props["STARTLONG"], props["STARTLAT"]]
         end = [props["FINALLONG"], props["FINALLAT"]]
+        motion = (round(props["VELOCITYLE"] * 10), round(props["VELOCITYAZ"]))
         if current and key == current_key and current[-1] == start:
             current.append(end)
+            motions.append(motion)
             continue
         if current:
-            flush(current, *current_key)
-        current, current_key = [start, end], key
+            flush(current, motions, *current_key)
+        current, motions, current_key = [start, end], [motion], key
     if current:
-        flush(current, *current_key)
-    return layers, list(longest_subduction.values())
+        flush(current, motions, *current_key)
+    return layers, list(longest_subduction.values()), extras
 
 
 def plate_pair_codes(boundary: str) -> tuple[str, str]:
@@ -410,7 +462,7 @@ def main() -> None:
     args = parser.parse_args()
     sources = load_sources(args.source_dir)
 
-    boundaries, longest_subduction = build_boundaries(sources["steps"])
+    boundaries, longest_subduction, boundary_extras = build_boundaries(sources["steps"])
     fault_lines = build_faults(sources["faults"])
     layers = {**boundaries, **fault_lines}
     for name, polylines in layers.items():
@@ -431,6 +483,7 @@ def main() -> None:
         "encoding": "delta",
         "quantumPerDegree": QUANTUM_PER_DEG,
         "layers": layers,
+        **boundary_extras,
     })
     write_json(OUTPUT_DIR / "geology.json", {
         "source": "PB2002 plates (ODC-By 1.0), Whittaker et al. 2015 hotspots (CC BY 3.0), GEM faults (CC BY-SA 4.0), "
