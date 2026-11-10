@@ -41,9 +41,9 @@ def main() -> None:
         grey, alpha = bed_image.getpixel(pixel(lon, lat))
         return grey * document["bed"]["stepM"] + document["bed"]["offsetM"], alpha
 
-    # Ice cores drilled to or near the bed: Vostok 3,769 m deep with ~130 m of ice left above the lake
-    # (Petit et al. 1999 and later drilling); EPICA Dome C 3,260 m with ~15 m left (EPICA 2004);
-    # South Pole ice 2,700-2,850 m thick (IceCube sits at 1,450-2,450 m in it).
+    # Wide brackets round widely reported figures, as a guard on placement rather than a measurement:
+    # the Vostok borehole met the lake at about 3,770 m, the EPICA Dome C core is about 3,260 m long and
+    # stopped just above the bed, and the ice at the South Pole is about 2,800 m thick.
     for name, lon, lat, low, high in [
         ("Vostok station", 106.84, -78.46, 3550, 3950),
         ("Dome C (Concordia)", 123.35, -75.10, 3100, 3400),
