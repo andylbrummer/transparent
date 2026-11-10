@@ -18,6 +18,7 @@ export const LAYER_SECTIONS = [
   'Weather',
   'Surface',
   'Surface lines',
+  'Human world',
   'Inside the Earth',
   'Near space',
   'Sky',
