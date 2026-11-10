@@ -27,7 +27,9 @@
  * case: frameMs, the interval between frames (16.7 at best on a 60 Hz
  * display); renderMs, the time a frame's draw calls take through to the
  * GPU finishing them - the figure that shows headroom and what a layer
- * costs; texture count, labels, status chips, console problems.
+ * costs, though it includes the fixed cost of waiting for the GPU (run a
+ * case in a tiny viewport to see it); texture count, labels, status chips,
+ * console problems.
  * Needs playwright-core and a Chromium; see shot.mjs.
  */
 import { chromium } from 'playwright-core';
@@ -154,20 +156,30 @@ for (const c of cases) {
 
   const info = await page.evaluate(async (windows) => {
     const app = window.__transparentEarth;
-    // Time each render through to the GPU finishing it: the frame interval
-    // stops at the display's 16.7 ms however little of it a frame uses.
+    // Time each frame's rendering through to the GPU finishing it: the
+    // frame interval stops at the display's 16.7 ms however little of it a
+    // frame uses. From the frame's first render call to a pixel read back
+    // after its last (the app's frame callback runs before this one, having
+    // been registered first): reading a pixel waits for the GPU, which
+    // gl.finish() in a browser does not. Once per frame, so that a stereo
+    // frame's two renders pay for one wait like any other frame.
     if (!window.__renderTimer) {
-      const timer = (window.__renderTimer = { ms: 0 });
+      const timer = (window.__renderTimer = { ms: 0, started: 0 });
       const gl = app.renderer.getContext();
       const render = app.renderer.render.bind(app.renderer);
       const pixel = new Uint8Array(4);
       app.renderer.render = (scene, camera) => {
-        const start = performance.now();
+        if (timer.started === 0) timer.started = performance.now();
         render(scene, camera);
-        // Reading a pixel back waits for the GPU; gl.finish() in a browser does not.
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        timer.ms += performance.now() - start;
       };
+      const afterFrame = () => {
+        requestAnimationFrame(afterFrame);
+        if (timer.started === 0) return;
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        timer.ms += performance.now() - timer.started;
+        timer.started = 0;
+      };
+      requestAnimationFrame(afterFrame);
     }
     // Other work on the machine's GPU shows up as slow windows: take several and keep the best and the middle one.
     const times = [];
