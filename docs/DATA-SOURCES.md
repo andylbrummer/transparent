@@ -22,6 +22,9 @@ files and can be removed without touching other layers.
 | Volcanoes by last eruption; Greatest eruptions (VEI 6+) | Volcanoes (type, height, last eruption) and Holocene eruptions of VEI 6 and above | [Global Volcanism Program (2026), [Database] Volcanoes of the World (v. 5.4.0; 7 Aug 2026), distributed by Smithsonian Institution, compiled by Venzke, E., doi:10.5479/si.GVP.VOTW5-2026.5.4](https://volcano.si.edu/gvp_votw.cfm) | non-commercial use with citation (Smithsonian terms of use) |
 | Seafloor features and names | Undersea feature names, positions and depths | [IHO-IOC GEBCO Gazetteer of Undersea Feature Names, www.gebco.net, served by NOAA NCEI](https://www.ngdc.noaa.gov/gazetteer/) | no stated licence; citation requested, as given |
 | Crust: depth of the Moho; Sediment thickness | Moho depth and sediment thickness (model CRUST1.0, 1° cells) | [Laske, G., Masters, G., Ma, Z. & Pasyanos, M. (2013), Update on CRUST1.0 – A 1-degree Global Model of Earth’s Crust, Geophys. Res. Abstracts 15, EGU2013-2658](https://igppweb.ucsd.edu/~gabi/crust1.html) | no stated licence; the authors ask to be cited |
+| Undersea cables (2022) | Undersea cable routes, landing points, lengths and years, as of 14 November 2022 | [TeleGeography, Submarine Cable Map (the last openly licensed release of its data)](https://www.submarinecablemap.com/) | CC BY-NC-SA 3.0 (non-commercial, share-alike) |
+| Air routes (2014) | Air routes as of June 2014 | [OpenFlights route database](https://openflights.org/data.php) | Open Database License (ODbL) 1.0 |
+| Deepest holes | Depths of the Mponeng and TauTona gold mines | [Wikipedia, "Mponeng Gold Mine" and "TauTona Mine"](https://en.wikipedia.org/wiki/Mponeng_Gold_Mine) | CC BY-SA 4.0 |
 | Notable earthquakes since 1900 | Earthquake locations before 1973, and 0.4 % of the M5+ catalogue | [ISC-GEM Global Instrumental Earthquake Catalogue, International Seismological Centre (2026), via ComCat](https://doi.org/10.31905/D808B825) | CC BY-SA 3.0 |
 | Deep mantle in 3-D: slow provinces (LLSVPs); Mantle at 150 km (tomography); Mantle at 400 km (tomography); Mantle at 700 km (tomography); Mantle at 1,250 km (tomography); Mantle at 2,050 km (tomography); Mantle at 2,850 km (tomography) | Seismic tomography: shear-velocity anomaly of the mantle (model SEMUCB-WM1) | [French, S.W. & Romanowicz, B.A. (2014), Geophys. J. Int. 199, 1303, doi:10.1093/gji/ggu334; spherical-harmonic expansion to degree 31 as distributed with hc (Becker, O’Neill & Steinberger)](https://github.com/geodynamics/hc) | no stated licence: a published model, cited as its authors ask; the file is from the hc repository, whose code is GPL-2.0 |
 | Meteor shower radiants | Meteor showers: radiants, activity periods, maxima and rates | [International Meteor Organization, 2026 Meteor Shower Calendar (ed. J. Rendtel), Working List of Visual Meteor Showers](https://www.imo.net/resources/calendar/) | no stated licence; figures credited to the IMO |
@@ -81,6 +84,33 @@ files and can be removed without touching other layers.
 | Crust: depth of the Moho (`moho-depth`) | off | Moho depth and sediment thickness (model CRUST1.0, 1° cells) | [Laske, G., Masters, G., Ma, Z. & Pasyanos, M. (2013), Update on CRUST1.0 – A 1-degree Global Model of Earth’s Crust, Geophys. Res. Abstracts 15, EGU2013-2658](https://igppweb.ucsd.edu/~gabi/crust1.html) | no stated licence; the authors ask to be cited |
 | Sediment thickness (`sediment-thickness`) | off | Moho depth and sediment thickness (model CRUST1.0, 1° cells) | [Laske, G., Masters, G., Ma, Z. & Pasyanos, M. (2013), Update on CRUST1.0 – A 1-degree Global Model of Earth’s Crust, Geophys. Res. Abstracts 15, EGU2013-2658](https://igppweb.ucsd.edu/~gabi/crust1.html) | no stated licence; the authors ask to be cited |
 | Heat flow (measured) (`heat-flow`) | off | Heat-flow measurements | [Global Heat Flow Data Assessment Group et al. (2024), The Global Heat Flow Database: Release 2024, v. 2026.03, GFZ Data Services, doi:10.5880/fidgeo.2024.014](https://doi.org/10.5880/fidgeo.2024.014) | CC BY 4.0 |
+
+## Surface lines
+
+| Layer | Default | What | Source | Licence |
+| --- | --- | --- | --- | --- |
+| Rivers and lakes (`rivers-lakes`) | off | Rivers, lakes and sea ports | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
+
+## Human world
+
+| Layer | Default | What | Source | Licence |
+| --- | --- | --- | --- | --- |
+| Undersea cables (2022) (`undersea-cables`) | off | Undersea cable routes, landing points, lengths and years, as of 14 November 2022 | [TeleGeography, Submarine Cable Map (the last openly licensed release of its data)](https://www.submarinecablemap.com/) | CC BY-NC-SA 3.0 (non-commercial, share-alike) |
+| Shipping lanes (`ship-density`) | off | Global shipping traffic density, 2015–2021 | [Cerdeiro, D.A., Komaromi, A., Liu, Y. & Saeed, M. (2020), World Seaborne Trade in Real Time, IMF Working Paper 20/57; World Bank Data Catalog, Global Shipping Traffic Density](https://datacatalog.worldbank.org/search/dataset/0037580) | CC BY 4.0 |
+| Sea ports (`ports`) | off | Rivers, lakes and sea ports | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
+| Airports (`airports`) | off | Airports: positions and IATA codes | [OurAirports (scale ranks from Natural Earth)](https://ourairports.com/data/) | public domain |
+| Air routes (2014) (`air-routes`) | off | Air routes as of June 2014 | [OpenFlights route database](https://openflights.org/data.php) | Open Database License (ODbL) 1.0 |
+|  |  | Airports: positions and IATA codes | [OurAirports (scale ranks from Natural Earth)](https://ourairports.com/data/) | public domain |
+| Power plants, 500 MW and more (`power-plants`) | off | Power plants: position, capacity and fuel | [Global Energy Observatory, Google, KTH Royal Institute of Technology in Stockholm, Enipedia, World Resources Institute (2021), Global Power Plant Database v1.3.0](https://datasets.wri.org/dataset/globalpowerplantdatabase) | CC BY 4.0 |
+| Nuclear power plants (`nuclear-plants`) | off | Power plants: position, capacity and fuel | [Global Energy Observatory, Google, KTH Royal Institute of Technology in Stockholm, Enipedia, World Resources Institute (2021), Global Power Plant Database v1.3.0](https://datasets.wri.org/dataset/globalpowerplantdatabase) | CC BY 4.0 |
+| Highest mountains (`high-mountains`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+| Deepest holes (`deep-places`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+|  |  | Depths of the Mponeng and TauTona gold mines | [Wikipedia, "Mponeng Gold Mine" and "TauTona Mine"](https://en.wikipedia.org/wiki/Mponeng_Gold_Mine) | CC BY-SA 4.0 |
+| Space launch sites (`launch-sites`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+| Telescopes and detectors (`observatories`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+| Particle accelerators (`particle-accelerators`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+| World Heritage Sites (`world-heritage`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+| Shipwrecks (`shipwrecks`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
 
 ## Inside the Earth
 
@@ -215,6 +245,7 @@ files and can be removed without touching other layers.
 - [Earth extras: data sources and verification](data-sources/earth-extras.md)
 - [Earthquakes: data sources and verification](data-sources/earthquakes.md)
 - [Stars, the sky frame and the always-loaded map: data sources and verification](data-sources/foundation.md)
+- [The human world: data sources and verification](data-sources/human-world.md)
 - [Near space: data sources and verification](data-sources/near-space.md)
 - [Data sources: the sky slice](data-sources/sky.md)
 - [Slabs, trenches, ridges and seafloor age: data sources and verification](data-sources/tectonics.md)
