@@ -10,7 +10,6 @@ import {
   FLOW_SINKING_COLOR,
   MantleFlowLayer,
   PlumeLayer,
-  SlabLayer,
   depthColor,
   depthRampGradient,
   ecefAtDepth,
@@ -113,31 +112,6 @@ describe('DEPTH_RAMP_GLSL', () => {
       for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(glsl[k] - legend[k]));
     }
     expect(worst).toBeLessThan(0.5);
-  });
-});
-
-describe('SlabLayer', () => {
-  it('draws each contour at its depth, in its depth colour', () => {
-    const layer = new SlabLayer({
-      encoding: 'delta',
-      quantumPerDegree: 100,
-      contours: [
-        { depthKm: 40, polylines: [[14000, 3800, 100, 0]] },
-        { depthKm: 600, polylines: [[13500, 4000, 0, 100]] },
-      ],
-    });
-    const lines = layer.getObject().children[0] as LineSegments2;
-    const segs = segments(lines);
-    expect(segs).toHaveLength(2);
-    expect(depthKmOf(segs[0][0])).toBeCloseTo(40, 3);
-    expect(lonOf(segs[0][1])).toBeCloseTo(141, 4);
-    expect(depthKmOf(segs[1][1])).toBeCloseTo(600, 3);
-
-    const colors = lines.geometry.getAttribute('instanceColorStart');
-    const deep = depthColor(600, new THREE.Color());
-    expect(colors.getX(1)).toBeCloseTo(deep.r, 6);
-    expect(colors.getZ(1)).toBeCloseTo(deep.b, 6);
-    layer.dispose();
   });
 });
 

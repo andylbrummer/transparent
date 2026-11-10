@@ -12,7 +12,7 @@ import type { LabelKind } from '../render/labels';
 import { PLUME_COLOR, depthRampGradient, flowGradient } from '../render/interior';
 import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
 
-export type InteriorLayerName = 'quakes' | 'slabs' | 'plumes' | 'mantle-flow';
+export type InteriorLayerName = 'quakes' | 'plumes' | 'mantle-flow';
 
 export type LayerTarget =
   | { readonly lines: readonly OutlineLayerName[] }
@@ -62,14 +62,6 @@ export const LAYER_SWITCHES: readonly LayerSwitch[] = [
     label: 'Earthquakes, M5+ since 1973',
     section: 'Inside the Earth',
     target: { interior: 'quakes' },
-    legend: depthRampGradient(DEPTH_LEGEND_KM),
-    caption: 'depth 0 – 700 km',
-  },
-  {
-    id: 'slabs',
-    label: 'Subducting slabs',
-    section: 'Inside the Earth',
-    target: { interior: 'slabs' },
     legend: depthRampGradient(DEPTH_LEGEND_KM),
     caption: 'depth 0 – 700 km',
   },

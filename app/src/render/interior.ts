@@ -1,14 +1,13 @@
 /**
- * The Earth below the surface: subducting slabs, mantle plumes and
- * earthquake hypocentres, each at its real depth.
+ * The Earth below the surface: mantle plumes and modelled mantle flow, and
+ * the depth colours shared by everything drawn at depth.
  *
- * Like the surface lines they draw over the raymarched globe without a
+ * Like the surface lines these draw over the raymarched globe without a
  * depth test - the globe is see-through - so depth reads from colour:
- * slabs and quakes share one ramp (DEPTH_RAMP), so a quake sitting on a
- * slab is the slab's colour. Data comes from tools/pipeline/
- * generate_seismicity.py (slabs.json, quakes.json), generate_geology.py
- * (the plumes of geology.json) and generate_mantle_flow.py
- * (mantle-flow.json).
+ * slabs (src/layers/slabs) and quakes share one ramp (DEPTH_RAMP), so a
+ * quake sitting on a slab is the slab's colour. Data comes from
+ * tools/pipeline/generate_geology.py (the plumes of geology.json) and
+ * generate_mantle_flow.py (mantle-flow.json).
  */
 
 import * as THREE from 'three';
@@ -16,7 +15,6 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
-import { outlineSegmentPositions } from './outlines';
 
 /** Depth (km) to colour, seismology's usual shallow-red to deep-violet. */
 export const DEPTH_RAMP: readonly { readonly depthKm: number; readonly color: number }[] = [
@@ -140,39 +138,6 @@ abstract class InteriorLines {
       (lines.material as LineMaterial).dispose();
     }
     this.group.clear();
-  }
-}
-
-/** The shape of app/public/geo/slabs.json. */
-export interface SlabData {
-  readonly encoding: 'delta';
-  readonly quantumPerDegree: number;
-  readonly contours: readonly { readonly depthKm: number; readonly polylines: readonly (readonly number[])[] }[];
-}
-
-/** Slab2 depth contours, each at its depth and in its DEPTH_RAMP colour. */
-export class SlabLayer extends InteriorLines {
-  constructor(data: SlabData) {
-    super();
-    const parts: Float32Array[] = [];
-    for (const contour of data.contours) {
-      parts.push(outlineSegmentPositions(contour.polylines, data.quantumPerDegree, EARTH_RADIUS_M - contour.depthKm * 1000));
-    }
-    const positions = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
-    const colors = new Float32Array(positions.length);
-    const color = new THREE.Color();
-    let offset = 0;
-    data.contours.forEach((contour, i) => {
-      positions.set(parts[i], offset);
-      depthColor(contour.depthKm, color);
-      for (let v = offset; v < offset + parts[i].length; v += 3) {
-        colors[v] = color.r;
-        colors[v + 1] = color.g;
-        colors[v + 2] = color.b;
-      }
-      offset += parts[i].length;
-    });
-    this.add(fatLines(positions, colors, lineMaterial({ vertexColors: true, width: 1.4, opacity: 0.8 }), 'slabs'));
   }
 }
 
