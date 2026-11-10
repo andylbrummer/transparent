@@ -24,8 +24,20 @@ export interface SkyMapSpec {
    * wash out the stars above and the globe below.
    */
   readonly gain: number;
+  /**
+   * Share of that light kept below the horizon, where the map is seen
+   * through the planet (on top of the dimming all sky layers get there).
+   * Chosen by looking straight down with each map on: the maps that are
+   * bright all over - hydrogen, H-alpha, the X-ray background, the galaxy
+   * counts, the fine-grained microwave maps - washed the far side's oceans
+   * in their colour and keep least. Default DEFAULT_THROUGH_EARTH.
+   */
+  readonly throughEarth?: number;
   readonly credits: readonly Credit[];
 }
+
+/** What a sky map keeps below the horizon unless it says otherwise. */
+export const DEFAULT_THROUGH_EARTH = 0.5;
 
 const LAMBDA_LICENCE = 'public (NASA LAMBDA archive), citation requested';
 // Black at zero, so a sky with no anisotropy adds no light.
@@ -66,6 +78,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
     caption:
       'neutral atomic hydrogen from its 21 cm line (HI4PI 2016): the Galaxy’s gas, the Magellanic Clouds and their stream · 6×10¹⁹ → 2×10²² atoms/cm², logarithmic',
     gain: 0.8,
+    throughEarth: 0.4,
     credits: [
       {
         what: 'Neutral hydrogen column density',
@@ -94,6 +107,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
     legend: CMB_LEGEND,
     caption: 'WMAP nine-year map, 2001-10, at 1° resolution, the Milky Way removed · −300 → +300 µK',
     gain: 0.55,
+    throughEarth: 0.4,
     credits: [
       {
         what: 'WMAP nine-year Internal Linear Combination map',
@@ -112,6 +126,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
     caption:
       'Planck 2018 SMICA map, 2009-13, measured at 5′ and shown at 10′, the Milky Way removed (a faint seam remains along its plane) · −300 → +300 µK',
     gain: 0.55,
+    throughEarth: 0.4,
     credits: [
       {
         what: 'Planck 2018 SMICA CMB temperature map',
@@ -177,6 +192,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
     caption:
       'the red light of ionised hydrogen at 656 nm (Finkbeiner 2003, from WHAM, VTSS and SHASSA): nebulae and bubbles blown by hot stars · 0.3 → 500 rayleighs',
     gain: 0.9,
+    throughEarth: 0.3,
     credits: [
       {
         what: 'Full-sky H-alpha composite',
@@ -196,6 +212,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
     caption:
       'ROSAT all-sky survey, 1990-91, diffuse X-rays at ¼, ¾ and 1.5 keV shown as red, green and blue: million-degree gas, supernova bubbles, the North Polar Spur · dark arcs were never scanned',
     gain: 0.6,
+    throughEarth: 0.35,
     credits: [
       {
         what: 'ROSAT All-Sky Survey diffuse X-ray background maps',
@@ -232,6 +249,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
     caption:
       'galaxies per square degree among the 547,000 brighter than Ks 13.5 in the 2MASS survey: the nearby cosmic web · 4 → 250 per square degree · empty where the Milky Way hides them, and false counts along its outer plane',
     gain: 1,
+    throughEarth: 0.4,
     credits: [
       {
         what: '2MASS Extended Source Catalog',

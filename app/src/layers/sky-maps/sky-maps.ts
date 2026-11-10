@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { SkyMap } from '../../render/sky-map';
 import type { LayerContext, LayerInstance } from '../types';
-import type { SkyMapSpec } from './specs';
+import { DEFAULT_THROUGH_EARTH, type SkyMapSpec } from './specs';
 
 type LoadTexture = (url: string) => Promise<THREE.Texture>;
 
@@ -24,7 +24,12 @@ export async function createSkyMapLayer(
   spec: SkyMapSpec,
   loadTexture: LoadTexture = loadWithThree
 ): Promise<LayerInstance> {
-  const map = new SkyMap(context.skyRoot, context.skyUniforms, { name: spec.id, frame: 'galactic', gain: spec.gain });
+  const map = new SkyMap(context.skyRoot, context.skyUniforms, {
+    name: spec.id,
+    frame: 'galactic',
+    gain: spec.gain,
+    throughEarth: spec.throughEarth ?? DEFAULT_THROUGH_EARTH,
+  });
   // The quad fills the screen wherever it hangs; under the sky root it is hidden with the sky until a position fix.
   context.skyRoot.add(map.object);
   map.object.visible = false;

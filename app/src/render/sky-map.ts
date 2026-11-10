@@ -29,6 +29,13 @@ export interface SkyMapOptions {
   readonly frame: SkyMapFrame;
   /** Multiplies the image's light. Default 1. */
   readonly gain?: number;
+  /**
+   * Share of its below-the-horizon light the map keeps, on top of the dimming
+   * every sky layer gets there. A diffuse map lights every pixel, and seen
+   * through the planet it lies as a wash over the oceans of the far side;
+   * points and lines do not. Default 1.
+   */
+  readonly throughEarth?: number;
   readonly renderOrder?: number;
 }
 
@@ -41,11 +48,12 @@ const FRAGMENT_SHADER = `
   uniform float uGain;
   uniform vec3 uObserverUp;
   uniform float uBelowHorizon;
+  uniform float uThroughEarth;
   void main() {
     vec3 rd = viewRay();
     vec3 m = uWorldToMap * rd;
     vec2 uv = vec2(0.5 - atan(m.y, m.x) / (2.0 * PI), asin(clamp(m.z, -1.0, 1.0)) / PI + 0.5);
-    float horizon = mix(uBelowHorizon, 1.0, smoothstep(-0.005, 0.005, dot(rd, uObserverUp)));
+    float horizon = mix(uBelowHorizon * uThroughEarth, 1.0, smoothstep(-0.005, 0.005, dot(rd, uObserverUp)));
     gl_FragColor = vec4(texture2D(uMap, uv).rgb * uGain * horizon, 1.0);
   }
 `;
@@ -67,6 +75,7 @@ export class SkyMap {
         uGain: { value: options.gain ?? 1 },
         uObserverUp: uniforms.uObserverUp,
         uBelowHorizon: uniforms.uBelowHorizon,
+        uThroughEarth: { value: options.throughEarth ?? 1 },
       },
       transparent: true,
       depthTest: false,

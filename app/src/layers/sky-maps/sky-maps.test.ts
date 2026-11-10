@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import type { LayerContext } from '../types';
 import { createSkyMapLayer } from './sky-maps';
-import { SKY_MAP_SPECS } from './specs';
+import { SKY_MAP_SPECS, DEFAULT_THROUGH_EARTH } from './specs';
 
 /** The baked images, by path under app/ (not loaded: the keys say which exist). */
 const BAKED = import.meta.glob('/public/sky/maps/*.jpg');
@@ -130,6 +130,10 @@ describe('SKY_MAP_SPECS', () => {
       expect(spec.caption.length).toBeGreaterThan(40);
       expect(spec.gain).toBeGreaterThan(0);
       expect(spec.gain).toBeLessThanOrEqual(1);
+      // Below the horizon a map keeps part of its light, never more than above it.
+      const kept = spec.throughEarth ?? DEFAULT_THROUGH_EARTH;
+      expect(kept).toBeGreaterThan(0);
+      expect(kept).toBeLessThanOrEqual(DEFAULT_THROUGH_EARTH);
       expect(spec.credits.length).toBeGreaterThan(0);
     }
   });
