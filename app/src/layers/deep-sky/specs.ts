@@ -176,6 +176,8 @@ export const DEEP_SKY_SPECS: readonly DeepSkySpec[] = [
     labelRank: 6.42,
     labelColor: '#ffe9b8',
     labelAbove: true,
+    // Priority is the distance in parsecs: the Sun's dozen nearest neighbours keep their names beside a bright star's.
+    featured: { maxPriority: 2.7, rank: 6.39 },
     credits: [
       {
         what: 'Stars and brown dwarfs within 10 parsecs',
