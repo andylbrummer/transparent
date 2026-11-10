@@ -28,7 +28,7 @@ const ROWS: readonly Row[] = [
   [
     'sat-gnss',
     'Navigation satellites (GPS, Galileo, GLONASS, BeiDou)',
-    'GPS gold · Galileo blue · GLONASS red · BeiDou green · shells 19,100 – 23,200 km up, each satellite with its orbit',
+    'GPS gold · Galileo blue · GLONASS red · BeiDou green · most in shells 19,100 – 23,200 km up, each satellite with its orbit',
     stops('#ffd24d', '#66b3ff', '#ff7366', '#80f299'),
   ],
   ['sat-geo', 'Geostationary belt', 'the ring 35,786 km over the equator: weather, relay and television satellites, each over one longitude'],
