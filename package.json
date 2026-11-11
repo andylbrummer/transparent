@@ -2,6 +2,16 @@
   "name": "transparent-earth",
   "private": true,
   "version": "0.1.0",
+  "description": "Look down through the planet: a WebXR app that shows the Earth's interior, the far side and the sky beneath you, from real, cited data.",
+  "license": "MIT",
+  "author": "Andy Brummer",
+  "homepage": "https://andylbrummer.github.io/transparent/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andylbrummer/transparent.git"
+  },
+  "bugs": "https://github.com/andylbrummer/transparent/issues",
+  "keywords": ["earth", "webxr", "threejs", "geophysics", "seismology", "geology", "astronomy", "visualization", "open-data", "augmented-reality"],
   "type": "module",
   "workspaces": [
     "packages/*",

@@ -1,0 +1,34 @@
+MIT License
+
+Copyright (c) 2026 Andy Brummer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---------------------------------------------------------------------------
+
+Data is not covered by this licence.
+
+The MIT licence above covers the source code: everything in this repository
+except the data files under app/public/ (the baked datasets, images and
+textures) and the screenshots under docs/images/ insofar as they show those
+data. Each dataset keeps the licence its publisher gave it - public domain,
+CC0, CC BY, CC BY-SA, ODbL, non-commercial terms, or citation only - and its
+attribution must be kept when it is reused. docs/DATA-SOURCES.md lists every
+source, its licence and the attribution it asks for; the app shows the same
+list under Layers -> Data credits.
