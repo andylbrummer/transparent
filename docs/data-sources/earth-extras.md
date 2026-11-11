@@ -638,3 +638,41 @@ California at 10° field of view, where the bars run east-west.
 **Not done**: per-measurement back-azimuths (the file has them only in
 some remarks), which would show two-layer structure; other compilations
 (Missouri S&T SWS-DB). Not run on a phone or headset.
+
+## Inner core: rays through it (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Inner core: rays through it (`inner-core`, off) | 5,129 PKIKP rays through the inner core: entry, exit, turning depth and differential travel-time residual (PKP AB−DF or BC−DF) | Frost, D.A., Lasbleis, M., Chandler, B. & Romanowicz, B. (2021), Dynamic history of the inner core constrained by seismic anisotropy, Nature Geoscience 14, 531–535, doi:10.1038/s41561-021-00761-w; data compiled from Vinnik et al. 1994, Bréger et al. 2000, Tkalčić et al. 2002, Leykam et al. 2010, Cao & Romanowicz 2007, Romanowicz et al. 2015, Frost & Romanowicz 2019, Soergel 2015 and the paper itself | CC BY 4.0 (Zenodo record) | https://doi.org/10.5281/zenodo.4721364 | Baked: `tools/pipeline/generate_inner_core.py` → `app/public/geo/inner-core.json` (180 kB, 70 kB gzipped) | Frost et al. 2021, Zenodo (CC BY 4.0) |
+
+**Why rays and not a map.** The inner core's structure is known from the
+waves that cross it, and there are few: the sources and stations sit where
+they sit, so most of the ball is crossed by no wave at all. Drawing the rays
+shows both what is measured and where nothing is. Each ray is two straight
+legs from where it enters the inner core to where it turns, at the file's
+depth under the middle of its chord, and out; a straight chord turns within
+12 km of the real ray. Colour is the residual: blue arrived early, red late,
+the mantle slices' convention, dim grey near nothing so the few strong rays
+show over the many weak ones (the strongest are drawn last). The Earth's axis
+is the grey line through the ball.
+
+**Checked** (`tools/pipeline/test_inner_core.py`, 14 checks): 5,144 rays,
+5,129 with a residual (none has both kinds); every turning point on its ray's
+great circle and midway along it; the file's angle to the axis (ξ) equal to
+the chord's to within 0.4°, which is what the app computes in its place;
+every ray turning inside the inner core; rays within 35° of the axis arrive
+a median +3.18 s early, rays over 55° from it +0.02 s: the anisotropy found
+by Morelli, Dziewonski & Woodhouse (1986, GRL 13, 1545) and the paper's
+subject; the bake decodes to the file. App: `inner-core.test.ts` (6).
+
+**Not claimed.** The paper finds the anisotropy strengthening with depth.
+Binned simply here by turning depth, the polar-minus-equatorial difference
+grows in seconds (3.1 → 4.0 s) but shrinks per 1,000 km of path (2.0 → 1.6
+s), so the app does not say it either way. The east–west hemispheres and the
+innermost inner core (radius ~300–650 km by different studies) exist only as
+numbers in papers and are not drawn. AB−DF residuals carry more of the
+lowermost mantle than BC−DF; both are drawn alike, and the file says which.
+
+**Looked at** (`~/review-loop/shots/inner-core/`): from the equator and from
+Austin, looking down; the polar rays a blue band along the axis. Not run on a
+phone or headset.

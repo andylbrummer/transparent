@@ -187,6 +187,7 @@ files and can be removed without touching other layers.
 |  |  | Coastlines projected onto the depth slices | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
 | Mantle at 2,850 km (tomography) (`tomography-2850`) | off | Seismic tomography: shear-velocity anomaly of the mantle (model SEMUCB-WM1) | [French, S.W. & Romanowicz, B.A. (2014), Geophys. J. Int. 199, 1303, doi:10.1093/gji/ggu334; spherical-harmonic expansion to degree 31 as distributed with hc (Becker, O’Neill & Steinberger)](https://github.com/geodynamics/hc) | no stated licence: a published model, cited as its authors ask; the file is from the hc repository, whose code is GPL-2.0 |
 |  |  | Coastlines projected onto the depth slices | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
+| Inner core: rays through it (anisotropy) (`inner-core`) | off | PKIKP differential travel-time residuals, with inner-core entry, exit and turning points (compiled from six source sets) | [Frost, D.A., Lasbleis, M., Chandler, B. & Romanowicz, B. (2021), Dynamic history of the inner core constrained by seismic anisotropy, Nature Geoscience 14, 531–535, doi:10.1038/s41561-021-00761-w; data: Zenodo, doi:10.5281/zenodo.4721364](https://doi.org/10.5281/zenodo.4721364) | CC BY 4.0 |
 
 ## Near space
 
