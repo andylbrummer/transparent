@@ -676,3 +676,38 @@ lowermost mantle than BC−DF; both are drawn alike, and the file says which.
 **Looked at** (`~/review-loop/shots/inner-core/`): from the equator and from
 Austin, looking down; the polar rays a blue band along the axis. Not run on a
 phone or headset.
+
+## Ocean drilling: every cored hole (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ocean drilling: 4,216 cored holes (`drill-holes`, off) | Every hole cored by the Deep Sea Drilling Project (legs 1–96, 1968–83), the Ocean Drilling Program (legs 100–210, 1985–2003) and IODP (expeditions 301 on): position, the programmes that worked it, how many cruises | International Ocean Discovery Program, Drilled Holes table (the table behind its Google Earth maps) | No licence stated; the programmes are publicly funded (NSF, JAMSTEC, ECORD and partners) and publish their data openly | https://kml.iodp.org/Drilled_Holes.csv | Baked: `tools/pipeline/generate_drill_holes.py` → `app/public/geo/drill-holes.json` (128 kB, 32 kB gzipped) | IODP Drilled Holes table (DSDP, ODP, IODP) |
+
+**What is drawn.** A dot per hole (site and hole letter), coloured by the
+programme that first cored it; a hole reopened on several cruises is one
+point at its first-listed position. Holes worked on three or more cruises are
+ringed and named: ten, led by Hole 504B on the Costa Rica Rift (nine cruises,
+DSDP leg 69 to IODP expedition 384T), then 395A, U1309D, 1256D, 418A, 801C, 857D,
+858G, C0002F and C0010A. A cruise's programme is from its number: under 100
+DSDP, 100–210 ODP, 301 and up IODP.
+
+**Not sized by depth, as first planned.** The table's `core_penetrated`
+column is not one quantity across cruises: Hole 735B gives 500.7 m for leg
+118 and 1,508 m for leg 176 (the hole's whole depth after both); U1503A
+995.1 m then 1,710.1 m; while 504B's legs each give that cruise's own
+interval. Summing or taking the largest would each be wrong for some holes,
+so the dots are one size and the caption says why.
+
+**Checked** (`tools/pipeline/test_drill_holes.py`, 14 checks): 4,283 rows,
+4,216 holes, each hole–cruise pair once; the programme rules (78B is DSDP,
+384T is IODP); over 1,000 holes from each programme; Site 1 in the Gulf of
+Mexico (DSDP leg 1, 1968); 504B with nine cruises from DSDP to IODP at 1.23 N
+83.73 W and the most visited; no hole near Kola (the table is ocean drilling
+only); every position on the globe. App: `drill-holes.test.ts` (4).
+
+**Licence.** The table states none. It is recorded as such in the credits,
+not read as public domain.
+
+**Looked at** (`~/review-loop/shots/drill-holes/`): the Pacific and the
+Atlantic from the far side, the named holes legible. Not run on a phone or
+headset.
