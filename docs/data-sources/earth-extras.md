@@ -551,3 +551,42 @@ over wide caps, so nothing smaller is real.
 **Not done**: the PP measurements, the uncorrected depths, the amplitudes and
 the thermal model, all in the same archive; the transition zone's thickness
 as its own map. Not run on a phone or headset.
+
+## Lithosphere thickness (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Lithosphere thickness (`lithosphere`, off) | Depth of the thermal lithosphere-asthenosphere boundary: how far down the cold, rigid plate reaches, drawn on the surface above | Priestley, K., Ho, T., Takei, Y. & McKenzie, D. (2024), The thermal and anisotropic structure of the top 300 km of the mantle, Earth Planet. Sci. Lett. 626, 118525, doi:10.1016/j.epsl.2023.118525 (model CAM2023); files from the EarthScope Earth Model Collaboration, CAM2023.emc.2025-01-13 | No stated licence: the README and the EMC ask that the paper and the EMC be cited. Recorded as an open question in the progress file. | https://data.earthscope.org/archive/seismology/products/emc/data/CAM2022/CAM2023.emc.2025-01-13.tgz (16.3 MB; only `CAM2023_lithosphere.xyz` is read) | Baked: `tools/pipeline/generate_lithosphere.py` → `app/public/geo/lithosphere.png` (180×90 grey, a pixel per 2° cell, 9 kB) | CAM2023 (Priestley et al. 2024) |
+
+**What it is.** A surface-wave model's thermal plate: CAM2023 turns shear-wave
+speeds into temperatures and puts the base of the lithosphere where they
+meet the mantle's adiabat (the README calls it the "thermal
+lithosphere-asthenosphere boundary"; its LAB file was updated from
+CAM2022). A model on a 2° grid, smoothed over about 200 km: it shows the
+cratons' keels and the oceans' cooling, not any single place's depth. Grey
+= round(255 × depth / 300 km); 21–263 km in the file. Thin plate dark,
+thick bright, a line every 50 km.
+
+**Checked** (`tools/pipeline/test_lithosphere.py`, 20 checks). Against an
+independent dataset: under the oceans the plate thickens with the square
+root of the seafloor's age, as plate cooling predicts (Parsons & Sclater
+1977); with the app's seafloor-age picture (Seton et al. 2020, made from
+magnetic stripes, not seismic waves) at 7,877 ocean cells, r = 0.81, and
+the median thickness rises with every older band: 32, 41, 69, 78, 93 km
+for 0–10, 10–30, 30–60, 60–100 and 100–200 Myr. Keels over 150 km under
+the Superior (199 km), Slave (182), Siberian (175), Kaapvaal (166), West
+African (189), Yilgarn (198) cratons and the Fennoscandian shield (216)
+(Jordan 1978; Priestley & McKenzie 2006); under 50 km at the East Pacific
+Rise (25), the Mid-Atlantic Ridge (29), Iceland (31) and Afar (31). The
+picture decodes to the file within half a step (0.59 km). App:
+`lithosphere.test.ts` (4: the scale matches the bake, thick brighter than
+thin, the 50 km contour, the switch).
+
+**Looked at** (`~/review-loop/shots/lithosphere/`): North America and
+South America, and Africa with Arabia and India, each seen through the
+Earth from its antipode; the keels stand out bright inside their 150 and
+200 km contours, the ridges dark.
+
+**Not done**: the other LAB models (LITHO1.0, LithoRef18) to show how much
+models disagree; Tibet's 240 km is the model's and is debated. Not run on
+a phone or headset.
