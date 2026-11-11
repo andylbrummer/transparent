@@ -15,8 +15,19 @@ accepts only GET/HEAD (405 otherwise). Caps live in `deploy/nginx.conf`
 
 ## Deploy
 
-`deploy/deploy.sh` builds `app/dist`, rsyncs it with the compose files to
-`beagle-ab:/home/beagle/work/transparent`, runs `docker compose up -d`, and
-checks the live URL. The tunnel credential lives only on beagle-ab at
+A push to `main` deploys both sites. GitHub Pages builds in Actions
+(`.github/workflows/deploy.yml`). transparent.sbdev.io is pulled by beagle-ab:
+a systemd user timer (`deploy/systemd/`) runs `deploy/auto-deploy.sh` every
+two minutes. When `main` has moved and the CI workflow passed for that commit,
+the script builds it in a capped `node:20` container and swaps `app/dist` into
+`/home/beagle/work/transparent/dist`. Nothing reaches into beagle-ab and no
+credential is used: the repository is public. A failed CI run is skipped and
+recorded in `skipped-sha`. Install or update the timer with
+`deploy/install-auto-deploy.sh`; watch it with
+`ssh beagle-ab 'journalctl --user -u transparent-deploy -f'`.
+
+`deploy/deploy.sh` is the manual path: it builds `app/dist` here, rsyncs it
+with the compose files to `beagle-ab:/home/beagle/work/transparent`, runs
+`docker compose up -d`, and checks the live URL. The tunnel credential lives only on beagle-ab at
 `/home/beagle/.config/cloudflared/transparent.json` (0600) and is never in
 this repo.
