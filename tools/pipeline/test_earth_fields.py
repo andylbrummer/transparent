@@ -9,6 +9,15 @@ Reference values, with where they come from:
               India and Sri Lanka and about +85 m at New Guinea (Lemoine
               et al. 1998). The grid read here gives -106.99 m at 78.75 E,
               4.75 N and +85.39 m at 147.25 E, 8.25 S.
+  gravity     XGM2019 synthesised here. Its geoid is held to EGM96's,
+              an independent model: they differ by EGM96's zero-degree
+              term, -0.53 m (NGA), and otherwise by under a metre rms.
+              The Puerto Rico Trench holds "the most negative free-air
+              gravity anomaly on earth, -380 mGal" (USGS Open-File Report
+              2005-1066, ten Brink et al.); at 0.25 degrees it is less
+              deep. Trenches pull less and island volcanoes more: the
+              textbook pattern, checked as signs at the Mariana Trench's
+              deepest point and on Hawaii.
   Moho        CRUST1.0 cells read on 2026-11-09: 7-13 km under the open
               Pacific, over 65 km under Tibet and over 60 km under the
               Altiplano; the continental shields sit at 35-45 km.
@@ -42,7 +51,8 @@ from generate_geo import OUTPUT_DIR, REPO_ROOT
 from geo_test_support import check, finish
 
 meta = {field["id"]: field for field in json.loads((OUTPUT_DIR / "fields.json").read_text())["fields"]}
-check(sorted(meta) == ["geoid", "heat-flow", "magnetic-anomaly", "moho-depth", "sediment-thickness"], f"five fields ({sorted(meta)})")
+check(sorted(meta) == ["geoid", "gravity-anomaly", "heat-flow", "magnetic-anomaly", "moho-depth", "sediment-thickness"],
+      f"six fields ({sorted(meta)})")
 
 images = {}
 for name, field in meta.items():
@@ -53,7 +63,7 @@ for name, field in meta.items():
           f"{field['file']}: {field['width']} x {field['height']}, 2:1")
     check(path.stat().st_size < 520_000, f"{field['file']}: under 520 kB ({path.stat().st_size} bytes)")
 total = sum((bake.FIELDS_DIR / f["file"]).stat().st_size for f in meta.values())
-check(total < 800_000, f"all five under 800 kB together ({total} bytes)")
+check(total < 1_050_000, f"all six under 1.05 MB together ({total} bytes)")
 
 
 def code(name: str, lon: float, lat: float) -> float:
@@ -184,9 +194,43 @@ for lo, la, what in [(-40.0, 30.0, "the central Atlantic"), (135.0, -25.0, "cent
 share = float((image == 128).mean())
 check(share < 0.12, f"little of the map is exactly blank ({100 * share:.1f} %)")
 
+# --- gravity -------------------------------------------------------------
+g_lats, g_lons, g_field = bake.gravity_grid(720, 360)
+# EGM96's nodes are every 0.25 degrees from 90 N and 180 W: every other one is a 0.5-degree cell centre.
+egm_at_centres = bake.load_egm96()[1::2, 1::2]
+weights = np.cos(np.radians(g_lats))[:, None] * np.ones((1, 720))
+difference = g_field["geoid_m"] - egm_at_centres
+mean_difference = float((difference * weights).sum() / weights.sum())
+rms = math.sqrt(float(((difference - mean_difference) ** 2 * weights).sum() / weights.sum()))
+check(0.4 < mean_difference < 0.7, f"XGM2019's geoid sits {mean_difference:.2f} m above EGM96's: its zero-degree term, -0.53 m")
+check(rms < 1.0, f"and otherwise matches EGM96 to {rms:.2f} m rms: the synthesis is right")
+anomaly = g_field["anomaly_mgal"]
+check(abs(float((anomaly * weights).sum() / weights.sum())) < 1.0, "the anomaly averages to nothing over the globe")
+gravity = meta["gravity-anomaly"]
+low_lon, low_lat = gravity["minAt"]
+check(-68 < low_lon < -64 and 18 < low_lat < 21 and -400 < gravity["min"] < -300,
+      f"the lowest anomaly anywhere, {gravity['min']} mGal, is at the Puerto Rico Trench ({low_lon}, {low_lat}); USGS: -380")
+
+
+def gravity_near(lon: float, lat: float, radius: float = 0.75) -> np.ndarray:
+    rows = np.abs(g_lats - lat) <= radius
+    columns = np.abs((g_lons - lon + 180) % 360 - 180) <= radius
+    return anomaly[np.ix_(rows, columns)]
+
+
+check(gravity_near(142.59, 11.37).min() < -200, "the Mariana Trench at the Challenger Deep pulls less")
+check(gravity_near(-155.47, 19.82).max() > 200, "Hawaii's volcanoes pull more")
+decoded = (code("gravity-anomaly", -66.375, 19.375) - 128) / 127
+check(decoded < -0.95, f"the image holds the trench's low ({decoded:+.2f} of the scale)")
+full = np.array(Image.open(bake.FIELDS_DIR / "gravity-anomaly.jpg"), dtype=np.float64)
+error = np.sqrt(np.mean((full - bake.gravity_code(bake.gravity_grid()[2]["anomaly_mgal"])) ** 2))
+# The bound the magnetic JPEG was chosen to (generate_earth_fields.py, MAGNETIC_JPEG_QUALITY).
+check(error < 6, f"the JPEG holds the anomaly to {error:.1f} of 127 codes rms")
+
 # --- the app's copy of the scales -----------------------------------------
 app = (REPO_ROOT / "app/src/layers/earth-fields/fields.ts").read_text()
 for constant, value in [("MAGNETIC_RANGE_NT", bake.MAGNETIC_RANGE_NT), ("GEOID_RANGE_M", bake.GEOID_RANGE_M),
+                        ("GRAVITY_RANGE_MGAL", bake.GRAVITY_RANGE_MGAL),
                         ("MOHO_MAX_KM", bake.MOHO_MAX_KM), ("SEDIMENT_MAX_KM", bake.SEDIMENT_MAX_KM),
                         ("HEAT_FLOW_MIN", bake.HEAT_FLOW_MIN), ("HEAT_FLOW_MAX", bake.HEAT_FLOW_MAX)]:
     found = re.search(rf"export const {constant} = ([\d.]+);", app)
@@ -194,6 +238,7 @@ for constant, value in [("MAGNETIC_RANGE_NT", bake.MAGNETIC_RANGE_NT), ("GEOID_R
 for field in meta.values():
     check(f"file: '{field['file']}'" in app, f"fields.ts draws {field['file']}")
 check("91,058 borehole and seabed measurements in 10,214 cells" in app, "the heat-flow caption's counts are the bake's")
+check(f"lon: {low_lon}, lat: {low_lat}" in app, "the gravity label sits on the bake's lowest point")
 check("lon: 78.75, lat: 4.75" in app and "lon: 147.25, lat: -8.25" in app, "the geoid's labels sit on EGM96's extremes")
 
 finish()

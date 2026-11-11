@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { rampColor } from '../weather/ramps';
 import { fieldShadeGlsl } from './field';
-import { EARTH_FIELDS, geoidCode, heatFlowCode, magneticCode, mohoCode, sedimentCode } from './fields';
+import { EARTH_FIELDS, geoidCode, gravityCode, heatFlowCode, magneticCode, mohoCode, sedimentCode } from './fields';
 import earthFields from './layer';
 
 const field = (id: string): (typeof EARTH_FIELDS)[number] => {
@@ -20,6 +20,10 @@ describe('the field codes', () => {
     expect(geoidCode(0) * 255).toBeCloseTo(128, 9);
     // The geoid low south of India, −106.99 m: grey 4.
     expect(Math.round(geoidCode(-106.99) * 255)).toBe(4);
+    expect(gravityCode(0) * 255).toBeCloseTo(128, 9);
+    // Square-root scale: 75 mGal is half-way from zero to 300; the Puerto Rico Trench's −360 is past the end.
+    expect(gravityCode(75) * 255).toBeCloseTo(128 + 63.5, 9);
+    expect(gravityCode(-360) * 255).toBeCloseTo(1, 9);
     expect(mohoCode(40)).toBeCloseTo(0.5, 9);
     expect(sedimentCode(5)).toBeCloseTo(0.5, 9);
     expect(heatFlowCode(10)).toBeCloseTo(0, 9);
@@ -35,10 +39,11 @@ describe('the field ramps', () => {
     }
   });
 
-  it('are not the depth rainbow: the magnetic and geoid ramps are two-sided about a pale zero', () => {
+  it('are not the depth rainbow: the magnetic, geoid and gravity ramps are two-sided about a pale zero', () => {
     for (const [id, zero] of [
       ['magnetic-anomaly', magneticCode(0)],
       ['geoid', geoidCode(0)],
+      ['gravity-anomaly', gravityCode(0)],
     ] as const) {
       const [r, g, b] = rampColor(field(id).ramp, zero);
       expect(Math.min(r, g, b)).toBeGreaterThan(215);
@@ -78,7 +83,7 @@ describe('fieldShadeGlsl', () => {
 
 describe('the field layers', () => {
   it('are exclusive surface layers, off until asked for', () => {
-    expect(earthFields.map((l) => l.id)).toEqual(['magnetic-anomaly', 'geoid', 'moho-depth', 'sediment-thickness', 'heat-flow']);
+    expect(earthFields.map((l) => l.id)).toEqual(['magnetic-anomaly', 'geoid', 'gravity-anomaly', 'moho-depth', 'sediment-thickness', 'heat-flow']);
     for (const layer of earthFields) {
       expect(layer.section).toBe('Surface');
       expect(layer.exclusiveGroup).toBe('earth-field');

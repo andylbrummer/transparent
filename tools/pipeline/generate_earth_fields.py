@@ -25,6 +25,20 @@ geoid  The height of the geoid - mean sea level, the equipotential
     15-arc-minute grid as packaged by PROJ (cdn.proj.org,
     us_nga_egm96_15.tif). Public domain (U.S. Government). A model.
 
+gravity-anomaly  The free-air gravity anomaly: how much gravity at the
+    surface differs from that of the smooth reference Earth (GRS80). Mass
+    piled up - volcanoes, mountains not yet sunk into isostatic balance,
+    the outer rises of trenches - pulls harder; the trenches, where the
+    sea is deep and the plate bent down, pull less.
+    XGM2019: Zingerle, P., Pail, R., Gruber, T. & Oikonomidou, X. (2019),
+    The experimental gravity field model XGM2019e, GFZ Data Services,
+    doi:10.5880/ICGEM.2019.007 (the degree-760 member). CC BY 4.0.
+    Synthesised here to degree 719, the limit of the model's full
+    combination with ground and altimetry data (spherical_harmonics.py),
+    at the centres of 0.25-degree cells on the ellipsoid. A model: GOCE
+    and GRACE from orbit, gravity measured on land and from altimetry at
+    sea, and topography where gravity is not measured.
+
 moho-depth, sediment-thickness  The depth of the Moho - the base of the
     crust - below sea level, and the thickness of the sediments on top of
     the crystalline crust.
@@ -47,7 +61,7 @@ Every image is equirectangular, longitude -180..180 left to right, north
 up. The PNGs are RGB: red is the value's code (each field has its own
 scale: the *_code functions below, named in fields.json and mirrored in
 the app's fields.ts), green is how much of the pixel has data, blue is
-unused. The magnetic anomaly is a grey JPEG of the code alone, with no
+unused. The magnetic anomaly and the gravity anomaly are grey JPEGs of the code alone, with no
 anomaly (128) where there is no data.
 
 Usage:
@@ -66,6 +80,7 @@ from PIL import Image
 
 from fetch_cache import cached_fetch
 from generate_geo import OUTPUT_DIR, write_json
+from spherical_harmonics import read_gfc, synthesise
 
 FIELDS_DIR = OUTPUT_DIR / "fields"
 
@@ -83,6 +98,11 @@ MAGNETIC_RANGE_NT = 400.0
 # that and off by about 6 of the 127 codes (rms), which no eye finds in the stripes.
 MAGNETIC_JPEG_QUALITY = 70
 GEOID_RANGE_M = 110.0
+GRAVITY_RANGE_MGAL = 300.0
+XGM2019_URL = "https://datapub.gfz-potsdam.de/download/10.5880.ICGEM.2019.007/XGM2019.zip"
+# The degree to which XGM2019 combines satellite, ground and altimetry data in full (its README: "up to d/o 719").
+GRAVITY_MAX_DEGREE = 719
+GRAVITY_JPEG_QUALITY = 80
 MOHO_MAX_KM = 80.0
 SEDIMENT_MAX_KM = 20.0
 HEAT_FLOW_MIN, HEAT_FLOW_MAX = 10.0, 1000.0
@@ -97,6 +117,12 @@ def magnetic_code(nt: np.ndarray) -> np.ndarray:
 
 def geoid_code(metres: np.ndarray) -> np.ndarray:
     return 128 + 127 * np.clip(metres / GEOID_RANGE_M, -1, 1)
+
+
+def gravity_code(mgal: np.ndarray) -> np.ndarray:
+    """Signed square root, as for the magnetic anomaly: most of the planet is within 50 mGal, the trenches and volcanoes hundreds."""
+    t = np.sign(mgal) * np.sqrt(np.minimum(np.abs(mgal) / GRAVITY_RANGE_MGAL, 1.0))
+    return 128 + 127 * t
 
 
 def moho_code(km: np.ndarray) -> np.ndarray:
@@ -209,6 +235,32 @@ def bake_geoid(width: int = 720, height: int = 360) -> dict:
                    "maxAt": [round(high[1] * 0.25 - 180, 2), round(90 - high[0] * 0.25, 2)]}
 
 
+def gravity_grid(width: int = 1440, height: int = 720) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """(lats, lons, synthesis) at the centres of the image's pixels, rows from the north."""
+    model = read_gfc(cached_fetch(XGM2019_URL, "fields/XGM2019.zip"), max_degree=GRAVITY_MAX_DEGREE)
+    lats = 90 - (np.arange(height) + 0.5) * 180 / height
+    lons = -180 + (np.arange(width) + 0.5) * 360 / width
+    return lats, lons, synthesise(model, lats, lons)
+
+
+def bake_gravity() -> dict:
+    lats, lons, field = gravity_grid()
+    anomaly = field["anomaly_mgal"]
+    height, width = anomaly.shape
+    FIELDS_DIR.mkdir(parents=True, exist_ok=True)
+    out = FIELDS_DIR / "gravity-anomaly.jpg"
+    Image.fromarray(np.clip(np.rint(gravity_code(anomaly)), 0, 255).astype(np.uint8), "L").save(
+        out, quality=GRAVITY_JPEG_QUALITY, optimize=True)
+    print(f"  {out.name}: {width} x {height}, {out.stat().st_size / 1024:.0f} KiB", file=sys.stderr)
+    low = np.unravel_index(np.argmin(anomaly), anomaly.shape)
+    high = np.unravel_index(np.argmax(anomaly), anomaly.shape)
+    return {"file": out.name, "width": width, "height": height, "id": "gravity-anomaly", "unit": "mGal",
+            "encoding": "signed-sqrt", "range": GRAVITY_RANGE_MGAL, "maxDegree": GRAVITY_MAX_DEGREE,
+            "min": round(float(anomaly.min()), 1), "max": round(float(anomaly.max()), 1),
+            "minAt": [round(float(lons[low[1]]), 3), round(float(lats[low[0]]), 3)],
+            "maxAt": [round(float(lons[high[1]]), 3), round(float(lats[high[0]]), 3)]}
+
+
 def load_crust1() -> np.ndarray:
     """Boundary heights, km above sea level, [180, 360, 9]: cells from 89.5 N and 179.5 W; the last boundary is the Moho."""
     with tarfile.open(cached_fetch(CRUST1_URL, "fields/crust1.0.tar.gz")) as archive:
@@ -274,7 +326,7 @@ def bake_heat_flow(width: int = 360, height: int = 180) -> dict:
 
 def main() -> None:
     fields = []
-    for bake in (bake_magnetic, bake_geoid, bake_crust, bake_heat_flow):
+    for bake in (bake_magnetic, bake_geoid, bake_gravity, bake_crust, bake_heat_flow):
         print(f"{bake.__name__}:", file=sys.stderr)
         result = bake()
         for field in result if isinstance(result, list) else [result]:

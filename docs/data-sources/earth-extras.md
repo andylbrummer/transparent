@@ -19,6 +19,7 @@ measured on 2026-11-09/10 (UTC).
 | Impact craters (`impact-craters`) | The 187 proven impact structures of 100 m and more: position, diameter, recommended age | Schmieder, M. & Kring, D.A. (2020), Earth's Impact Events Through Geologic Time: A List of Recommended Ages for Terrestrial Impact Structures and Deposits, Astrobiology 20(1), 91–141, doi:10.1089/ast.2019.2085, Table 1 | CC BY 4.0 ("distributed under the terms of the Creative Commons License (http://creativecommons.org/licenses/by/4.0)", in the article) | https://www.ebi.ac.uk/europepmc/webservices/rest/PMC6987741/fullTextXML | `generate_craters.py` → `geo/craters.json` (27 kB) | Schmieder & Kring (2020), Astrobiology 20, 91, doi:10.1089/ast.2019.2085 |
 | Magnetic anomaly of the crust (`magnetic-anomaly`) | Crustal magnetic anomaly, ±400 nT on a square-root scale | Meyer, B., Saltus, R. & Chulliat, A. (2017), EMAG2v3: Earth Magnetic Anomaly Grid (2-arc-minute resolution), Version 3, NOAA National Centers for Environmental Information, doi:10.7289/V5H70CVX | Public domain: "Produced by the NOAA National Centers for Environmental Information. Not subject to copyright protection within the United States." | https://gis.ngdc.noaa.gov/arcgis/rest/services/EMAG2v3/ImageServer/exportImage | `generate_earth_fields.py` → `geo/fields/magnetic-anomaly.jpg` (503 kB, 2048 × 1024) | Meyer, Saltus & Chulliat (2017), EMAG2v3, NOAA NCEI, doi:10.7289/V5H70CVX |
 | Geoid height (`geoid`) | Height of the geoid above the ellipsoid, −107 … +85 m | EGM96: Lemoine, F.G. et al. (1998), The Development of the Joint NASA GSFC and NIMA Geopotential Model EGM96, NASA/TP-1998-206861; the 15-arc-minute grid as packaged by PROJ | Public domain, per PROJ-data's `us_nga_README.txt` ("Source: NGA … License: Public Domain") - the packager's statement; no NGA page was fetched | https://cdn.proj.org/us_nga_egm96_15.tif | same script → `geo/fields/geoid.png` (72 kB) | EGM96, NASA GSFC / NIMA (Lemoine et al. 1998) |
+| Gravity anomaly (`gravity-anomaly`, added 2026-11-11) | Free-air gravity anomaly, −360 … +688 mGal, 0.25° cells | XGM2019: Zingerle, P., Pail, R., Gruber, T. & Oikonomidou, X. (2019), The experimental gravity field model XGM2019e, GFZ Data Services, doi:10.5880/ICGEM.2019.007 (the degree-760 member) | CC BY 4.0, stated in the file's own header and in its DataCite record | https://datapub.gfz-potsdam.de/download/10.5880.ICGEM.2019.007/XGM2019.zip | `generate_earth_fields.py` + `spherical_harmonics.py` → `geo/fields/gravity-anomaly.jpg` (246 kB) | XGM2019, Zingerle et al. 2019, GFZ (CC BY 4.0) |
 | Crust: depth of the Moho (`moho-depth`); Sediment thickness (`sediment-thickness`) | Depth of the base of the crust; thickness of the three sediment layers; 1° cells (both from the model's `crust1.bnds`) | CRUST1.0: Laske, G., Masters, G., Ma, Z. & Pasyanos, M. (2013), Update on CRUST1.0 - A 1-degree Global Model of Earth's Crust, Geophys. Res. Abstracts 15, Abstract EGU2013-2658 | **No licence stated.** The model's page says only "Please refer to the REM web site if you use this model … or to Laske, G., Masters, G., Ma, Z. and Pasyanos, M., Update on CRUST1.0 …"; the readme in the archive has no terms | https://igppweb.ucsd.edu/~gabi/crust1/crust1.0.tar.gz | same script → `geo/fields/moho-depth.png` (37 kB), `sediment-thickness.png` (50 kB) | Laske, Masters, Ma & Pasyanos (2013), CRUST1.0, EGU2013-2658 |
 | Heat flow, measured (`heat-flow`) | Median of the measurements in each 1° cell: 91,058 measurements in 10,214 cells | Global Heat Flow Data Assessment Group et al. (2024), The Global Heat Flow Database: Release 2024, v. 2026.03, GFZ Data Services, doi:10.5880/fidgeo.2024.014 | CC BY 4.0 (DataCite record of the DOI) | https://datapub.gfz-potsdam.de/download/10.5880.FIDGEO.2024.014-VEueRf/GHFBD-R2024_v.2026-03.zip | same script → `geo/fields/heat-flow.png` (24 kB); all five described in `geo/fields.json` (1 kB) | Global Heat Flow Data Assessment Group (2024), Global Heat Flow Database Release 2024, doi:10.5880/fidgeo.2024.014 |
 | Ocean currents (`ocean-currents`) | Mean surface current, Dec 2011 – Sep 2014 (39 five-day composites averaged), 1° grid; names of eleven currents | OSCAR third-degree surface currents, Earth & Space Research: Bonjean, F. & Lagerloef, G.S.E. (2002), Diagnostic model and analysis of the surface currents in the tropical Pacific Ocean, J. Phys. Oceanogr. 32, 2938–2954; served by NOAA CoastWatch ERDDAP, dataset `jplOscar`. Names and positions: Wikidata | ERDDAP record: "The data may be used and redistributed for free but is not intended for legal use, since it may contain inaccuracies." Wikidata: CC0 | https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplOscar.nc ; https://query.wikidata.org/sparql | `generate_ocean_currents.py` → `geo/ocean-currents.bin` (130 kB), `ocean-currents.json` (1 kB) | OSCAR, Earth & Space Research (Bonjean & Lagerloef 2002), via NOAA CoastWatch ERDDAP; Wikidata |
@@ -471,4 +472,39 @@ before 1945".
 
 **Not done**: the field's change (secular variation) and core-flow models
 inferred from it; the inner core; anything finer than degree 10. Not run
+on a phone or headset.
+
+## Gravity anomaly (added 2026-11-11)
+
+The row is in the table at the top. **What is computed.** XGM2019's
+coefficients (12 MB zip, degree 760) are synthesised here to degree 719, the
+limit to which the model combines satellite, ground and altimetry data in
+full (its README), at the centres of 0.25° cells on the GRS80 ellipsoid:
+each point's geocentric latitude and radius, the series continued to that
+radius, GRS80's normal field (J2 … J10) taken away, and the free-air anomaly
+Σ (n − 1)(a/r)^n … in the usual spherical approximation (Heiskanen & Moritz
+1967). Plain numpy, four seconds (`tools/pipeline/spherical_harmonics.py`).
+Stored as a grey JPEG on a signed square-root scale to ±300 mGal; the
+shader leaves anomalies under about 12 mGal clear.
+
+**Checked** (`tools/pipeline/test_earth_fields.py`, 8 new checks): the
+geoid from the same synthesis sits 0.58 m above EGM96's grid (EGM96 carries
+NGA's −0.53 m zero-degree term) and otherwise matches it to 0.60 m rms, an
+independent model, which holds the normalisation, the normal field and the
+ellipsoid; the worst place is 12 m at 29° N 96° E in Tibet, where EGM96 had
+no ground gravity. The anomaly averages to nothing over the globe. Its
+lowest point anywhere is at the Puerto Rico Trench (66.4° W, 19.4° N),
+−360 mGal: USGS Open-File Report 2005-1066 gives "the most negative
+free-air gravity anomaly on earth, −380 mGal", at finer resolution. The
+Challenger Deep is under −200 mGal and Hawaii's volcanoes over +200. The
+JPEG holds the anomaly to 4.7 of 127 codes rms, the bound the magnetic
+JPEG was chosen to. App: `fields.test.ts` (the code and the pale zero).
+
+**Looked at** (`~/review-loop/shots/gravity/`): the Caribbean, with the
+trench's label, and the western Pacific. Over land the map is busy: there
+the free-air anomaly mostly follows the topography; a Bouguer anomaly would
+take that away, and is not built.
+
+**Not done**: the Bouguer anomaly; degrees above 719 (XGM2019e goes to
+5,540, but above 719 it is mostly topography, not measured gravity). Not run
 on a phone or headset.

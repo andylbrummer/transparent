@@ -45,6 +45,7 @@ export interface EarthField {
 /** The scales of the codes, as in generate_earth_fields.py. */
 export const MAGNETIC_RANGE_NT = 400;
 export const GEOID_RANGE_M = 110;
+export const GRAVITY_RANGE_MGAL = 300;
 export const MOHO_MAX_KM = 80;
 export const SEDIMENT_MAX_KM = 20;
 export const HEAT_FLOW_MIN = 10;
@@ -53,6 +54,8 @@ export const HEAT_FLOW_MAX = 1000;
 /** Code (0..1) of a value on each scale: the inverse of what the shader reads. */
 export const magneticCode = (nt: number): number =>
   (128 + 127 * Math.sign(nt) * Math.sqrt(Math.min(Math.abs(nt) / MAGNETIC_RANGE_NT, 1))) / 255;
+export const gravityCode = (mgal: number): number =>
+  (128 + 127 * Math.sign(mgal) * Math.sqrt(Math.min(Math.abs(mgal) / GRAVITY_RANGE_MGAL, 1))) / 255;
 export const geoidCode = (m: number): number => (128 + (127 * m) / GEOID_RANGE_M) / 255;
 export const mohoCode = (km: number): number => km / MOHO_MAX_KM;
 export const sedimentCode = (km: number): number => Math.sqrt(km / SEDIMENT_MAX_KM);
@@ -126,6 +129,37 @@ export const EARTH_FIELDS: readonly EarthField[] = [
       { text: 'geoid low · −107 m', lon: 78.75, lat: 4.75 },
       { text: 'geoid high · +85 m', lon: 147.25, lat: -8.25 },
     ],
+  },
+  {
+    id: 'gravity-anomaly',
+    label: 'Gravity anomaly (free-air)',
+    file: 'gravity-anomaly.jpg',
+    // Weaker pull green-blue, stronger brown-red: apart from the geoid's blue-orange beside it in the menu.
+    ramp: [
+      [gravityCode(-300), 0x1d3b6e],
+      [gravityCode(-60), 0x3fa6a0],
+      [gravityCode(0), 0xf1efe8],
+      [gravityCode(60), 0xd99a5b],
+      [gravityCode(300), 0x7a2a12],
+    ],
+    // Clear within ±12 mGal of nothing, full colour from ±110 mGal: shown whole, the land is all texture and buries the trenches.
+    alphaGlsl: 'smoothstep(0.2, 0.6, abs(s))',
+    coverage: false,
+    opacity: 0.85,
+    caption:
+      '−300 … +300 mGal, square-root scale: where gravity pulls more or less than on a smooth Earth · ' +
+      'deep troughs over the ocean trenches, the deepest at Puerto Rico (−360 mGal at this resolution); highs on volcanoes and young mountains · ' +
+      'a model (XGM2019, satellites with ground and altimetry data), worked out here to 0.25°',
+    credits: [
+      {
+        what: 'Free-air gravity anomaly, synthesised to degree 719 from the XGM2019 gravity field model',
+        source:
+          'Zingerle, P., Pail, R., Gruber, T. & Oikonomidou, X. (2019), The experimental gravity field model XGM2019e, GFZ Data Services, doi:10.5880/ICGEM.2019.007',
+        licence: 'CC BY 4.0',
+        url: 'https://doi.org/10.5880/ICGEM.2019.007',
+      },
+    ],
+    labels: [{ text: 'Puerto Rico Trench · −360 mGal', lon: -66.375, lat: 19.375 }],
   },
   {
     id: 'moho-depth',
