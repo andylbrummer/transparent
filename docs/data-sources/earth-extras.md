@@ -508,3 +508,46 @@ take that away, and is not built.
 **Not done**: the Bouguer anomaly; degrees above 719 (XGM2019e goes to
 5,540, but above 719 it is mostly topography, not measured gravity). Not run
 on a phone or headset.
+
+## The transition zone's boundaries: the 410 and the 660 (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Top of the transition zone (`transition-zone-410`, off); Base of the transition zone (`transition-zone-660`, off) | Depth of the 410 and 660 km discontinuities from SS precursors, corrected for 3-D structure above, each drawn as a ball at its average depth coloured by its departure from that average | Waszek, L., Tauzin, B., Schmerr, N.C., Ballmer, M.D. & Afonso, J.C. (2021), A poorly mixed mantle transition zone and its thermal state inferred from seismic waves, Nature Geoscience 14, 949–955, doi:10.1038/s41561-021-00850-w; data: ISC Seismological Dataset Repository, doi:10.31905/7M3LMG8X | **No stated licence.** The readme says only "When using this dataset, please cite Waszek et al., Nat. Geosci., 2021"; shipped on that citation, as CRUST1.0 and the ULVZ database are. Flagged in the progress file. | https://download.isc.ac.uk/datarepository/410660.tgz | Baked: `tools/pipeline/generate_transition_zone.py` → `app/public/geo/transition-zone/410.png` (34 kB) and `660.png` (37 kB), 512×256 grey, and `transition-zone.json` | Waszek et al. (2021), ISC Dataset Repository |
+
+**What is drawn.** The archive (21 MB) holds SS and PP measurements, corrected
+and not, on a complete, already smoothed 0.5° grid. The SS files are used: the
+660 is mostly invisible to PP, which is the paper's finding. The two files are
+read out of the archive without unpacking it (it carries macOS `._` files),
+interpolated to pixel centres and written as the departure from the map's own
+area-weighted mean: grey 128 is the mean, 1 and 255 are 30 km shallower and
+deeper. The means are 410.0 km and **653.9 km**: from SS the "660" averages
+654 km, and the ball for it sits there. Green is raised, violet pushed down,
+±20 km at the ends; departures under 2 km are clear. The 410 ranges
+396–425 km, the 660 634–679 km.
+
+**Checked** (`tools/pipeline/test_transition_zone.py`, 21 checks): both grids
+complete, 361 × 721, the ±180° columns equal; ranges and the 410's mean; the
+zone's thickness follows the thermal model in the same archive, which was
+made from it (r = −0.993, thin where hot), so the files were read the right
+way round; mean thickness 244 km, against about 242 km in earlier global
+studies (Flanagan & Shearer 1998; Lawrence & Shearer 2006); the 660 deeper
+and the zone thicker than average under the Izu-Bonin (+7.5/+7.9 km), Tonga
+(+2.7/+7.7) and South American (+13.0/+10.1) subduction zones, where cold
+slabs reach it; the zone 10.8 km thinner than average under Hawaii (Li et al.
+2000, Nature 405, 938); the deepest 660 at 15.5° S 89.5° W, off Peru over
+the subducting slab; each picture decodes to the data within 1 km. **One
+check dropped, not bent**: that the 410 and 660 move in opposite directions.
+Over the globe this data has them moving together (r = +0.39), and the claim
+was general knowledge, not from this paper. App: `transition-zone.test.ts`
+(4).
+
+**Looked at** (`~/review-loop/shots/transition-zone/`): the 660 from Lima and
+from Tokyo, the 410 from Hawaii, each looking down; the label "the 660 · 654
+km on average" sits where the ball passes under the viewer. The relief comes
+in blobs thousands of km across: the bounce points of SS waves are averaged
+over wide caps, so nothing smaller is real.
+
+**Not done**: the PP measurements, the uncorrected depths, the amplitudes and
+the thermal model, all in the same archive; the transition zone's thickness
+as its own map. Not run on a phone or headset.

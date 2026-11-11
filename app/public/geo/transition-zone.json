@@ -1,0 +1,21 @@
+{
+ "width": 512,
+ "height": 256,
+ "scaleKm": 30.0,
+ "boundaries": [
+  {
+   "id": "410",
+   "file": "geo/transition-zone/410.png",
+   "meanKm": 410.0,
+   "minKm": 396.0,
+   "maxKm": 424.7
+  },
+  {
+   "id": "660",
+   "file": "geo/transition-zone/660.png",
+   "meanKm": 653.9,
+   "minKm": 633.5,
+   "maxKm": 678.6
+  }
+ ]
+}
