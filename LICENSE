@@ -19,16 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----------------------------------------------------------------------------
-
-Data is not covered by this licence.
-
-The MIT licence above covers the source code: everything in this repository
-except the data files under app/public/ (the baked datasets, images and
-textures) and the screenshots under docs/images/ insofar as they show those
-data. Each dataset keeps the licence its publisher gave it - public domain,
-CC0, CC BY, CC BY-SA, ODbL, non-commercial terms, or citation only - and its
-attribution must be kept when it is reused. docs/DATA-SOURCES.md lists every
-source, its licence and the attribution it asks for; the app shows the same
-list under Layers -> Data credits.

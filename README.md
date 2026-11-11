@@ -116,10 +116,10 @@ the [code of conduct](CODE_OF_CONDUCT.md). To report a security problem, see
 ## Licence
 
 - **Code:** [MIT](LICENSE).
-- **Data:** each dataset keeps its publisher's licence. That ranges from public domain and
-  CC0 through CC BY and CC BY-SA to non-commercial or citation-only terms. If you reuse a
-  file from `app/public/`, check its row in [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md)
-  and keep the attribution.
+- **Data:** each dataset keeps its publisher's licence ([LICENSE-DATA.md](LICENSE-DATA.md)).
+  That ranges from public domain and CC0 through CC BY and CC BY-SA to non-commercial or
+  citation-only terms. If you reuse a file from `app/public/`, check its row in
+  [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md) and keep the attribution.
 
 Transparent Earth stands on the work of the scientists and agencies whose data it shows,
 among them USGS, NASA, NOAA, ESA, the International Seismological Centre, EarthByte and
