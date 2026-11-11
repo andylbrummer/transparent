@@ -49,7 +49,7 @@ The layers panel has more than 170 layers, each built from real, cited data.
 Open **Layers** to switch layers on and off. **Layers → Data credits** lists every source.
 To pin the clock, add `?time=2026-11-09T06:00:00Z` to the URL.
 
-> **Status: prototype.** This is built for exploring and it's under active development. It
+> **Status: beta.** This is built for exploring and it's under active development. It
 > has been checked in desktop and headless browsers. Frame rates on phones and headsets
 > (the targets are the Pixel 6 Pro and Quest 3S) have not been measured yet. The AR window
 > onto your floor ([spec](spec/mobile.md)) is new and has not been tried on a phone yet.
