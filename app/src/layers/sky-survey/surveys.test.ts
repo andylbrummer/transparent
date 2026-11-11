@@ -24,6 +24,7 @@ describe('the surveys', () => {
     expect(spec.floor).toBeGreaterThanOrEqual(0);
     expect(spec.floor).toBeLessThan(0.5);
     expect(spec.gain).toBeGreaterThanOrEqual(1);
+    if (spec.negative) expect(spec.fields).toBeDefined();
   });
 
   it.each(SURVEYS)('$id credits the survey and the tile service, and says it loads live', (spec) => {
@@ -34,6 +35,19 @@ describe('the surveys', () => {
       expect(credit.url).toMatch(/^https:\/\//);
     }
     expect(spec.caption).toContain('loaded live');
+  });
+
+  it('include Hubble’s close-ups, turned back from negatives, and say the streaks are the originals’', () => {
+    const hubble = SURVEYS.find((spec) => spec.id === 'survey-hst')!;
+    expect(hubble.negative).toBe(true);
+    expect(hubble.fields?.map((field) => field.coverage)).toEqual(['hst-acs']);
+    // A few thousand scattered fields: rings would clutter the sky.
+    expect(hubble.markers).toBe(false);
+    expect(hubble.caption).toMatch(/negative/);
+    expect(hubble.caption).toMatch(/satellite trails/);
+    // skies.esac.esa.int sends no CORS header with a 404.
+    for (const base of hubble.bases) expect(base).toMatch(/^https:\/\/cdn\./);
+    expect(SURVEYS.filter((spec) => spec.negative).map((spec) => spec.id)).toEqual(['survey-hst']);
   });
 
   it('include Webb’s close-ups, ringed, and Euclid’s four fields, limited to their coverage files', () => {

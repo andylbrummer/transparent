@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { ICRS_TO_GALACTIC, healpixPixelPoint, type Mat3 } from '@transparent-earth/core';
 import { RENDER_ORDER } from '../../render/order';
 import type { LayerContext, LayerInstance } from '../types';
-import { bestSource, targetOrder, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad, type HipsTile } from './hips';
+import { HIPS_TILE_PX, bestSource, targetOrder, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad, type HipsTile } from './hips';
 import type { Coverage } from './coverage';
 import type { SurveySpec } from './surveys';
 
@@ -41,7 +41,19 @@ const VERTEX_SHADER = `
   }
 `;
 
-const FRAGMENT_SHADER = `
+/**
+ * The tile shader. A survey stored as negatives (white sky) gets NEGATIVE:
+ * turned back. Like every survey it adds its light to the sky map under
+ * it: drawn over it instead, its floor cut away the diffuse light DSS
+ * shows and a field over M31 read as a hole. Its black is where nothing
+ * was observed; the
+ * JPEG blur and the coarser tiles' averaging ramp that edge up to the sky,
+ * which turned back would be a bright line round every field, so a pixel
+ * counts as observed only when its neighbours out to a few texels do too.
+ */
+function fragmentShader(negative: boolean): string {
+  return `
+  ${negative ? '#define NEGATIVE' : ''}
   uniform sampler2D uMap;
   uniform vec3 uWindow;
   uniform float uFloor;
@@ -50,17 +62,41 @@ const FRAGMENT_SHADER = `
   uniform float uBelowHorizon;
   varying vec2 vUv;
   varying vec3 vWorldDir;
+#ifdef NEGATIVE
+  // The darkest of a texel's neighbours, as grey: no data anywhere near makes it black.
+  float darkestNear(vec2 t) {
+    float darkest = 1.0;
+    for (int ring = 1; ring <= 2; ring++) {
+      float r = 2.5 * float(ring) / ${String(HIPS_TILE_PX)}.0;
+      for (int k = 0; k < 8; k++) {
+        float a = 0.7853982 * float(k);
+        darkest = min(darkest, dot(texture2D(uMap, t + r * vec2(cos(a), sin(a))).rgb, vec3(1.0 / 3.0)));
+      }
+    }
+    return darkest;
+  }
+#endif
   void main() {
     // The wanted tile's place in the image being drawn (its own, or an ancestor's).
     vec2 w = uWindow.xy + vUv * uWindow.z;
     // A HiPS image has HEALPix v along its rows and u down its columns; the bitmap's first row is t = 0.
-    vec3 c = texture2D(uMap, vec2(w.y, w.x)).rgb;
+    vec2 t = vec2(w.y, w.x);
+    vec3 c = texture2D(uMap, t).rgb;
+    float horizon = mix(uBelowHorizon, 1.0, smoothstep(-0.005, 0.005, dot(normalize(vWorldDir), uObserverUp)));
+#ifdef NEGATIVE
+    // Sky is near white in the negative, the brightest galaxy cores about 0.3; a saturated star is black too and
+    // is left out with the no-data, so the sky map's own star shows there.
+    float observed = smoothstep(0.04, 0.2, min(dot(c, vec3(1.0 / 3.0)), darkestNear(t)));
+    vec3 light = max(1.0 - c - uFloor, 0.0) * uGain;
+    gl_FragColor = vec4(light * observed * horizon, 1.0);
+#else
     // The survey's sky background is not black; what is under the floor is no light at all.
     vec3 light = max(c - uFloor, 0.0) * uGain;
-    float horizon = mix(uBelowHorizon, 1.0, smoothstep(-0.005, 0.005, dot(normalize(vWorldDir), uObserverUp)));
     gl_FragColor = vec4(light * horizon, 1.0);
+#endif
   }
 `;
+}
 
 interface Held {
   /** Null: the server has no such tile (a survey that does not cover the whole sky). */
@@ -245,7 +281,7 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
       if (!entry) {
         const material = new THREE.ShaderMaterial({
           vertexShader: VERTEX_SHADER,
-          fragmentShader: FRAGMENT_SHADER,
+          fragmentShader: fragmentShader(spec.negative === true),
           uniforms: {
             uMap: { value: null },
             uWindow: { value: new THREE.Vector3(0, 0, 1) },
@@ -262,8 +298,8 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
         });
         const mesh = new THREE.Mesh(tileGeometry(tile), material);
         mesh.frustumCulled = false;
-        // Just over the all-sky maps, under the stars.
-        mesh.renderOrder = RENDER_ORDER.skyMap + 0.01;
+        // Just over the all-sky maps (close-ups over those), under the stars.
+        mesh.renderOrder = RENDER_ORDER.skyMap + (coverage ? 0.02 : 0.01);
         group.add(mesh);
         entry = { tile, mesh, material };
         drawn.set(key, entry);

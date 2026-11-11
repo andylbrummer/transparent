@@ -34,6 +34,8 @@ export interface SurveySpec {
   readonly fields?: readonly CloseupField[];
   /** Ring each covered cell from a wide view: for fields too small to find. */
   readonly markers?: boolean;
+  /** Tiles stored as negatives (white sky): drawn turned back, their black no-data corners left out. */
+  readonly negative?: boolean;
 }
 
 export interface CloseupField {
@@ -129,7 +131,7 @@ export const SURVEYS: readonly SurveySpec[] = [
     maxOrder: 6,
     frame: 'equatorial',
     floor: 0.22,
-    gain: 1.6,
+    gain: 1.15,
     credits: [
       {
         what: 'Swift-BAT 70-month hard X-ray survey image (14–24, 24–50, 50–194 keV as red, green, blue)',
@@ -192,9 +194,40 @@ export const SURVEYS: readonly SurveySpec[] = [
     ],
   },
   {
+    id: 'survey-hst',
+    label: 'Hubble close-ups (ACS)',
+    order: 16,
+    caption:
+      'every patch Hubble’s Advanced Camera for Surveys imaged to 2015, visible and near-ultraviolet, about 25 square degrees in all · stored as negatives and turned back here: the straight streaks are satellite trails and camera seams in the original images, not objects · drawn over the sky map that is on · loaded live as you look',
+    // The CDN, not skies.esac.esa.int: that host sends no CORS header with a 404.
+    bases: ['https://cdn.skies.esac.esa.int/HST/ACS'],
+    fields: [{ base: 'https://cdn.skies.esac.esa.int/HST/ACS', coverage: 'hst-acs' }],
+    // A few thousand scattered fields: rings would clutter the sky.
+    markers: false,
+    negative: true,
+    extension: 'jpg',
+    // Order 2 and coarser are not served (404).
+    minOrder: 3,
+    // The survey's own deepest order, about 0.025″ a pixel.
+    maxOrder: 14,
+    frame: 'equatorial',
+    // Turned back, the empty sky sits at about 0.14 (the negative's 215–220 of 255, four tiles).
+    floor: 0.16,
+    gain: 1.15,
+    credits: [
+      {
+        what: 'Hubble Space Telescope ACS images, all bands, every observation to August 2015',
+        source: 'NASA/ESA Hubble Space Telescope; original data from the European HST Archive (eHST) at ESA/ESAC',
+        licence: 'NASA/ESA mission archive data, public after their proprietary period; the tiles state copyright eHST/ESA, the acknowledgement asked for is given here',
+        url: 'https://www.cosmos.esa.int/web/hst',
+      },
+      ESA_TILES,
+    ],
+  },
+  {
     id: 'survey-euclid',
     label: 'Euclid deep fields',
-    order: 16,
+    order: 17,
     caption:
       'Euclid’s first deep fields in colour, visible and near-infrared, 2025–26: South, Fornax and North, 30–56 square degrees each, and a patch of the Galactic bulge · millions of galaxies: zoom in · drawn over the sky map that is on · loaded live as you look',
     bases: [

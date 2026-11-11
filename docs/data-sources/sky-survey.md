@@ -1,6 +1,6 @@
 # Sky surveys as pictures: data sources and verification
 
-What the seven `survey-*` layers draw, where it comes from and what was
+What the eight `survey-*` layers draw, where it comes from and what was
 checked. Numbers are as measured on 2026-11-10 (UTC).
 
 Before this the app's deep sky was outlines and markers over a 2048-pixel
@@ -18,24 +18,27 @@ resolution.
 | Hard X-ray sky (`survey-xray-bat`) | Swift-BAT 70-month survey image, 14–24 / 24–50 / 50–194 keV as red, green, blue, whole sky, order 6 | Baumgartner et al. 2013, ApJS 207:19; Swift-BAT team, NASA GSFC | `hips_copyright = public`; acknowledgement requested | `https://cdn.skies.esac.esa.int/swift_bat_flux` | Swift-BAT team |
 | X-ray pictures (`survey-xray-xmm`) | XMM-Newton EPIC images, colour composition, the 13% of the sky XMM has pointed at, order 7 | ESA XMM-Newton Science Archive, ESAC Science Data Centre | The properties file states no licence; ESA's usual terms are free use with credit "ESA/XMM-Newton". **Assumed, not stated — for Andy.** | `https://esdchips.esac.esa.int/XMM-Newton/EPIC-RGB` | ESA/XMM-Newton |
 | Webb close-ups (`survey-jwst`) | JWST NIRCam images, every public field since the 2022 Early Release Observations, about 1.5–2.4 deg² in all (0.006% of the sky or less), drawn to its own order 15 | NASA/ESA/CSA JWST; original data from the European JWST Archive (eJWST) at ESA/ESAC | The properties file states **no licence and no copyright**; the archive data are public after their proprietary period and the eJWST acknowledgement is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging` | Original data from the European JWST Archive (eJWST) at ESA/ESAC |
-| Euclid deep fields (`survey-euclid`) | Euclid VIS + NISP colour mosaics: Quick Release 1 deep fields South (56.0 deg²), Fornax (30.0), North (46.7), March 2025, and the Galactic bulge outreach field (5.2 deg², April 2026); drawn to order 11 | ESA Euclid mission and Euclid Consortium, Euclid Science Archive at ESAC; bulge HiPS by J.-C. Cuillandre (U. Hawaii) and J. Espinosa (Starion for ESA) | The three deep-field properties files state **no licence and no copyright**; the bulge field's states copyright ESA. Public release data; credit ESA/Euclid/Euclid Consortium. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/Q1-EDF{S,F,N}-R4-PNG-RGB_HIPS`, `https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS` | ESA/Euclid/Euclid Consortium |
-| All seven | Tile service | ESASky HiPS node, ESAC Science Data Centre, ESA; HiPS: Fernique et al. 2015, A&A 578:A114 | Public service; its hipslist asks that HiPS not be **mirrored** without the owner's agreement — the app mirrors nothing, it links | https://sky.esa.int/ | ESASky / ESAC |
+| Hubble close-ups (`survey-hst`) | HST Advanced Camera for Surveys images, all bands, every observation in the archive to August 2015, 24.6 deg² by its coverage map; stored as negatives and turned back by the app; drawn to its own order 14 (about 0.025″ a pixel) | NASA/ESA Hubble Space Telescope; original data from the European HST Archive (eHST) at ESA/ESAC (properties: `bib_reference` 2002ExA....14..107C) | The properties file states `hips_copyright = ESA/ESDC` and `obs_copyright = eHST/ESA`, no licence. NASA/ESA mission archive data, public after their proprietary period; the eHST acknowledgement asked for is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/HST/ACS` | Original data from the European HST Archive (eHST) at ESA/ESAC |
+| Euclid deep fields (`survey-euclid`) | Euclid VIS + NISP colour mosaics: Quick Release 1 deep fields South (56.0 deg²), Fornax (30.0), North (46.7), March 2025, and the Galactic bulge outreach field (5.2 deg², April 2026); drawn to its own order 12 | ESA Euclid mission and Euclid Consortium, Euclid Science Archive at ESAC; bulge HiPS by J.-C. Cuillandre (U. Hawaii) and J. Espinosa (Starion for ESA) | The three deep-field properties files state **no licence and no copyright**; the bulge field's states copyright ESA. Public release data; credit ESA/Euclid/Euclid Consortium. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/Q1-EDF{S,F,N}-R4-PNG-RGB_HIPS`, `https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS` | ESA/Euclid/Euclid Consortium |
+| All eight | Tile service | ESASky HiPS node, ESAC Science Data Centre, ESA; HiPS: Fernique et al. 2015, A&A 578:A114 | Public service; its hipslist asks that HiPS not be **mirrored** without the owner's agreement — the app mirrors nothing, it links | https://sky.esa.int/ | ESASky / ESAC |
 
 Every tile host answers cross-origin requests with
 `Access-Control-Allow-Origin: *` (checked with an `Origin` header on a tile
 of each). No key, no sign-up. One trap: `skies.esac.esa.int` sends the
 header with a tile but not with a 404, so in a browser an empty tile there
-reads as a network failure (seen as CORS errors in the app); the Webb layer
-uses the CDN host `cdn.skies.esac.esa.int`, which sends it with both.
+reads as a network failure (seen as CORS errors in the app); the Webb and
+Hubble layers use the CDN host `cdn.skies.esac.esa.int`, which sends it with both.
 
-Baked for the Webb and Euclid layers: `app/public/sky/closeups.json` (8 kB),
+Baked for the Webb, Hubble and Euclid layers: `app/public/sky/closeups.json`
+(32 kB, 11 kB compressed as served; Hubble's 8,605 cells are most of it),
 each survey's coverage map (`Moc.fits`, IVOA MOC 1.1; Webb's 68,484 cells to
 order 15) coarsened to the order-8 cells (13.7′) that hold any of it, by
 `tools/pipeline/generate_closeup_coverage.py`. Coarsening only adds sky:
-30 deg² of cells for Webb's 2.37 deg², 6–10% more for Euclid's fields. The
-app asks each field's server only for tiles touching its cells; Webb's
-cells are ringed from a wide view (Euclid's fields are degrees across and
-show without). The four Euclid fields are four HiPS on two hosts: one
+30 deg² of cells for Webb's 2.37 deg², 451 deg² for Hubble's 24.6 (its
+fields are small and scattered), 6–10% more for Euclid's fields. The app
+asks each field's server only for tiles touching its cells; Webb's cells
+are ringed from a wide view (Euclid's fields are degrees across and show
+without; Hubble's 8,605 cells would clutter the sky, so they are not ringed). The four Euclid fields are four HiPS on two hosts: one
 switch runs a survey per field and merges their status chips.
 
 Webb's properties file states `moc_sky_fraction = 1.025E-5` (0.42 deg²), but
@@ -47,15 +50,38 @@ coverage all had a tile with data, covering 5% of each on average — about
 figures and well above the stated one. A MOC is drawn a little generously
 by design; the app uses it to choose which tiles to ask for, where erring
 generous costs only a few 404s. The stated fraction is taken as stale.
+Hubble's states 6.566E-6 (0.27 deg²) against its map's 24.6 deg²; the
+survey was built from three parts (blue, red, UV, concatenated in 2016) and
+the figure looks like the first part's alone. Not checked further.
 
 Euclid's tiles are heavy: 0.4–0.6 MB of PNG each (Webb's 2–140 kB). A narrow
 view needs 5–25, so up to about 10 MB per screenful; the layer is off by
 default and fetches only inside its fields.
 
-Hubble: ESA's HST/ACS survey (24.6 deg², to 2015) was tried and left out.
-Its tiles are negatives — white sky, black stars — crossed by satellite
-trails and chip gaps; drawn as added light they would wash the sky white,
-and inverting them would still leave the trails. (The first Euclid tiles
+Hubble: ESA's HST/ACS survey (24.6 deg², to 2015) stores its tiles as
+negatives — white sky, black stars — so the app turns them back (`negative`
+in `surveys.ts`). What that takes:
+
+- **No data is black in a negative**, and so is a saturated star's core;
+  turned back, both would be the brightest thing there. A pixel is drawn
+  only where the negative is above 0.04–0.2 (smoothly) — the sky is
+  215–220 of 255, the brightest unsaturated galaxy core sampled (M51's) 79.
+- **Every field's edge ramps** from that black up to the sky (JPEG blur,
+  and the coarser tiles average data with no data), which turned back drew
+  a bright outline round each field — seen round M31's scattered fields and
+  each saturated star in the Ultra Deep Field. A pixel now counts as
+  observed only when the darkest of 16 neighbours out to 5 texels does
+  too: the outlines went. A saturated star is left out with its ring, and
+  the sky map's own star shows there.
+- **Drawn over the sky map instead of added to it** was tried (so M51 is
+  not shown twice) and dropped: the floor cut away the diffuse light DSS
+  shows and the fields over M31 read as black holes. Added, as every other
+  survey is; gain lowered to 1.15 so M51's core, added to DSS's, is not
+  wholly burnt out.
+- **Satellite trails and camera seams stay**: they are in the images. The
+  caption says so. Over the Ultra Deep Field they cross most of the view.
+
+(The first Euclid tiles
 sampled looked empty because they were outside the fields: picked from the
 HiPS's initial view position, not its coverage.)
 
@@ -89,8 +115,10 @@ node serves 2MASS but did not send the cross-origin header.
   horizon it shows through the planet, dimmed; over the bright surface it
   is effectively invisible. Only one whole-sky picture is on at a time
   (the five whole-sky surveys and the twelve baked maps share an exclusive
-  group). Webb's and Euclid's close-ups are outside that group and add
-  over whichever is on.
+  group). Webb's, Hubble's and Euclid's close-ups are outside that group,
+  drawn just after it, and add over whichever is on.
+- **Hubble's stretch** is floor 0.16, gain 1.15, on the turned-back image:
+  its empty sky sits at 0.14–0.16 (the negative's 215–220, four tiles).
 - **Euclid's stretch** is floor 0.06, gain 1.3: its mosaics' empty sky sits
   at about 15 of 255 (median of three tiles inside EDF South).
 - **Webb's stretch** is gain 2, floor 0: its fields are dark with small
@@ -130,22 +158,27 @@ node serves 2MASS but did not send the cross-origin header.
 
 - Core: `healpix.test.ts`, 134 cases against healpy.
 - App: `hips.test.ts` (13: URL layout, order choice, tile counts, ancestor
-  windows), `surveys.test.ts` (17: every survey https, credited, off by
-  default, Webb and Euclid outside the exclusive group with their fields),
+  windows), `surveys.test.ts` (22: every survey https, credited, off by
+  default, Webb and Euclid outside the exclusive group with their fields,
+  and Hubble's (turned back, unringed, captioned with its trails, on the CDN),
   `coverage.test.ts` (13: cell decoding, coarser/finer tiles against the
   cells including pixel numbers past 2^31, cell centres against
   `healpixUnitToNested`, marker fade, merged status chips).
 - Pipeline: `test_hips_orientation.py`, 16 checks on live tiles;
-  `test_closeup_coverage.py`, 39 checks: cells sorted, in range, area
+  `test_closeup_coverage.py`, 46 checks: cells sorted, in range, area
   bounds, each Euclid field's area against its stated sky fraction, the
-  SMACS 0723 deep field, Stephan's Quintet, the Pillars of Creation and the
-  centres of Euclid's three deep fields each inside a cell, placed with
-  healpy.
+  SMACS 0723 deep field, Stephan's Quintet, the Pillars of Creation, the
+  Hubble Ultra Deep Field, M51, M31's nucleus and the centres of Euclid's
+  three deep fields each inside a cell, placed with healpy.
 - Webb looked at (`~/review-loop/shots/webb/`): SMACS 0723 from 40° (rings
   over DSS) to 0.2°, where both NIRCam modules and the lensing cluster show
   over the DSS stars, then at 0.03° (the cluster and its lensed arcs),
   0.01° and 0.003° (single faint galaxies at Webb's own pixel scale). Off-centre by about 90″ because the shot's aim was
   worked out by hand (precession, no aberration), not an app error.
+- Hubble looked at (`~/review-loop/shots/hubble/`): M51 at 1°, 0.15° and
+  0.03° (spiral arms and dust lanes over DSS's, the camera's seams as
+  straight lines), M31 at 3° (no outlines), the Ultra Deep Field at 0.1°
+  and 0.02° (galaxies, and trails across most of it).
 - Euclid looked at (`~/review-loop/shots/euclid/`): EDF South at 8° (the
   footprint shows as a speckled field over DSS), 1° and 0.2° (colour
   galaxies, spiral arms resolved).
