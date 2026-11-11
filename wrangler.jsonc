@@ -1,0 +1,12 @@
+// transparent.sbdev.io: the built app served as Workers static assets, no
+// Worker code. Cloudflare Workers Builds runs the gate and deploys on every
+// push to main; see AGENTS.md.
+{
+  "name": "transparent",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./app/dist",
+    "not_found_handling": "none"
+  },
+  "workers_dev": false
+}
