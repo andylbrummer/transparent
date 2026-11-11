@@ -154,6 +154,7 @@ files and can be removed without touching other layers.
 | Particle accelerators (`particle-accelerators`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
 | World Heritage Sites (`world-heritage`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
 | Shipwrecks (`shipwrecks`) | off | Landmarks: positions, elevations, depths and how widely each is written about | [Wikidata](https://www.wikidata.org/) | CC0 1.0 |
+| Major mineral deposits (`mineral-deposits`) | off | Major mineral deposits: name, country, position, commodities, geological setting | [Schulz, K.J. & Briskey, J.A. (compilers), Major mineral deposits of the world, U.S. Geological Survey Open-File Report 2005-1294](https://mrdata.usgs.gov/major-deposits/) | public domain (U.S. Government work) |
 
 ## Inside the Earth
 

@@ -267,3 +267,41 @@ against them. Among them:
 - **Holes.** Provinces with holes (the Canadian Shield around Hudson Bay)
   are drawn first, so their holes do not erase the provinces inside them.
   The same applies to the fields.
+
+## Major mineral deposits of the world (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mineral deposits (`mineral-deposits`, off) | 3,161 major deposits of non-fuel mineral commodities: name, country, commodities, geological setting, a commodity group for the colour | Schulz, K.J. & Briskey, J.A. (compilers), Major mineral deposits of the world, U.S. Geological Survey Open-File Report 2005-1294 (five regional compilations combined) | Public domain (U.S. Government work; metadata Use_Constraints: none) | https://mrdata.usgs.gov/major-deposits/ | Baked: `tools/pipeline/generate_mineral_deposits.py` → `app/public/geo/mineral-deposits.json` (262 kB, 67 kB gzipped) | Schulz & Briskey, USGS OFR 2005-1294 |
+
+**What is drawn.** A dot per deposit, coloured by the group of its
+first-listed commodity: precious (gold, silver, PGE; 601), base (copper,
+lead, zinc, nickel, cobalt, molybdenum; 812), steel (iron, manganese,
+chromium, vanadium, tungsten; 484), aluminium (bauxite; 74), critical
+(lithium, rare earths, niobium, tantalum, tin, uranium and other minor
+metals; 324), gems (diamond and gemstones; 98) and industrial (everything
+else: phosphate, potash, salt, clays, fluorspar...; 768). Seven of the 3,168
+records have no position and are left out.
+
+**Labels are a hand-picked list, not a size ranking.** The file has no
+tonnages or grades, so nothing is sized and nothing can be ranked. Eleven
+well-known deposits are named: La Escondida, Chuquicamata, Grasberg, Kiruna,
+Olympic Dam, Muruntau, Bayan Obo (its rare-earth record; the file also lists
+it as an iron deposit at another position), Carajás, Bingham Canyon,
+Kalgoorlie and the Western Bushveld; each is checked against the file.
+Positions are "near the deposits they describe" (the metadata), not outlines.
+The compilers warn of "likely inconsistencies among the regional reports".
+Fuels are outside the compilation's scope.
+
+**Checked** (`tools/pipeline/test_mineral_deposits.py`, 34 checks): 3,168
+records, 3,161 kept; every group used; every position on the globe, none at
+0 N 0 E; the grouping of gold, copper, iron, lithium, rare earths, diamonds,
+lapis lazuli, potash and phosphate; La Escondida and Chuquicamata (Chile,
+copper), Grasberg (Indonesia, copper), Kiruna (Sweden, iron), Olympic Dam
+(Australia, copper with uranium) and Muruntau (Uzbekistan, gold), each with
+its country, group and commodity; Bayan Obo present as a rare-earth deposit;
+Chile with at least 30 base-metal deposits; no fuels; the app's named
+deposits and group colours. App: `mineral-deposits.test.ts` (6).
+
+**Looked at** (`~/review-loop/shots/mineral-deposits/`): the Andes, and the
+world from the far side of Africa. Not run on a phone or headset.
