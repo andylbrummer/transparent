@@ -115,11 +115,11 @@ describe('createLookController', () => {
     expect(camera.fov).toBeCloseTo(DEFAULT_FOV_DEG / 2, 9);
   });
 
-  it('stops zooming at a fifth of a degree in and a hundred degrees out', () => {
+  it('stops zooming at eleven arcseconds in and a hundred degrees out', () => {
     const look = createLookController();
     for (let i = 0; i < 200; i++) look.onKeyDown('+');
     expect(look.getState().fovDeg).toBe(MIN_FOV_DEG);
-    expect(MIN_FOV_DEG).toBe(0.2);
+    expect(MIN_FOV_DEG).toBe(0.003);
     for (let i = 0; i < 200; i++) look.onKeyDown('-');
     expect(look.getState().fovDeg).toBe(MAX_FOV_DEG);
   });

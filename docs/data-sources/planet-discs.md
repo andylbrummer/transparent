@@ -40,7 +40,7 @@ Nothing is fetched at run time.
   against the disc are drawing choices.
 - **Drawing choices:** everything is drawn **40× life size** (Jupiter is at
   most 50″ across, a thirtieth of the Moon: at life size 50 pixels at the
-  app's narrowest field of 0.2°, and invisible in a headset, which cannot
+  app's old narrowest field of 0.2°, and invisible in a headset, which cannot
   zoom), the moons' spacing by the same factor, so at this scale a moon can
   stand in front of unrelated stars. The caption says "drawn 40× life
   size". Saturn's map is pulled 45% toward grey because the source is far

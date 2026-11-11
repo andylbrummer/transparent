@@ -175,8 +175,8 @@ export const SURVEYS: readonly SurveySpec[] = [
     extension: 'png',
     // Order 3 and coarser tiles are not served (404); the patches are too small to see at those scales anyway.
     minOrder: 4,
-    // The survey goes to order 15; at the narrowest view (0.2°) a phone screen wants order 9 or 10.
-    maxOrder: 11,
+    // The survey's own deepest order: about 0.03″ a pixel, reached at the app's narrowest view.
+    maxOrder: 15,
     frame: 'equatorial',
     floor: 0,
     // A dark field of small galaxies: at the scales a screen reaches, most are a few pixels, averaged down.
@@ -214,7 +214,8 @@ export const SURVEYS: readonly SurveySpec[] = [
     extension: 'png',
     // Tiles are 0.4–0.6 MB each: none coarser than order 3, where a field still spans a tile or two.
     minOrder: 3,
-    maxOrder: 11,
+    // The survey's own deepest order, about 0.2″ a pixel.
+    maxOrder: 12,
     frame: 'equatorial',
     // The mosaics' empty sky sits at about 15 of 255.
     floor: 0.06,

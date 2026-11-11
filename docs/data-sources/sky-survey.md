@@ -17,7 +17,7 @@ resolution.
 | Mid-infrared sky (`survey-wise`) | AllWISE W1, W2, W4 as blue, green, red, whole sky, order 8 | Wright et al. 2010, AJ 140:1868; UCLA and JPL/Caltech, funded by NASA | Public domain with acknowledgement | `https://cdn.skies.esac.esa.int/AllWISEColor` (mirror: CDS) | WISE — UCLA & JPL/Caltech, NASA; HiPS by CDS |
 | Hard X-ray sky (`survey-xray-bat`) | Swift-BAT 70-month survey image, 14–24 / 24–50 / 50–194 keV as red, green, blue, whole sky, order 6 | Baumgartner et al. 2013, ApJS 207:19; Swift-BAT team, NASA GSFC | `hips_copyright = public`; acknowledgement requested | `https://cdn.skies.esac.esa.int/swift_bat_flux` | Swift-BAT team |
 | X-ray pictures (`survey-xray-xmm`) | XMM-Newton EPIC images, colour composition, the 13% of the sky XMM has pointed at, order 7 | ESA XMM-Newton Science Archive, ESAC Science Data Centre | The properties file states no licence; ESA's usual terms are free use with credit "ESA/XMM-Newton". **Assumed, not stated — for Andy.** | `https://esdchips.esac.esa.int/XMM-Newton/EPIC-RGB` | ESA/XMM-Newton |
-| Webb close-ups (`survey-jwst`) | JWST NIRCam images, every public field since the 2022 Early Release Observations, 2.37 deg² in all (0.006% of the sky), drawn to order 11 | NASA/ESA/CSA JWST; original data from the European JWST Archive (eJWST) at ESA/ESAC | The properties file states **no licence and no copyright**; the archive data are public after their proprietary period and the eJWST acknowledgement is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging` | Original data from the European JWST Archive (eJWST) at ESA/ESAC |
+| Webb close-ups (`survey-jwst`) | JWST NIRCam images, every public field since the 2022 Early Release Observations, 2.37 deg² in all (0.006% of the sky), drawn to its own order 15 | NASA/ESA/CSA JWST; original data from the European JWST Archive (eJWST) at ESA/ESAC | The properties file states **no licence and no copyright**; the archive data are public after their proprietary period and the eJWST acknowledgement is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging` | Original data from the European JWST Archive (eJWST) at ESA/ESAC |
 | Euclid deep fields (`survey-euclid`) | Euclid VIS + NISP colour mosaics: Quick Release 1 deep fields South (56.0 deg²), Fornax (30.0), North (46.7), March 2025, and the Galactic bulge outreach field (5.2 deg², April 2026); drawn to order 11 | ESA Euclid mission and Euclid Consortium, Euclid Science Archive at ESAC; bulge HiPS by J.-C. Cuillandre (U. Hawaii) and J. Espinosa (Starion for ESA) | The three deep-field properties files state **no licence and no copyright**; the bulge field's states copyright ESA. Public release data; credit ESA/Euclid/Euclid Consortium. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/Q1-EDF{S,F,N}-R4-PNG-RGB_HIPS`, `https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS` | ESA/Euclid/Euclid Consortium |
 | All seven | Tile service | ESASky HiPS node, ESAC Science Data Centre, ESA; HiPS: Fernique et al. 2015, A&A 578:A114 | Public service; its hipslist asks that HiPS not be **mirrored** without the owner's agreement — the app mirrors nothing, it links | https://sky.esa.int/ | ESASky / ESAC |
 
@@ -89,7 +89,7 @@ node serves 2MASS but did not send the cross-origin header.
 - **Euclid's stretch** is floor 0.06, gain 1.3: its mosaics' empty sky sits
   at about 15 of 255 (median of three tiles inside EDF South).
 - **Webb's stretch** is gain 2, floor 0: its fields are dark with small
-  galaxies, and at the scales a screen reaches (order 9–10 at 0.2°) most
+  galaxies, and at the scales most views reach (order 9–10 at 0.2°) most
   are a few pixels. The same patch was compared at orders 9 and 12: same
   mean level (11.6 and 12.9 of 255, correlation 0.95), so the coarse tiles
   are not darkened by the HiPS build; the faintness is the sky's.
@@ -99,8 +99,11 @@ node serves 2MASS but did not send the cross-origin header.
 - The order is chosen so a tile's 512 pixels are stretched at most 1.25×:
   the whole sky in 12–48 tiles at a 60° field, order 7 at 1°, order 9 (the
   deepest DSS and 2MASS have, about an arcsecond a pixel) at the narrowest
-  field, 0.2°. The zoom limit was 1° before these layers; it was lowered so
-  their resolution can be reached (M51 at 0.3° and M57 at 0.2° looked at). A screen needs
+  field DSS needs, 0.2°. The zoom limit was 1° before these layers, then
+  0.2° (M51 at 0.3° and M57 at 0.2° looked at); it is now 0.003° (11″), so
+  Webb's own order 15 (about 0.03″ a pixel) and Euclid's order 12 are
+  reached on a phone-height screen. Below 0.2° the whole-sky surveys are
+  only stretched. A screen needs
   5–25 tiles; at most 40 are drawn and 56 kept (about 56 MB of texture at
   the cap, a megabyte each, no mipmaps).
 - Six requests at a time, nearest the centre of view first; requests for
@@ -135,7 +138,8 @@ node serves 2MASS but did not send the cross-origin header.
   healpy.
 - Webb looked at (`~/review-loop/shots/webb/`): SMACS 0723 from 40° (rings
   over DSS) to 0.2°, where both NIRCam modules and the lensing cluster show
-  over the DSS stars. Off-centre by about 90″ because the shot's aim was
+  over the DSS stars, then at 0.03° (the cluster and its lensed arcs),
+  0.01° and 0.003° (single faint galaxies at Webb's own pixel scale). Off-centre by about 90″ because the shot's aim was
   worked out by hand (precession, no aberration), not an app error.
 - Euclid looked at (`~/review-loop/shots/euclid/`): EDF South at 8° (the
   footprint shows as a speckled field over DSS), 1° and 0.2° (colour
@@ -150,10 +154,8 @@ node serves 2MASS but did not send the cross-origin header.
 
 - Not run on a phone or headset; texture memory at the cap is untested on a
   real device, and stereo was not looked at.
-- Webb's survey goes to order 15 (about 0.03″ a pixel) but the app's zoom
-  stops at 0.2°, order 9–10: Webb's resolution is not reached (nor
-  Euclid's, order 12). Lowering the
-  zoom limit is an app-wide choice — **for Andy**.
+- The 0.003° zoom limit is for exploring on a desktop; on a phone's gyro
+  such a narrow view will shake. Not tried on a device.
 - Tile seams: none seen, but edges are clamped per tile, so a faint line is
   possible at high contrast.
 - Surveys in galactic coordinates are supported in code (the group is

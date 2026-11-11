@@ -19,7 +19,8 @@ describe('the surveys', () => {
     for (const base of spec.bases) expect(base).toMatch(/^https:\/\/[a-z0-9.-]+\/\S+[^/]$/);
     expect(spec.minOrder).toBeGreaterThanOrEqual(0);
     expect(spec.maxOrder).toBeGreaterThan(spec.minOrder);
-    expect(spec.maxOrder).toBeLessThanOrEqual(13);
+    // Webb's own resolution; deeper would need a zoom past the app's limit.
+    expect(spec.maxOrder).toBeLessThanOrEqual(15);
     expect(spec.floor).toBeGreaterThanOrEqual(0);
     expect(spec.floor).toBeLessThan(0.5);
     expect(spec.gain).toBeGreaterThanOrEqual(1);

@@ -20,11 +20,13 @@ export const EYE_HEIGHT_M = 1.5;
 
 export const DEFAULT_FOV_DEG = 60;
 /**
- * A fifth of a degree: about where the photographed sky reaches its own
- * resolution (an arcsecond a pixel), a galaxy a few arcminutes across fills
- * the view, and Jupiter drawn 40× life size does too.
+ * Eleven arcseconds across: where Webb's close-ups reach their own
+ * resolution (order 15, about 0.03″ a tile pixel) on a phone-height
+ * screen. This is a prototype for exploring, so the limit follows the
+ * sharpest picture offered rather than what a gyro can hold steady;
+ * the photographed sky runs out of detail at about 0.2°.
  */
-export const MIN_FOV_DEG = 0.2;
+export const MIN_FOV_DEG = 0.003;
 export const MAX_FOV_DEG = 100;
 const KEY_STEP_RAD = 0.05;
 const KEY_ZOOM_FACTOR = 1.1;
