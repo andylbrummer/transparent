@@ -4,7 +4,7 @@ Data checks for generate_closeup_coverage.py's output.
 
 The cells are sorted, unique and in range, cover at least the area the
 coverage maps state and not much more, and include fields Webb is known
-to have imaged and the centres of Euclid's deep fields - placed with healpy, not with the
+to have imaged, fields Hubble's ACS imaged before 2015, and the centres of Euclid's deep fields - placed with healpy, not with the
 script's own arithmetic - while leaving most of the sky out.
 
 Usage:
@@ -26,6 +26,12 @@ WEBB_FIELDS = {
     "Stephan's Quintet (NIRCam, 2022)": (338.9894, 33.9597),
     "Pillars of Creation, M16 (NIRCam, 2022)": (274.7000, -13.8370),
 }
+# Fields imaged with Hubble's Advanced Camera for Surveys before the survey's 2015 cut-off, positions from SIMBAD.
+HUBBLE_FIELDS = {
+    "Hubble Ultra Deep Field (ACS, 2003-04)": (53.1625, -27.7914),
+    "M51, Whirlpool Galaxy (ACS, 2005)": (202.4696, 47.1952),
+    "M31 nucleus (ACS, PHAT 2010-13)": (10.6847, 41.2690),
+}
 # Centres of Euclid's deep fields as the mission's Q1 release gives them (Euclid Collaboration: Aussel et al. 2025).
 EUCLID_FIELDS = {
     "euclid-edfs": {"Euclid Deep Field South": (61.24, -48.42)},
@@ -35,9 +41,12 @@ EUCLID_FIELDS = {
 }
 # Each survey's moc_sky_fraction from its HiPS properties file, read 2026-11-10: the bake's area must agree.
 # Webb's states 1.025e-5 (0.42 deg²) while its Moc.fits, dated the same minute, sums to 2.37 deg²; the same sum
-# matches all four Euclid files, so the stated fraction is taken as stale and not checked.
+# matches all four Euclid files, so the stated fraction is taken as stale and not checked. Hubble ACS's states
+# 6.566e-6 (0.27 deg²), its Moc.fits 24.6 deg²: the survey was built from three parts (blue, red, UV) and the
+# fraction seems to be the first part's alone; not checked either.
 SKY_FRACTION = {
     "jwst": None,
+    "hst-acs": None,
     "euclid-edfs": 1.357e-3,
     "euclid-edff": 7.266e-4,
     "euclid-edfn": 1.132e-3,
@@ -47,14 +56,15 @@ SKY_FRACTION = {
 
 def main() -> None:
     data = json.loads(OUTPUT.read_text())
-    check(OUTPUT.stat().st_size < 20_000, f"{OUTPUT.stat().st_size / 1024:.0f} KB")
+    # Hubble's thousands of scattered fields take most of it; served compressed, about a third of this.
+    check(OUTPUT.stat().st_size < 40_000, f"{OUTPUT.stat().st_size / 1024:.0f} KB")
     order = data["order"]
     nside = 2**order
     cell_area = 4 * math.pi * (180 / math.pi) ** 2 / hp.nside2npix(nside)
     check(data["frame"] == "icrs", "cells are in ICRS")
 
     check(sorted(data["surveys"]) == sorted(SKY_FRACTION), "the expected surveys, no more")
-    for name, fields in (("jwst", WEBB_FIELDS), *EUCLID_FIELDS.items()):
+    for name, fields in (("jwst", WEBB_FIELDS), ("hst-acs", HUBBLE_FIELDS), *EUCLID_FIELDS.items()):
         survey = data["surveys"][name]
         deltas = survey["deltas"]
         cells = []

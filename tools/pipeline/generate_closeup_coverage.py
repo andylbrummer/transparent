@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Content pipeline for Transparent Earth: where Webb and Euclid have looked.
+Content pipeline for Transparent Earth: where Webb, Hubble and Euclid have looked.
 
 Writes app/public/sky/closeups.json: the patches of sky covered by ESA's
-picture surveys (HiPS) of JWST NIRCam images and of Euclid's deep fields,
+picture surveys (HiPS) of JWST NIRCam images, of Hubble ACS images and of
+Euclid's deep fields,
 as HEALPix cells at one order. The app uses them twice: to mark on the sky
 where there is a close-up to zoom into, and to ask the tile server only
 for tiles that touch one - between them they cover under 0.5% of the
@@ -24,9 +25,9 @@ output covers a little more sky than the surveys do, never less.
     https://cdn.skies.esac.esa.int/Q1-EDFS-R4-PNG-RGB_HIPS/ and siblings,
     https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS/
 
-ESA's Hubble ACS survey is left out: its tiles are negatives (white sky)
-crossed by satellite trails and chip gaps, which drawn as added light
-would wash the sky out.
+  Hubble: every ACS image in the European HST Archive (eHST) to August
+    2015, all bands - https://cdn.skies.esac.esa.int/HST/ACS/. Its tiles
+    are negatives (white sky); the app turns them back.
 
 Usage:
     python3 tools/pipeline/generate_closeup_coverage.py
@@ -45,6 +46,7 @@ from fetch_cache import cached_fetch
 
 SURVEYS = {
     "jwst": "https://skies.esac.esa.int/JWST/NIRCam_Imaging",
+    "hst-acs": "https://cdn.skies.esac.esa.int/HST/ACS",
     "euclid-edfs": "https://cdn.skies.esac.esa.int/Q1-EDFS-R4-PNG-RGB_HIPS",
     "euclid-edff": "https://cdn.skies.esac.esa.int/Q1-EDFF-R4-PNG-RGB_HIPS",
     "euclid-edfn": "https://cdn.skies.esac.esa.int/Q1-EDFN-R4-PNG-RGB_HIPS",
