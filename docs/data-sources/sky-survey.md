@@ -17,7 +17,7 @@ resolution.
 | Mid-infrared sky (`survey-wise`) | AllWISE W1, W2, W4 as blue, green, red, whole sky, order 8 | Wright et al. 2010, AJ 140:1868; UCLA and JPL/Caltech, funded by NASA | Public domain with acknowledgement | `https://cdn.skies.esac.esa.int/AllWISEColor` (mirror: CDS) | WISE — UCLA & JPL/Caltech, NASA; HiPS by CDS |
 | Hard X-ray sky (`survey-xray-bat`) | Swift-BAT 70-month survey image, 14–24 / 24–50 / 50–194 keV as red, green, blue, whole sky, order 6 | Baumgartner et al. 2013, ApJS 207:19; Swift-BAT team, NASA GSFC | `hips_copyright = public`; acknowledgement requested | `https://cdn.skies.esac.esa.int/swift_bat_flux` | Swift-BAT team |
 | X-ray pictures (`survey-xray-xmm`) | XMM-Newton EPIC images, colour composition, the 13% of the sky XMM has pointed at, order 7 | ESA XMM-Newton Science Archive, ESAC Science Data Centre | The properties file states no licence; ESA's usual terms are free use with credit "ESA/XMM-Newton". **Assumed, not stated — for Andy.** | `https://esdchips.esac.esa.int/XMM-Newton/EPIC-RGB` | ESA/XMM-Newton |
-| Webb close-ups (`survey-jwst`) | JWST NIRCam images, every public field since the 2022 Early Release Observations, 2.37 deg² in all (0.006% of the sky), drawn to its own order 15 | NASA/ESA/CSA JWST; original data from the European JWST Archive (eJWST) at ESA/ESAC | The properties file states **no licence and no copyright**; the archive data are public after their proprietary period and the eJWST acknowledgement is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging` | Original data from the European JWST Archive (eJWST) at ESA/ESAC |
+| Webb close-ups (`survey-jwst`) | JWST NIRCam images, every public field since the 2022 Early Release Observations, about 1.5–2.4 deg² in all (0.006% of the sky or less), drawn to its own order 15 | NASA/ESA/CSA JWST; original data from the European JWST Archive (eJWST) at ESA/ESAC | The properties file states **no licence and no copyright**; the archive data are public after their proprietary period and the eJWST acknowledgement is given. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/JWST/NIRCam_Imaging` | Original data from the European JWST Archive (eJWST) at ESA/ESAC |
 | Euclid deep fields (`survey-euclid`) | Euclid VIS + NISP colour mosaics: Quick Release 1 deep fields South (56.0 deg²), Fornax (30.0), North (46.7), March 2025, and the Galactic bulge outreach field (5.2 deg², April 2026); drawn to order 11 | ESA Euclid mission and Euclid Consortium, Euclid Science Archive at ESAC; bulge HiPS by J.-C. Cuillandre (U. Hawaii) and J. Espinosa (Starion for ESA) | The three deep-field properties files state **no licence and no copyright**; the bulge field's states copyright ESA. Public release data; credit ESA/Euclid/Euclid Consortium. **Assumed, not stated — for Andy.** | `https://cdn.skies.esac.esa.int/Q1-EDF{S,F,N}-R4-PNG-RGB_HIPS`, `https://esdchips.esac.esa.int/EuclidOutreach/Q2-EGBS-PNG-RGB_HIPS` | ESA/Euclid/Euclid Consortium |
 | All seven | Tile service | ESASky HiPS node, ESAC Science Data Centre, ESA; HiPS: Fernique et al. 2015, A&A 578:A114 | Public service; its hipslist asks that HiPS not be **mirrored** without the owner's agreement — the app mirrors nothing, it links | https://sky.esa.int/ | ESASky / ESAC |
 
@@ -40,8 +40,13 @@ switch runs a survey per field and merges their status chips.
 
 Webb's properties file states `moc_sky_fraction = 1.025E-5` (0.42 deg²), but
 its `Moc.fits`, written the same minute, sums to 2.37 deg²; the same sum
-agrees to 0.1% with all four Euclid files' stated fractions. The MOC is what
-the app uses; the stated fraction is taken as stale.
+agrees to 0.1% with all four Euclid files' stated fractions. Checked against
+the tiles themselves (2026-11-11): 20 order-8 cells drawn at random from the
+coverage all had a tile with data, covering 5% of each on average — about
+1.5 deg² over the 30 deg² of cells, so the true area lies between the two
+figures and well above the stated one. A MOC is drawn a little generously
+by design; the app uses it to choose which tiles to ask for, where erring
+generous costs only a few 404s. The stated fraction is taken as stale.
 
 Euclid's tiles are heavy: 0.4–0.6 MB of PNG each (Webb's 2–140 kB). A narrow
 view needs 5–25, so up to about 10 MB per screenful; the layer is off by
