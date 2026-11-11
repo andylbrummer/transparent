@@ -14,6 +14,7 @@ positions are ICRS / J2000, in millidegrees.
     gamma          gamma-ray sources, 0.1-100 GeV     Fermi-LAT 4FGL-DR4 (Ballet et al. 2023)
     pulsars        radio pulsars and magnetars        ATNF Pulsar Catalogue (Manchester et al. 2005)
     exoplanets     stars with confirmed planets       NASA Exoplanet Archive, Planetary Systems Composite
+    exoplanet-candidates  stars with planet candidates  NASA Exoplanet Archive: TESS TOIs, Kepler KOIs, K2
     nearby         every star within 10 parsecs       The 10 parsec sample (Reyle et al. 2021)
     galaxies       galaxies within 11 Mpc             Updated Nearby Galaxy Catalog (Karachentsev et al. 2013)
     clusters       rich clusters of galaxies          Abell, Corwin & Olowin 1989
@@ -565,6 +566,62 @@ def build_exoplanets() -> Catalogue:
 
 
 # ---------------------------------------------------------------------------
+# Exoplanet candidates: signals each mission's team counts as a planet, not yet confirmed or ruled out
+
+
+def archive_query(adql: str) -> str:
+    return "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=" + urllib.parse.quote(adql) + "&format=csv"
+
+
+# Mission, query, the column naming the host, how a host is shown. TESS's own team disposition (TFOPWG): PC planet
+# candidate, APC ambiguous planet candidate; the rest are confirmed (CP, KP, in `exoplanets`) or false (FP, FA).
+CANDIDATE_SOURCES = [
+    (
+        "tess",
+        archive_query("select toi,tid,ra,dec from toi where tfopwg_disp in ('PC','APC')"),
+        "tid",
+        lambda row: f"TOI-{row['toi'].split('.')[0]}",
+    ),
+    (
+        "kepler",
+        archive_query("select kepoi_name,kepid,ra,dec from cumulative where koi_disposition = 'CANDIDATE'"),
+        "kepid",
+        lambda row: f"KOI-{int(row['kepoi_name'][1:].split('.')[0])}",
+    ),
+    (
+        "k2",
+        archive_query("select pl_name,hostname,ra,dec from k2pandc where default_flag = 1 and disposition = 'CANDIDATE'"),
+        "hostname",
+        lambda row: row["hostname"],
+    ),
+]
+# Hosts with this many candidates or more are named.
+CANDIDATE_LABEL_MIN = 3
+
+
+def build_exoplanet_candidates() -> Catalogue:
+    out = Catalogue(
+        "NASA Exoplanet Archive: TESS Project Candidates (toi, TFOPWG PC and APC), Kepler Objects of Interest "
+        "cumulative table (CANDIDATE), K2 Planets and Candidates (CANDIDATE), https://exoplanetarchive.ipac.caltech.edu",
+        [mission for mission, *_ in CANDIDATE_SOURCES],
+        "number of planet candidates at the star",
+    )
+    for mission, url, host_column, host_name in CANDIDATE_SOURCES:
+        path = cached_fetch(url, f"deepsky/candidates_{mission}.csv")
+        hosts: dict[str, dict] = {}
+        for row in csv.DictReader(path.read_text(encoding="utf-8").splitlines()):
+            if not row["ra"] or not row["dec"]:
+                continue
+            host = hosts.setdefault(row[host_column], {"ra": float(row["ra"]), "dec": float(row["dec"]), "count": 0, "name": host_name(row)})
+            host["count"] += 1
+        for host in sorted(hosts.values(), key=lambda h: (-h["count"], h["name"])):
+            index = out.add(host["ra"], host["dec"], mission, host["count"])
+            if host["count"] >= CANDIDATE_LABEL_MIN:
+                out.label(index, f"{host['name']} · {host['count']} candidates", 10 - host["count"])
+    return out
+
+
+# ---------------------------------------------------------------------------
 # The 10 parsec sample
 
 NEARBY_CLASSES = ["star", "low-mass", "brown-dwarf", "white-dwarf"]
@@ -1037,6 +1094,7 @@ BUILDERS = {
     "gamma": build_gamma,
     "pulsars": build_pulsars,
     "exoplanets": build_exoplanets,
+    "exoplanet-candidates": build_exoplanet_candidates,
     "nearby": build_nearby,
     "galaxies": build_galaxies,
     "clusters": build_clusters,

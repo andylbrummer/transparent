@@ -227,9 +227,9 @@ baked. Nothing under `app/public/` is gitignored.
 
 ## Deep Sky and All-Sky Maps
 
-`generate_deepsky.py` bakes sixteen catalogues of the faint and invisible
+`generate_deepsky.py` bakes seventeen catalogues of the faint and invisible
 sky (Messier/NGC/IC objects, X-ray and gamma-ray sources, pulsars,
-exoplanet hosts, the nearest stars, galaxies, clusters, quasars, the 2MASS
+exoplanet hosts and candidates, the nearest stars, galaxies, clusters, quasars, the 2MASS
 Redshift Survey...) into `app/public/sky/deep/`. Standard library only;
 `sky_catalog_support.py` holds the HEASARC / VizieR / SIMBAD readers and
 the B1950 → J2000 precession.

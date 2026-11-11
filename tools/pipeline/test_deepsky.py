@@ -220,6 +220,35 @@ def exoplanet_checks() -> None:
     check(4000 < count < 8000, f"exoplanets: {count} host stars")
 
 
+def ecliptic_latitude_deg(ra: float, dec: float) -> float:
+    obliquity = math.radians(23.4393)
+    ra_r, dec_r = math.radians(ra), math.radians(dec)
+    return math.degrees(math.asin(math.sin(dec_r) * math.cos(obliquity) - math.cos(dec_r) * math.sin(obliquity) * math.sin(ra_r)))
+
+
+def candidate_checks() -> None:
+    """Where each mission looked is known independently of the archive: the check is that its candidates are there."""
+    data = load("exoplanet-candidates")
+    count = len(data["ra"])
+    by_class = {name: [i for i in range(count) if data["cls"][i] == k] for k, name in enumerate(data["classes"])}
+    check(sorted(by_class) == ["k2", "kepler", "tess"], "candidates: one class per mission")
+    planets = {name: sum(data["val"][i] for i in idx) for name, idx in by_class.items()}
+    # The archive's counts on 2026-11-11: TOIs PC 4,813 + APC 494, Kepler CANDIDATE 1,977, K2 CANDIDATE 975.
+    check(4500 < planets["tess"] < 6500, f"candidates: {planets['tess']} TESS candidates")
+    check(1500 < planets["kepler"] < 2500, f"candidates: {planets['kepler']} Kepler candidates")
+    check(700 < planets["k2"] < 1300, f"candidates: {planets['k2']} K2 candidates")
+    check(all(v >= 1 for v in data["val"]), "candidates: every marker holds at least one")
+    # Kepler stared at one patch of Cygnus and Lyra for four years: a circle of 8 deg about its centre holds it all.
+    kepler_out = [i for i in by_class["kepler"] if separation_deg(*position(data, i), *KEPLER_FIELD) > 8]
+    check(not kepler_out, f"candidates: every Kepler candidate in the Kepler field ({len(kepler_out)} outside)")
+    # K2 pointed along the ecliptic, its reaction wheels' only stable direction.
+    k2_lat = [abs(ecliptic_latitude_deg(*position(data, i))) for i in by_class["k2"]]
+    check(max(k2_lat) < 15, f"candidates: every K2 candidate within 15 deg of the ecliptic (max {max(k2_lat):.1f})")
+    # TESS covers nearly the whole sky, north and south.
+    north = sum(1 for i in by_class["tess"] if position(data, i)[1] > 0)
+    check(0.3 < north / len(by_class["tess"]) < 0.7, f"candidates: TESS candidates in both hemispheres ({north} of {len(by_class['tess'])} north)")
+
+
 def nearby_checks() -> None:
     nearby = load("nearby")
     proxima = check_at(nearby, "nearby", "Proxima Cen", (217.39, -62.67), 0.02)
@@ -362,6 +391,7 @@ def main() -> None:
     gamma_checks()
     pulsar_checks()
     exoplanet_checks()
+    candidate_checks()
     nearby_checks()
     galaxy_checks()
     lss_checks()
