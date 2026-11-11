@@ -1,0 +1,29 @@
+name: Data source or layer idea
+description: Suggest a dataset to show, or a correction to one already shown
+labels: [data]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What it would show
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Link to the data
+      description: The original publisher, not a copy.
+    validations:
+      required: true
+  - type: input
+    id: licence
+    attributes:
+      label: Licence
+      description: As the publisher states it. Data must be free, public and keyless, and allow redistribution.
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Something to check it against
+      description: A published figure the baked data should reproduce (optional, but it helps).

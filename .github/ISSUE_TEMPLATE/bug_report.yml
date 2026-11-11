@@ -1,0 +1,30 @@
+name: Bug report
+description: Something looks wrong, breaks, or runs slowly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect? Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      description: Which layers were on, where you were looking, and the URL (including any ?time=).
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: e.g. Pixel 6 Pro, Chrome 142; or Quest 3S browser; or desktop Firefox
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [Phone (gyro), Cardboard, Desktop, Other]
