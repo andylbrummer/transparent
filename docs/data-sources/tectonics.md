@@ -161,3 +161,96 @@ load after first paint, because the layer is on by default;
 - Depth figures on the contours ("300 km") rank last among labels and
   rarely find room in a wide view.
 - Trenches draw over the slabs but under the earthquakes.
+
+## Geologic provinces, Archean crust and igneous provinces (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Geologic provinces (`geologic-provinces`, off) | 921 provinces tiling the Earth, coloured by province type (15 types in 11 colours) | Hasterok, D., Halpin, J.A., Collins, A.S., Hand, M., Kreemer, C., Gard, M.G. & Glorie, S. (2022), New maps of global geological provinces and tectonic plates, Earth-Science Reviews 231, 104069, doi:10.1016/j.earscirev.2022.104069; `global_gprv.shp` from the Zenodo record doi:10.5281/zenodo.6586972 (version 1, the latest) | CC BY 4.0 (Zenodo record). The same files on GitHub (dhasterok/global_tectonics) are GPL-3.0; not used. | https://doi.org/10.5281/zenodo.6586972 | Baked: `tools/pipeline/generate_geologic_provinces.py` → `app/public/geo/provinces.png` (2048×1024, 81 kB) and `provinces.json` | Hasterok et al. (2022) |
+| Cratons: the oldest crust (`cratons`, off) | 114 polygons of crust with Archean (>2.5 Ga) basement, craton / shield / other, and whether reworked after the Archean; 38 names | as above, `cratons.shp` | CC BY 4.0 | as above | Baked: same script → `cratons.png` (55 kB) and `cratons.json` (names, centres, member provinces) | Hasterok et al. (2022) |
+| Large igneous and volcanic provinces (`igneous-provinces`, off) | 2,526 polygons of magmatism apart from ordinary seafloor spreading, coloured by age, 21 named | Johansson, L., Zahirovic, S. & Müller, R.D. (2018), The interplay between the eruption and weathering of Large Igneous Provinces and the deep-time carbon cycle, GRL 45, doi:10.1029/2017GL076691; volcanic provinces v2 in the EarthByte GPlates 2.3 sample data (`IgneousProvinces.zip`) | CC BY 3.0 (EarthByte's GPlates 2.3 data page) | https://www.earthbyte.org/webdav/ftp/earthbyte/GPlates/GPlates2.3_GeoData/Individual/IgneousProvinces.zip | Baked: `tools/pipeline/generate_igneous_provinces.py` → `igneous-provinces.png` (105 kB) and `.json` | Johansson et al. (2018), EarthByte |
+
+**Fetching only what is needed.** The Zenodo record is a single 1.17 GB zip.
+The bake reads its central directory with HTTP Range requests (Zenodo
+answers 206), then fetches and inflates just the four members it needs
+(`global_gprv.shp/.dbf`, `cratons.shp/.dbf`, 1.8 MB packed), checking each
+CRC. `cratons.dbf` has no code-page file and some names are Latin-1; they
+are decoded as such ("Saõ Francisco Craton", spelt as the source spells it).
+
+**What `cratons` means.** The repository README: "regions with geochemical
+samples or that are known to have Archean (>2500 Ma) basement; the polygons
+have largely been extracted from global_gprv.shp ... an additional column in
+the attribute table has been added to identify post-Archean reworking". 59 of
+the 114 are reworked; they are drawn in the same hue, fainter. Not every
+polygon is typed craton: 55 cratons, 34 shields, and 25 orogenic belts, arcs,
+rifts and basins with Archean basement under them.
+
+**Province classes.** Wide and narrow rifts are one colour; basin, foredeep
+basin and continental back-arc basin another; oceanic back-arc basins are
+drawn with oceanic crust. Nothing else is merged. Oceanic crust is drawn at
+0.3 opacity, the rest at 0.62, so the continents lead.
+
+**Why Johansson and not Whittaker.** The same zip holds Whittaker et al.
+(2015)'s 80 plume-related LIPs, the stricter set; but they stop at 200 Ma and
+are all from a plume and ridge study, with no Siberian Traps, Emeishan or
+Wrangellia. Johansson's README says what its 2,526 polygons hold: "a range of
+emplacement modes, essentially any significant magmatism that is distinct
+from typical seafloor spreading-related magmatism", age-progressive or not:
+flood basalts, oceanic plateaus, dyke swarms, and seamount chains outlined
+along depth contours. The layer is named for that. Ages are the file's
+`FROMAGE` (the age each polygon appears in the plate model); the scale runs
+to 300 Ma and the few older ones (to 650 Ma in the file) sit at its end and
+carry no age in their names. Polygons are where the rocks are today.
+
+**Drawing.** One shared bake (`tools/pipeline/province_raster.py`) draws
+polygons of longitude and latitude on a 2048×1024 picture: R the class or
+age, G outlines (cratons only: thin lines were most of the bytes elsewhere),
+B anti-aliased coverage. Rings are unwrapped across the date line and drawn
+at −360, 0 and +360°; a ring once round a pole is closed along it
+(Antarctica, the Arctic). Larger polygons are drawn first (provinces,
+cratons) and older first (igneous), so the smaller or younger lie on top.
+The app reads the class unfiltered (`texelFetch`) and colours it from a
+256-entry palette (`app/src/layers/geologic-provinces/drape.ts`), draws an
+edge where the class changes or the coverage ends, and reads coverage
+filtered.
+
+**Checked** (`tools/pipeline/test_geologic_provinces.py`, 37 checks;
+`test_igneous_provinces.py`, 16):
+- the provinces' area column sums to 510.2 million km² (the Earth's area);
+- the drawing covers 100.00% of the sphere;
+- oceanic crust drawn over 57.5% of the Earth, the figure in the paper's
+  abstract ("We estimate 57.5% of the Earth's surface is covered by oceanic
+  crust"); the file's crust-type column alone gives 58.7%, because it counts
+  oceanic back-arc basins;
+- all 921 provinces and 114 Archean polygons are drawn, 59 reworked;
+- places that sit on Archean cratons in every geology text are on Archean
+  crust and named in the right group: Johannesburg (Kaapvaal in the Kalahari
+  Craton), Kalgoorlie (Eastern Yilgarn) and Marble Bar (Pilbara) in the West
+  Australian Craton, Yellowknife (Slave), Timmins (Wawa-Abitibi in the
+  Superior Craton); Hawaii and Iceland are not;
+- the file's ages within 5 Myr of U-Pb dates: Siberian Traps 248–251 Ma
+  against 251.9 Ma (Burgess & Bowring 2015), CAMP 201 Ma against 201.6–201.0
+  Ma (Blackburn et al. 2013), Deccan 65 Ma against 66.3–65.6 Ma (Schoene et
+  al. 2019);
+- Mahabaleshwar (Western Ghats) on the Deccan, drawn at 65 Ma; the island of
+  Hawai'i on its chain under 3 Ma; Paris and Alice Springs on nothing.
+
+**One check dropped, not bent**: Norilsk on the Siberian Traps. The file's
+outlines stop about 17 km short of the town.
+
+App tests: `provinces.test.ts` (7: classes match the bake, palette layout,
+unfiltered class read, legend), `cratons.test.ts` (3), `igneous.test.ts` (4).
+
+**Looked at** (`~/review-loop/shots/geologic-provinces/`, `cratons/`,
+`igneous-provinces/`): Africa and Asia through the Earth; North America's
+cratons named; standing on the Kaapvaal looking north; India and Siberia
+with the Deccan, Siberian Traps, Emeishan and Ontong Java named. With all
+three on, the desktop GPU stayed at the 16.7 ms vsync floor; not measured on
+a phone or headset. Each picture is 2048×1024, the size of the other
+surface drapes: about 8 MB of GPU memory (RGBA) plus mipmaps while its
+layer is on. They were baked at 4096×2048 first (32 MB each); all checks
+pass at the smaller size.
+
+**Not done**: province names (921 is too many to show; only the craton
+groups and 21 igneous provinces are named); the provinces' last-orogeny and
+crust-type columns; the plates file from the same record.
