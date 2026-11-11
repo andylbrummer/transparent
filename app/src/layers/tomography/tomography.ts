@@ -12,7 +12,8 @@
  * anomalies clear, so both sides of the glass ball can be read at once.
  *
  * A bare coloured ball inside the Earth says nothing about where its
- * blobs are, so the coastlines are projected straight down onto it.
+ * blobs are, so the coastlines are projected straight down onto it
+ * (render/projected-coast.ts).
  */
 
 import * as THREE from 'three';
@@ -21,7 +22,8 @@ import { DeepShell } from '../../render/deep-shell';
 import { ecefAtDepth } from '../../render/interior';
 import { LABEL_KIND_ORDER } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
-import { outlineSegmentPositions, type OutlineData } from '../../render/outlines';
+import { type OutlineData } from '../../render/outlines';
+import { ProjectedCoast } from '../../render/projected-coast';
 import type { LayerContext, LayerInstance } from '../types';
 import { rampStrip } from '../weather/ramps';
 import { DVS_CLEAR_BELOW, DVS_FULL_FROM, DVS_RAMP, type TomographyShell } from './shells';
@@ -36,27 +38,6 @@ export const TOMOGRAPHY_SHADE_GLSL = `
     vec3 color = texture2D(uRamp, vec2(v * 0.5 + 0.5, 0.5)).rgb;
     float strength = smoothstep(${DVS_CLEAR_BELOW.toFixed(2)}, ${DVS_FULL_FROM.toFixed(2)}, abs(v));
     return vec4(color, 0.86 * strength);
-`;
-
-/**
- * The projected coastlines. A point of the sphere faces the camera when
- * p·c > r²; that side is the veil over the far one, and its lines are
- * fainter to match.
- */
-const COAST_VERTEX_SHADER = `
-  uniform vec3 uCameraPos;
-  uniform float uRadiusSq;
-  varying float vNear;
-  void main() {
-    vNear = step(uRadiusSq, dot(position, uCameraPos));
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const COAST_FRAGMENT_SHADER = `
-  varying float vNear;
-  void main() {
-    gl_FragColor = vec4(1.0, 1.0, 1.0, mix(0.42, 0.16, vNear));
-  }
 `;
 
 /** "2,850 km · shear-wave speed (model)". */
@@ -85,29 +66,10 @@ export async function createTomographyLayer(context: LayerContext, shell: Tomogr
   });
   deep.setTexture(texture);
 
-  const coastGeometry = new THREE.BufferGeometry();
-  coastGeometry.setAttribute(
-    'position',
-    new THREE.BufferAttribute(outlineSegmentPositions(outlines.layers.coastline ?? [], outlines.quantumPerDegree, radiusM), 3)
-  );
-  const coastMaterial = new THREE.ShaderMaterial({
-    vertexShader: COAST_VERTEX_SHADER,
-    fragmentShader: COAST_FRAGMENT_SHADER,
-    uniforms: { uCameraPos: { value: new THREE.Vector3() }, uRadiusSq: { value: radiusM * radiusM } },
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-  });
-  const coast = new THREE.LineSegments(coastGeometry, coastMaterial);
-  coast.name = `tomography-${shell.depthKm}-coast`;
-  coast.frustumCulled = false;
-  coast.renderOrder = SHELL_ORDER + 0.05;
-  coast.onBeforeRender = (_renderer, _scene, camera) => {
-    (coastMaterial.uniforms.uCameraPos.value as THREE.Vector3).setFromMatrixPosition(camera.matrixWorld);
-  };
+  const coast = new ProjectedCoast(outlines, radiusM, `tomography-${shell.depthKm}-coast`, SHELL_ORDER + 0.05);
 
   const group = new THREE.Group();
-  group.add(deep.object, coast);
+  group.add(deep.object, coast.object);
   context.earthRoot.add(group);
 
   // Named where the slice passes under the user's feet.
@@ -135,8 +97,7 @@ export async function createTomographyLayer(context: LayerContext, shell: Tomogr
       labels.remove();
       group.removeFromParent();
       deep.dispose();
-      coastGeometry.dispose();
-      coastMaterial.dispose();
+      coast.dispose();
       ramp.dispose();
     },
   };
