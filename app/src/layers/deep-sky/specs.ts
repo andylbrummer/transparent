@@ -193,7 +193,7 @@ export const DEEP_SKY_SPECS: readonly DeepSkySpec[] = [
     label: 'Exoplanet host stars',
     order: 22,
     file: 'sky/deep/exoplanets.json',
-    about: '4,900 stars with confirmed planets, by how the first was found · larger: more planets',
+    about: 'all 6,464 confirmed planets, on their 4,857 stars, by how the first was found · larger: more planets',
     classes: {
       transit: { label: 'transit', color: '#5ad1ff', shape: 'disc' },
       'radial-velocity': { label: 'radial velocity', color: '#ffb05a', shape: 'disc' },
@@ -211,6 +211,35 @@ export const DEEP_SKY_SPECS: readonly DeepSkySpec[] = [
       {
         what: 'Confirmed exoplanets and their host stars',
         source: 'NASA Exoplanet Archive, Planetary Systems Composite Parameters (Caltech/IPAC, under contract with NASA)',
+        licence: 'public, citation requested',
+        url: 'https://exoplanetarchive.ipac.caltech.edu/',
+      },
+    ],
+  },
+  {
+    kind: 'catalog',
+    id: 'exoplanet-candidates',
+    label: 'Exoplanet candidates',
+    order: 23,
+    file: 'sky/deep/exoplanet-candidates.json',
+    about:
+      '8,259 planet candidates on 7,961 stars, not yet confirmed or ruled out, by the mission that found them · TESS’s cover the sky, Kepler’s one patch in Cygnus, K2’s the ecliptic · larger: more candidates',
+    classes: {
+      tess: { label: 'TESS', color: '#7fe8c8', shape: 'ring' },
+      kepler: { label: 'Kepler', color: '#d7b8ff', shape: 'ring' },
+      k2: { label: 'K2', color: '#ffe08a', shape: 'ring' },
+    },
+    // Value: number of candidates at the star.
+    sizePx: (value) => clamp(3 + value * 0.9, 3.5, 9),
+    alpha: () => 0.75,
+    labelRank: 6.47,
+    labelColor: '#d9f5ec',
+    labelAbove: true,
+    credits: [
+      {
+        what: 'Exoplanet candidates: TESS Objects of Interest, Kepler Objects of Interest, K2 candidates',
+        source:
+          'NASA Exoplanet Archive (Caltech/IPAC, under contract with NASA): TESS Project Candidates with the TESS Follow-up Observing Program’s dispositions, the Kepler cumulative KOI table, K2 Planets and Candidates',
         licence: 'public, citation requested',
         url: 'https://exoplanetarchive.ipac.caltech.edu/',
       },

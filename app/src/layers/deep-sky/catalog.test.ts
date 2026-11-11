@@ -255,6 +255,22 @@ describe('DEEP_SKY_SPECS', () => {
     }
   });
 
+  it('shows planet candidates beside the confirmed hosts, as rings, never as confirmed', () => {
+    const hosts = DEEP_SKY_SPECS.find((spec) => spec.id === 'exoplanet-hosts') as CatalogSpec;
+    const candidates = DEEP_SKY_SPECS.find((spec) => spec.id === 'exoplanet-candidates') as CatalogSpec;
+    expect(candidates.order).toBe(hosts.order + 1);
+    expect(Object.keys(candidates.classes)).toEqual(['tess', 'kepler', 'k2']);
+    const confirmedColors = new Set(Object.values(hosts.classes).map((style) => style.color));
+    for (const style of Object.values(candidates.classes)) {
+      expect(style.shape).toBe('ring');
+      expect(confirmedColors.has(style.color)).toBe(false);
+    }
+    expect(candidates.about).toMatch(/not yet confirmed/);
+    const data = baked(candidates.file);
+    const total = data.val.reduce((sum, value) => sum + value, 0);
+    expect(total).toBeGreaterThan(7000);
+  });
+
   it('finds the Andromeda galaxy, labelled, with its true outline', () => {
     const data = baked('sky/deep/dso.json');
     const label = data.labels.find(([, text]) => text === 'M31 Andromeda Galaxy');

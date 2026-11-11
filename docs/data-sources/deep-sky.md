@@ -27,6 +27,7 @@ queried with ADQL.
 | `supernova-remnants` | 295 Galactic remnants: type, 1 GHz flux, angular size | Green D.A., A Catalogue of Galactic Supernova Remnants (June 2017 version); 2019, J. Astrophys. Astron. 40, 36 | published catalogue, citation requested | HEASARC `snrgreen` | `snr.json` 12,837 | Green D.A., Cavendish Laboratory, Cambridge |
 | `nearby-stars` | 439 stars, brown dwarfs and white dwarfs within 10 pc (planets left out), carried by proper motion to 2026.0; distance from parallax | Reylé C. et al. 2021, A&A 650, A201, "The 10 parsec sample in the Gaia era" (2023 update) | CDS VizieR: free use with citation | VizieR `J/A+A/650/A201/tablea1` (CfA mirror) | `nearby.json` 11,780 | Reylé et al. 2021, the 10 parsec sample |
 | `exoplanet-hosts` | 4,857 host stars of confirmed planets: number of planets, discovery method of the first | NASA Exoplanet Archive, Planetary Systems Composite Parameters (`pscomppars`), doi:10.26133/NEA13 | public; acknowledgement text requested | https://exoplanetarchive.ipac.caltech.edu/TAP | `exoplanets.json` 88,019 | This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with NASA |
+| `exoplanet-candidates` | 8,259 planet candidates on 7,961 stars, one ring per star per mission, sized by count: TESS (TFOPWG disposition PC or APC, 5,307), Kepler (cumulative KOI table, CANDIDATE, 1,977), K2 (default rows, CANDIDATE, 975); read 2026-11-11 | NASA Exoplanet Archive tables `toi`, `cumulative`, `k2pandc` | public; acknowledgement text requested | https://exoplanetarchive.ipac.caltech.edu/TAP | `exoplanet-candidates.json` 137,413 (49 kB gzipped) | This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with NASA |
 | `pulsars` | 4,503 pulsars: period, type (magnetar = `AXP` in the type column) | ATNF Pulsar Catalogue, Manchester R.N., Hobbs G.B., Teoh A., Hobbs M. 2005, AJ 129, 1993 | free use with acknowledgement of the paper and web address | HEASARC `atnfpulsar` | `pulsars.json` 87,832 | ATNF Pulsar Catalogue (Manchester et al. 2005), https://www.atnf.csiro.au/research/pulsar/psrcat |
 | `xray-sources` | 1,891 hard X-ray sources, 14-195 keV: flux, counterpart, class | Swift-BAT 157-Month All-Sky Hard X-ray Survey (Lien A. et al. 2025) | NASA data, public | HEASARC `swbat157m` | `xray-hard.json` 38,403 | Swift-BAT 157-month survey, NASA/GSFC |
 | `xray-binaries` | 114 high-mass and 187 low-mass X-ray binaries: peak 2-10 keV flux | Liu Q.Z., van Paradijs J., van den Heuvel E.P.J. 2006, A&A 455, 1165; 2007, A&A 469, 807 | published catalogues, citation requested | HEASARC `hmxbcat`, `lmxbcat` | `xray-binaries.json` 7,618 | Liu, van Paradijs & van den Heuvel 2006, 2007 |
@@ -76,7 +77,7 @@ and 2MASS ask for.
 
 ## What was verified, and how
 
-### Catalogues (`tools/pipeline/test_deepsky.py`, 329 checks)
+### Catalogues (`tools/pipeline/test_deepsky.py`, 344 checks)
 
 Known objects against their usual J2000 positions (SIMBAD's), which are
 independent of the X-ray, gamma-ray and radio catalogues baked. Baked
@@ -153,6 +154,22 @@ ecliptic direction; the cube's curvature comes from WCSLIB's CSC
 projection through astropy) is checked against the coordinates COBE's
 own DMR tables carry for all 6,144 resolution-6 pixels: worst
 disagreement 0.6″ (ecliptic), 2.4″ after rotating to galactic.
+
+**Exoplanet candidates** (added 2026-11-11) are checked against where
+each mission looked, which is known apart from the archive: all 1,977
+Kepler candidates within 8° of the Kepler field's centre; every K2
+candidate within 15° of the ecliptic (the furthest 8.9°), the only
+direction K2 could hold after its reaction wheels failed; TESS's in both
+hemispheres (2,532 of 5,181 stars north). Counts per mission match the
+archive's own totals. 473 candidate stars also have confirmed planets (the
+two layers overlap there, as they should); 44 stars carry candidates from
+two missions (37 TESS–K2, 7 TESS–Kepler), which may be the same signal
+seen twice: not merged, so the total may count a few dozen twice.
+Candidates are not planets, and many will be ruled out: of the TOIs
+already settled, 1,417 were false (FP, FA) and 1,425 confirmed (CP, KP);
+of the KOIs, 4,839 false positives and 2,748 confirmed (archive counts,
+2026-11-11, which also include signals rejected before they were ever
+candidates). The caption says "not yet confirmed or ruled out".
 
 ### In the app
 
