@@ -24,7 +24,7 @@ describe('GlobeRenderer', () => {
       new THREE.Matrix4().makeRotationFromQuaternion(camera.quaternion)
     );
     expect(uniforms.uCameraRot.value.elements).toEqual(expected.elements);
-    expect(uniforms.uAspect.value).toBe(2);
+    expect(uniforms.uAspect.value).toBeCloseTo(2, 12);
     // One pixel of an 800 px tall, 45° view: keeps the horizon a pixel wide.
     expect(uniforms.uPixelAngle.value).toBeCloseTo((2 * Math.tan((22.5 * Math.PI) / 180)) / 800, 12);
   });

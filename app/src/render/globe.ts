@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
+import { readProjectionFrame, type ProjectionFrame } from './view-ray';
 
 /**
  * NASA GIBS Blue Marble (Next Generation) as map tiles, put together into one
@@ -53,6 +54,7 @@ const FRAGMENT_SHADER = `
   uniform mat3 uCameraRot;
   uniform float uAspect;
   uniform float uTanHalfFov;
+  uniform vec2 uCenter;
   // |camera|^2 - r^2 per layer, computed on the CPU in double precision:
   // in float32 both terms are ~4e13 and their difference at the surface
   // (a few 1e7) would be lost to cancellation.
@@ -132,7 +134,7 @@ const FRAGMENT_SHADER = `
   }
 
   void main() {
-    vec2 uv = vUv * 2.0 - 1.0;
+    vec2 uv = vUv * 2.0 - 1.0 + uCenter;
     vec3 rd = normalize(uCameraRot * vec3(uv.x * uAspect * uTanHalfFov, uv.y * uTanHalfFov, -1.0));
     vec3 ro = uCameraPos;
     float b = dot(ro, rd);
@@ -176,6 +178,7 @@ export class GlobeRenderer {
   private baseImagery: THREE.Texture | null = null;
   private overrideImagery: THREE.Texture | null = null;
   private overrideGain = DEFAULT_SURFACE_GAIN;
+  private readonly frame: ProjectionFrame = { aspect: 1, tanHalfFov: 1, centerX: 0, centerY: 0 };
 
   constructor() {
     const uniforms = {
@@ -183,6 +186,7 @@ export class GlobeRenderer {
       uCameraRot: { value: new THREE.Matrix3().identity() },
       uAspect: { value: 1 },
       uTanHalfFov: { value: Math.tan((60 * Math.PI) / 180 / 2) },
+      uCenter: { value: new THREE.Vector2() },
       uLayerC: { value: new Float32Array(LAYER_COUNT) },
       uLayerColors: { value: premColors() },
       uLayerAlphas: { value: premAlphas() },
@@ -282,12 +286,12 @@ export class GlobeRenderer {
   update(camera: THREE.Camera, viewportHeightPx: number): void {
     // Track the camera's own framing so the raymarch matches what a
     // rasterised scene through the same camera would show.
-    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
-      const perspective = camera as THREE.PerspectiveCamera;
-      const tanHalfFov = Math.tan((perspective.fov * Math.PI) / 180 / 2);
-      this.material.uniforms.uAspect.value = perspective.aspect;
-      this.material.uniforms.uTanHalfFov.value = tanHalfFov;
-      this.material.uniforms.uPixelAngle.value = (2 * tanHalfFov) / viewportHeightPx;
+    // From the projection matrix, so an AR camera's off-centre frustum is followed too.
+    if (readProjectionFrame(camera, this.frame)) {
+      this.material.uniforms.uAspect.value = this.frame.aspect;
+      this.material.uniforms.uTanHalfFov.value = this.frame.tanHalfFov;
+      this.material.uniforms.uCenter.value.set(this.frame.centerX, this.frame.centerY);
+      this.material.uniforms.uPixelAngle.value = (2 * this.frame.tanHalfFov) / viewportHeightPx;
     }
 
     this.material.uniforms.uCameraPos.value.copy(camera.position);
