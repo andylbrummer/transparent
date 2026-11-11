@@ -1,0 +1,246 @@
+{
+ "source": "Johansson, Zahirovic & Müller (2018), GRL, doi:10.1029/2017GL076691; volcanic provinces v2, EarthByte GPlates 2.3 data (CC BY 3.0)",
+ "file": "geo/igneous-provinces.png",
+ "width": 2048,
+ "height": 1024,
+ "polygons": 2526,
+ "oldestMa": 300,
+ "ageRangeMa": [
+  0.0,
+  650.0
+ ],
+ "share": 0.0677,
+ "labels": [
+  {
+   "name": "Ontong Java Plateau",
+   "lon": 160.34,
+   "lat": -1.33,
+   "km2": 1893000.0,
+   "ageMa": [
+    120.0,
+    120.0
+   ],
+   "polygons": 1
+  },
+  {
+   "name": "Central Atlantic Magmatic Province",
+   "lon": -59.16,
+   "lat": -0.57,
+   "km2": 1798000.0,
+   "ageMa": [
+    201.0,
+    201.0
+   ],
+   "polygons": 70
+  },
+  {
+   "name": "Kerguelen Plateau",
+   "lon": 74.58,
+   "lat": -52.68,
+   "km2": 1399000.0,
+   "ageMa": [
+    40.1,
+    110.0
+   ],
+   "polygons": 5
+  },
+  {
+   "name": "Siberian Traps",
+   "lon": 99.22,
+   "lat": 65.18,
+   "km2": 811000.0,
+   "ageMa": [
+    248.0,
+    251.0
+   ],
+   "polygons": 169
+  },
+  {
+   "name": "Manihiki Plateau",
+   "lon": -164.6,
+   "lat": -8.39,
+   "km2": 788000.0,
+   "ageMa": [
+    120.0,
+    120.0
+   ],
+   "polygons": 1
+  },
+  {
+   "name": "Paraná",
+   "lon": -52.44,
+   "lat": -23.37,
+   "km2": 679000.0,
+   "ageMa": [
+    132.0,
+    132.0
+   ],
+   "polygons": 1
+  },
+  {
+   "name": "Ethiopian Traps",
+   "lon": 37.92,
+   "lat": 9.04,
+   "km2": 584000.0,
+   "ageMa": [
+    30.0,
+    31.0
+   ],
+   "polygons": 13
+  },
+  {
+   "name": "Deccan Traps",
+   "lon": 76.55,
+   "lat": 20.27,
+   "km2": 509000.0,
+   "ageMa": [
+    65.0,
+    65.0
+   ],
+   "polygons": 8
+  },
+  {
+   "name": "Ninetyeast Ridge",
+   "lon": 87.69,
+   "lat": -31.46,
+   "km2": 465000.0,
+   "ageMa": [
+    37.0,
+    91.0
+   ],
+   "polygons": 13
+  },
+  {
+   "name": "Hikurangi Plateau",
+   "lon": -175.23,
+   "lat": -40.28,
+   "km2": 403000.0,
+   "ageMa": [
+    120.0,
+    120.0
+   ],
+   "polygons": 2
+  },
+  {
+   "name": "Chon Aike",
+   "lon": -67.55,
+   "lat": -42.85,
+   "km2": 369000.0,
+   "ageMa": [
+    188.0,
+    188.0
+   ],
+   "polygons": 16
+  },
+  {
+   "name": "Kalkarindji",
+   "lon": 133.1,
+   "lat": -17.19,
+   "km2": 362000.0,
+   "ageMa": [
+    510.0,
+    510.0
+   ],
+   "polygons": 1
+  },
+  {
+   "name": "Shatsky Rise",
+   "lon": 159.77,
+   "lat": 35.01,
+   "km2": 359000.0,
+   "ageMa": [
+    147.0,
+    147.0
+   ],
+   "polygons": 1
+  },
+  {
+   "name": "Hawaiian–Emperor chain",
+   "lon": 167.43,
+   "lat": 50.48,
+   "km2": 321000.0,
+   "ageMa": [
+    0.4,
+    76.0
+   ],
+   "polygons": 55
+  },
+  {
+   "name": "Columbia River Basalts",
+   "lon": -119.82,
+   "lat": 45.76,
+   "km2": 166000.0,
+   "ageMa": [
+    17.0,
+    17.0
+   ],
+   "polygons": 2
+  },
+  {
+   "name": "Karoo",
+   "lon": 26.05,
+   "lat": -22.64,
+   "km2": 158000.0,
+   "ageMa": [
+    180.0,
+    180.0
+   ],
+   "polygons": 21
+  },
+  {
+   "name": "Midcontinent Rift",
+   "lon": -92.33,
+   "lat": 44.52,
+   "km2": 99000.0,
+   "ageMa": [
+    650.0,
+    650.0
+   ],
+   "polygons": 12
+  },
+  {
+   "name": "Wrangellia",
+   "lon": -126.25,
+   "lat": 49.82,
+   "km2": 89000.0,
+   "ageMa": [
+    230.0,
+    230.0
+   ],
+   "polygons": 89
+  },
+  {
+   "name": "Emeishan",
+   "lon": 102.82,
+   "lat": 25.88,
+   "km2": 57000.0,
+   "ageMa": [
+    258.0,
+    260.0
+   ],
+   "polygons": 232
+  },
+  {
+   "name": "Etendeka",
+   "lon": 13.85,
+   "lat": -20.11,
+   "km2": 18000.0,
+   "ageMa": [
+    135.0,
+    135.0
+   ],
+   "polygons": 7
+  },
+  {
+   "name": "Rajmahal Traps",
+   "lon": 87.66,
+   "lat": 24.49,
+   "km2": 4000.0,
+   "ageMa": [
+    117.0,
+    117.0
+   ],
+   "polygons": 2
+  }
+ ]
+}

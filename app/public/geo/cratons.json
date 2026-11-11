@@ -1,0 +1,404 @@
+{
+ "source": "Hasterok et al. (2022), Earth-Sci. Rev. 231, 104069; data Zenodo doi:10.5281/zenodo.6586972 (CC BY 4.0)",
+ "file": "geo/cratons.png",
+ "width": 2048,
+ "height": 1024,
+ "polygons": 114,
+ "share": 0.0819,
+ "classes": [
+  {
+   "id": 1,
+   "name": "craton",
+   "reworked": false,
+   "count": 47
+  },
+  {
+   "id": 2,
+   "name": "shield",
+   "reworked": false,
+   "count": 5
+  },
+  {
+   "id": 3,
+   "name": "other",
+   "reworked": false,
+   "count": 3
+  },
+  {
+   "id": 4,
+   "name": "craton",
+   "reworked": true,
+   "count": 8
+  },
+  {
+   "id": 5,
+   "name": "shield",
+   "reworked": true,
+   "count": 29
+  },
+  {
+   "id": 6,
+   "name": "other",
+   "reworked": true,
+   "count": 22
+  }
+ ],
+ "labels": [
+  {
+   "name": "Congo Craton",
+   "lon": 21.56,
+   "lat": -5.36,
+   "km2": 5203000.0,
+   "members": [
+    "Angolan Shield",
+    "Cuvette Centrale",
+    "East Congo Mobile Belt",
+    "Embomou Craton",
+    "Gabon Belt",
+    "Gabon Craton",
+    "Kasai Craton",
+    "Kibaran Belt",
+    "Rwenzori Block",
+    "Tanzania Craton",
+    "Uganda Craton",
+    "West Congo and Kimezian Belts"
+   ]
+  },
+  {
+   "name": "Siberian Craton",
+   "lon": 110.99,
+   "lat": 62.99,
+   "km2": 3470000.0,
+   "members": [
+    "Aldan Shield",
+    "Anabar Shield",
+    "Magan Terrane",
+    "Olenek Province",
+    "Stanovoi Belt",
+    "Tungus Province"
+   ]
+  },
+  {
+   "name": "Baltic Shield",
+   "lon": 39.24,
+   "lat": 57.19,
+   "km2": 2954000.0,
+   "members": [
+    "Karelia Craton",
+    "Kola Craton",
+    "Ukranian Craton",
+    "Volgo-Uralia Craton",
+    "Voronezh Massif"
+   ]
+  },
+  {
+   "name": "Superior Craton",
+   "lon": -83.7,
+   "lat": 51.66,
+   "km2": 2507000.0,
+   "members": [
+    "Ashuanipi Metasedimentary Belt",
+    "Eastern Wabigoon Terrane",
+    "English River-Opinaca Metasedimentary Belt",
+    "Hudson Bay Terrane",
+    "Marmion Terrane",
+    "Minnesota River Valley Terrane",
+    "North Caribou Terrane",
+    "Penokean Orogen",
+    "Quetico-Opatica Metasedimentary Belt",
+    "Riviere-Arnauld Terrane",
+    "Wawa-Abitibi Terrane",
+    "Western Wabigoon Terrane",
+    "Winnipeg River Terrane"
+   ]
+  },
+  {
+   "name": "West African Craton",
+   "lon": -6.94,
+   "lat": 13.13,
+   "km2": 2090000.0,
+   "members": [
+    "Eglab Shield",
+    "Kenema-Man Craton",
+    "Leo Rise",
+    "Reguibat Rise"
+   ]
+  },
+  {
+   "name": "Tuareg Shield",
+   "lon": 4.39,
+   "lat": 22.82,
+   "km2": 2084000.0,
+   "members": [
+    "LATEA Metacraton",
+    "Pharusian Belt"
+   ]
+  },
+  {
+   "name": "Rae Craton",
+   "lon": -90.72,
+   "lat": 66.42,
+   "km2": 1775000.0,
+   "members": [
+    "Foxe Orogen",
+    "Queen Maude Block",
+    "Rae Province",
+    "Snowbird Tectonic Zone"
+   ]
+  },
+  {
+   "name": "Sahara Metacraton",
+   "lon": 21.97,
+   "lat": 24.68,
+   "km2": 1485000.0,
+   "members": [
+    "Al Kufrah Craton",
+    "Murzuq Craton"
+   ]
+  },
+  {
+   "name": "Mawson Craton",
+   "lon": 136.14,
+   "lat": -72.96,
+   "km2": 1426000.0,
+   "members": []
+  },
+  {
+   "name": "North China Craton",
+   "lon": 117.64,
+   "lat": 39.15,
+   "km2": 1283000.0,
+   "members": [
+    "Longgang Block",
+    "Nangrim Block",
+    "Yanshan Fold Belt",
+    "Yinshan Block"
+   ]
+  },
+  {
+   "name": "Kalahari Craton",
+   "lon": 27.96,
+   "lat": -23.76,
+   "km2": 1183000.0,
+   "members": [
+    "Kaapvaal Craton",
+    "Limpopo Belt",
+    "Zimbabwe Craton"
+   ]
+  },
+  {
+   "name": "West Australian Craton",
+   "lon": 119.12,
+   "lat": -27.73,
+   "km2": 939000.0,
+   "members": [
+    "Eastern Yilgarn Craton",
+    "Pilbara Craton",
+    "Western Yilgarn Craton"
+   ]
+  },
+  {
+   "name": "Hearne Craton",
+   "lon": -100.86,
+   "lat": 57.05,
+   "km2": 905000.0,
+   "members": [
+    "Chesterfield Block",
+    "Hearne Province"
+   ]
+  },
+  {
+   "name": "Brazil Shield",
+   "lon": -57.09,
+   "lat": -2.68,
+   "km2": 886000.0,
+   "members": [
+    "Central Amazonian Belt"
+   ]
+  },
+  {
+   "name": "Slave Craton",
+   "lon": -111.1,
+   "lat": 67.56,
+   "km2": 861000.0,
+   "members": [
+    "Slave Platform"
+   ]
+  },
+  {
+   "name": "Sa\u00f5 Francisco Craton",
+   "lon": -43.29,
+   "lat": -13.94,
+   "km2": 804000.0,
+   "members": []
+  },
+  {
+   "name": "Rinkinian Orogen",
+   "lon": -38.09,
+   "lat": 71.42,
+   "km2": 740000.0,
+   "members": []
+  },
+  {
+   "name": "East Rae",
+   "lon": -53.28,
+   "lat": 77.52,
+   "km2": 712000.0,
+   "members": []
+  },
+  {
+   "name": "Ruker Craton",
+   "lon": 64.2,
+   "lat": -75.25,
+   "km2": 700000.0,
+   "members": []
+  },
+  {
+   "name": "Tarim Basin",
+   "lon": 85.58,
+   "lat": 39.68,
+   "km2": 652000.0,
+   "members": []
+  },
+  {
+   "name": "Dharwar Craton",
+   "lon": 77.37,
+   "lat": 15.49,
+   "km2": 611000.0,
+   "members": [
+    "Chuddapah Basin",
+    "Closepet Batholith",
+    "Eastern Dharwar Craton",
+    "Western Dharwar Craton"
+   ]
+  },
+  {
+   "name": "Rio de la Plata Craton",
+   "lon": -58.9,
+   "lat": -33.02,
+   "km2": 587000.0,
+   "members": []
+  },
+  {
+   "name": "Borborema Province",
+   "lon": -40.35,
+   "lat": -8.43,
+   "km2": 564000.0,
+   "members": []
+  },
+  {
+   "name": "South Australian Craton",
+   "lon": 135.28,
+   "lat": -31.63,
+   "km2": 535000.0,
+   "members": [
+    "Gawler Craton"
+   ]
+  },
+  {
+   "name": "South China Craton",
+   "lon": 109.67,
+   "lat": 27.83,
+   "km2": 515000.0,
+   "members": [
+    "Eastern Yangtze Craton"
+   ]
+  },
+  {
+   "name": "Wyoming Craton",
+   "lon": -106.95,
+   "lat": 44.57,
+   "km2": 497000.0,
+   "members": []
+  },
+  {
+   "name": "North Atlantic Craton",
+   "lon": -46.79,
+   "lat": 64.69,
+   "km2": 317000.0,
+   "members": []
+  },
+  {
+   "name": "Bundelkhand Craton",
+   "lon": 78.25,
+   "lat": 25.22,
+   "km2": 304000.0,
+   "members": []
+  },
+  {
+   "name": "Nagssugtoqidian Mobile Belt",
+   "lon": -42.77,
+   "lat": 67.12,
+   "km2": 292000.0,
+   "members": []
+  },
+  {
+   "name": "Parnaiba Block",
+   "lon": -47.31,
+   "lat": -5.94,
+   "km2": 261000.0,
+   "members": []
+  },
+  {
+   "name": "East Indian Shield",
+   "lon": 82.44,
+   "lat": 20.69,
+   "km2": 205000.0,
+   "members": [
+    "Bastar Craton",
+    "Singhbhum Craton"
+   ]
+  },
+  {
+   "name": "Grunehogna",
+   "lon": -5.57,
+   "lat": -71.63,
+   "km2": 191000.0,
+   "members": []
+  },
+  {
+   "name": "Sichuan Basin",
+   "lon": 106.36,
+   "lat": 30.53,
+   "km2": 189000.0,
+   "members": []
+  },
+  {
+   "name": "Vestfold Craton",
+   "lon": 82.91,
+   "lat": -67.74,
+   "km2": 165000.0,
+   "members": []
+  },
+  {
+   "name": "Medicine Hat Terrane",
+   "lon": -111.05,
+   "lat": 48.87,
+   "km2": 151000.0,
+   "members": []
+  },
+  {
+   "name": "North Australian Craton",
+   "lon": 132.38,
+   "lat": -12.53,
+   "km2": 148000.0,
+   "members": [
+    "Pine Creek Inlier"
+   ]
+  },
+  {
+   "name": "Media Coreau Domain",
+   "lon": -42.97,
+   "lat": -5.61,
+   "km2": 134000.0,
+   "members": []
+  },
+  {
+   "name": "Antongil Block",
+   "lon": 49.03,
+   "lat": -17.57,
+   "km2": 110000.0,
+   "members": []
+  }
+ ]
+}

@@ -1,0 +1,117 @@
+{
+ "source": "Hasterok et al. (2022), Earth-Sci. Rev. 231, 104069; data Zenodo doi:10.5281/zenodo.6586972 (CC BY 4.0)",
+ "file": "geo/provinces.png",
+ "width": 2048,
+ "height": 1024,
+ "provinces": 921,
+ "classes": [
+  {
+   "id": 1,
+   "name": "craton",
+   "types": [
+    "craton"
+   ],
+   "count": 59,
+   "share": 0.0382
+  },
+  {
+   "id": 2,
+   "name": "shield",
+   "types": [
+    "shield"
+   ],
+   "count": 100,
+   "share": 0.0671
+  },
+  {
+   "id": 3,
+   "name": "orogenic belt",
+   "types": [
+    "orogenic belt"
+   ],
+   "count": 171,
+   "share": 0.0929
+  },
+  {
+   "id": 4,
+   "name": "accretionary complex",
+   "types": [
+    "accretionary complex"
+   ],
+   "count": 120,
+   "share": 0.0423
+  },
+  {
+   "id": 5,
+   "name": "volcanic arc",
+   "types": [
+    "volcanic arc"
+   ],
+   "count": 185,
+   "share": 0.0731
+  },
+  {
+   "id": 6,
+   "name": "magmatic province",
+   "types": [
+    "magmatic province"
+   ],
+   "count": 15,
+   "share": 0.0092
+  },
+  {
+   "id": 7,
+   "name": "rift",
+   "types": [
+    "wide rift",
+    "narrow rift"
+   ],
+   "count": 55,
+   "share": 0.0326
+  },
+  {
+   "id": 8,
+   "name": "basin",
+   "types": [
+    "basin",
+    "foredeep basin",
+    "continental back-arc basin"
+   ],
+   "count": 49,
+   "share": 0.0261
+  },
+  {
+   "id": 9,
+   "name": "passive margin",
+   "types": [
+    "passive margin"
+   ],
+   "count": 59,
+   "share": 0.04
+  },
+  {
+   "id": 10,
+   "name": "ophiolite complex",
+   "types": [
+    "ophiolite complex"
+   ],
+   "count": 17,
+   "share": 0.0049
+  },
+  {
+   "id": 11,
+   "name": "oceanic crust",
+   "types": [
+    "oceanic crust",
+    "oceanic back-arc basin"
+   ],
+   "count": 91,
+   "share": 0.5735
+  }
+ ],
+ "crustKm2": {
+  "continental": 172395354,
+  "oceanic": 299365141,
+  "transitional": 38466053
+ }
+}
