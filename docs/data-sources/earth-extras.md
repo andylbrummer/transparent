@@ -429,3 +429,46 @@ Checked (`tools/pipeline/test_ice_sheets_through_time.py`, 49):
   ka or Ma, read out in years), the chip, the URL parameter, the switch.
 - Looked at (`~/review-loop/shots/ice-sheets/`): the LGM, MIS 6 and MIS 5a
   through the planet from the antipode of Hudson Bay, with the control.
+
+## Magnetic field on the core, 1900–2025 (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Magnetic field on the core (`core-field`, off) | Radial magnetic field on the core-mantle boundary (r = 3480 km), every five years 1900–2025, blended in between | International Geomagnetic Reference Field, 14th generation (IGRF-14), IAGA Division V Working Group V-MOD, December 2024 | Freely available international reference model; the coefficient file is served by NOAA NCEI (US Government). No licence text on the file. | https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt | Baked: `tools/pipeline/generate_core_field.py` → `app/public/geo/core-field/<year>.png` (26 × 512×256 grey, 21 kB each, 596 kB in all; one or two fetched at a time) and `core-field.json` | IGRF-14, IAGA V-MOD |
+
+**What is computed.** The field measured at and above the surface is
+continued down to the core as a potential field (the mantle is a near
+insulator): Br = Σ (n+1)(a/r)^(n+2) P_n^m(cos θ)(g cos mφ + h sin mφ),
+a = 6371.2 km, Schmidt semi-normalised. Continuing down multiplies degree
+n by (a/r)^(n+2), so small scales grow most: every epoch is cut at degree
+10, as all models before 2000 are, so the series does not jump in 2000
+when the models gain degrees 11–13. The crust's own field (degree 14 and
+up) is not the core's and is not in IGRF. Models before 1945 are not
+definitive; the control says so before 1945. Grey 128 is no field, 1 and
+255 are ∓1.2 mT; the shader stretches by 1.6 and leaves fields under 4%
+of the scale clear.
+
+**Checked** (`tools/pipeline/test_core_field.py`, 23 checks): the same
+sum, at the surface with IGRF 2025 to degree 13, gives NOAA's published
+WMM2025 test declinations (a different model of the same field) to within
+0.2° at nine places from 82° N to 59° S; no net flux through the core in
+1900, 1950 or 2020 (under 0.01% of the total, as there are no monopoles);
+the strongest radial field 0.83–0.95 mT; inward flux lobes under Canada
+(−0.62 mT) and Siberia (−0.67 mT) and an outward one south of Australia
+(+0.79 mT) in 2020 (Jackson, Jonkers & Walker 2000); inward (reversed)
+flux under the South Atlantic in 2020; the share of the southern core
+under reversed flux growing, 13.6% in 1900, 19.7% in 1950, 21.1% in 2025;
+the 2020 picture decodes to the field to one grey level. **One check
+dropped, not bent**: a fourth lobe "south of Africa" was written from
+memory, not from a source; the field there is +0.11 mT, eaten into by
+the reversed patches. App: `core-field.test.ts` (6: epochs, blending,
+status, `?core=<year>`, the switch).
+
+**Looked at** (`~/review-loop/shots/core-field/`): from Austin looking
+down, and over the South Atlantic in 1900 and 2025, the coastlines
+projected on the ball; the control reads "1900 · model less certain
+before 1945".
+
+**Not done**: the field's change (secular variation) and core-flow models
+inferred from it; the inner core; anything finer than degree 10. Not run
+on a phone or headset.
