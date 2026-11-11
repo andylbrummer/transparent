@@ -590,3 +590,51 @@ Earth from its antipode; the keels stand out bright inside their 150 and
 **Not done**: the other LAB models (LITHO1.0, LithoRef18) to show how much
 models disagree; Tibet's 240 km is the model's and is debated. Not run on
 a phone or headset.
+
+## SKS splitting: the grain of the upper mantle (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Grain of the upper mantle (`sks-splitting`, off) | Shear-wave splitting of core-refracted phases (SKS, SKKS, PKS) at seismic stations: the fast direction and the delay, averaged per station; stations with only nulls | Barruol, G., Wüstefeld, A. & Bokelmann, G. (2009), SKS-Splitting-database, Université de Montpellier, Laboratoire Géosciences, doi:10.18715/SKS_SPLITTING_DATABASE; Wüstefeld, A., Bokelmann, G., Barruol, G. & Montagner, J.-P. (2009), Phys. Earth Planet. Inter. 176, 198–212, doi:10.1016/j.pepi.2009.05.006; and the published works it compiles (366 references, in `splittingDB_ref.txt`) | No named licence: "an open-access database … do not forget to cite the proper works & references". Recorded as an open question in the progress file. | http://splitting.gm.univ-montp2.fr/DB/public/splittingDB.txt (6.7 MB, last modified 2026-10-05) and `splittingDB_ref.txt` | Baked: `tools/pipeline/generate_sks_splitting.py` → `app/public/geo/sks-splitting.json` (13,620 stations × 7 integers, 345 kB, 115 kB gzipped) | SKS splitting database, Univ. Montpellier |
+
+**What is kept.** 69,277 rows; kept 66,458: those of a core-refracted
+phase (a K in the phase's name, or no phase given). Dropped: 2,659 direct
+S, ScS and local S rows (they split near the earthquake too), 134 rows
+that are one layer of a two-layer model, 26 without a place or a value.
+539 kept rows are nulls (phi "null" or dt 0): few authors publish their
+nulls, so a station with no ring may simply not have reported any. Per
+station (same place to 0.01°): the fast direction is the axial mean (the
+mean of 2φ, halved, since φ and φ + 180° are the same direction), R its
+strength, dt the mean delay of the split rows; every row counts once,
+single measurement or published station mean alike. 13,352 stations
+have a direction; 268 have only nulls.
+
+**How it is drawn.** A bar through the station along the fast direction,
+45 km each side per second of delay (no shorter than 0.25 s), coloured
+cyan (0.3 s) → green (1 s) → yellow (2 s) and dimmed to 45% where R is
+low; grey rings, 18 km across, at null-only stations. The splitting
+happens somewhere along the path below the station, mostly in the top few
+hundred kilometres; the bars sit on the surface because the depth is not
+known.
+
+**Checked** (`tools/pipeline/test_sks_splitting.py`, 14 checks): the axial
+mean of 170° and 10° is 0°, and of 0° and 90° has no strength; over 95% of
+rows kept; the median station delay about a second (1.01 s; Silver 1996);
+southern California east-west (172 stations, 86°, R 0.82; inferred from
+Polet & Kanamori 2002, whose abstract puts the fast directions orthogonal
+to the maximum horizontal compressive stress, near north-south there); the Pyrenees along the range, about N100°E (122 stations,
+96°, R 0.90; Barruol et al. 1998); the file decodes to what was computed.
+**Not used as a check**: New Zealand's South Island came out at 28°, not
+the Alpine Fault's ~55° that I expected from memory; my box takes in
+stations well off the fault, and with no source to hand the check was
+dropped, not tuned. App: `sks-splitting.test.ts` (5: the counts the
+caption gives, bar orientation for φ 0° and 90°, length with delay,
+dimming with scatter, rings only for null-only stations, the switch).
+
+**Looked at** (`~/review-loop/shots/sks-splitting/`): North America (the
+USArray's dense coverage), Europe, both layers on together, and southern
+California at 10° field of view, where the bars run east-west.
+
+**Not done**: per-measurement back-azimuths (the file has them only in
+some remarks), which would show two-layer structure; other compilations
+(Missouri S&T SWS-DB). Not run on a phone or headset.
