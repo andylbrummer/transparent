@@ -751,3 +751,54 @@ Republic; the app's naming threshold. App: `deep-caves.test.ts` (4).
 **Looked at** (`~/review-loop/shots/deep-caves/`): Europe, and the Arabika
 Massif close up (Krubera and Veryovkina named; Sarma's label gives way to
 theirs). Not run on a phone or headset.
+
+## Permafrost zones (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Permafrost: ground frozen for years (`permafrost`, off) | Northern Hemisphere permafrost zones (continuous, discontinuous, sporadic, isolated patches), modelled at 1 km from MODIS land-surface temperature and ERA-Interim, 2000–2016 | Obu, J., Westermann, S., Kääb, A. & Bartsch, A. (2018), Ground Temperature Map, 2000–2016, Northern Hemisphere Permafrost, PANGAEA, doi:10.1594/PANGAEA.888600 (the PERZONES shapefile); method and areas: Obu, J. et al. (2019), Northern Hemisphere permafrost map based on TTOP modelling for 2000–2016 at 1 km² scale, Earth-Science Reviews 193, 299–316 | CC BY 3.0 | https://doi.org/10.1594/PANGAEA.888600 | Baked: `tools/pipeline/generate_permafrost.py` → `app/public/geo/permafrost.png` (2048×1024, 115 kB) and `permafrost.json` (areas) | Obu et al. 2018, PANGAEA (CC BY 3.0) |
+
+**What the zones are.** Each 1 km cell's permafrost probability is the
+fraction of 200 model runs with the ground below 0 °C, read as the share of
+the cell underlain by permafrost, and classed as the IPA map does
+(Brown et al.): continuous above 0.9, discontinuous 0.5–0.9, sporadic
+0.1–0.5, isolated patches 0.005–0.1 (Obu et al. 2019, section 2). The classes
+were smoothed with a 5×5 filter and vectorised; that file is what is baked.
+Glaciers, Greenland's ice sheet among them, are not part of it.
+
+**Reprojected by hand.** The polygons are in Arctic Polar Stereographic
+(EPSG:3995: WGS 84, standard parallel 71° N, central meridian 0; the
+`.prj` is checked for those). They are filled at 2 km in that plane, each
+record's holes cut only from its own outer rings, and the equirectangular
+picture is sampled by projecting each of its 2×2 subsamples forward with the
+ellipsoidal polar stereographic formulas (Snyder 1987, USGS PP 1395, ch. 21)
+in numpy, no projection library. R holds the zone (64 a step, spread a few
+pixels past the edge so filtering keeps the colour), B the coverage.
+
+**Checked** (`tools/pipeline/test_permafrost.py`, 22 checks): the projection
+(pole at the origin, k = 1 on 71° N, k at the pole (1 + sin 71°)/2 to 0.001,
+the central meridian down the plane, 180° up it); 79,239 polygons, four zones;
+zone areas from the polygons (plane area over k² at each ring's centre)
+against the paper's: continuous 11.56 v 10.7, discontinuous 3.24 v 3.1,
+sporadic 3.68 v 3.5 million km², each within 10%; the picture covers what the
+polygons do within 3% (23.5 v 23.2 million km²); nothing south of 15° N;
+Prudhoe Bay on the North Slope continuous, where the paper finds its extent
+"matches well" Jorgenson et al.'s map; none on Kodiak Island or in Spain's
+Sierra Nevada (both stated in the paper); the middle of Greenland's ice sheet
+not mapped. App: `permafrost.test.ts` (4).
+
+**Not matched.** The file's isolated-patches zone is 4.74 million km²
+against the paper's 3.5: the paper's figures are counts of probability
+pixels, the file is smoothed polygons, and the paper itself finds isolated
+patches overestimated in central Alaska. Checked only as "more than 3.5". The
+chip's region total (23.2 million km²) is the polygons', larger than the
+paper's 20.8 for the same reason.
+
+**Not drawn.** The dataset's Southern Hemisphere products (Antarctica, the
+Andes, New Zealand, East Africa) come as rasters in other projections, not as
+zones; the caption says the southern hemisphere's permafrost is not drawn.
+Permafrost depth and ground temperature (MAGT) are not shown.
+
+**Looked at** (`~/review-loop/shots/permafrost/`): Siberia and the Tibetan
+Plateau, and North America with the Arctic islands, from the far side. Not
+run on a phone or headset.
