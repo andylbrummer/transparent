@@ -43,6 +43,7 @@ The layers panel has more than 170 layers, each built from real, cited data.
 |---|---|
 | **Phone** (Android Chrome, iOS Safari) | Point the phone and the view follows the compass and gyro. Drag to correct the heading, pinch to zoom. The app asks for your location; without it, it starts in Austin, Texas. |
 | **Cardboard** | The **Cardboard** button gives a stereo view for a phone headset. |
+| **AR** (Android Chrome with ARCore) | The **AR** button opens the camera. Point it at the floor, then tap to open a half-metre window in it. Through the window you look down into the Earth beneath you, with north set from the compass. |
 | **Desktop** | Drag or use the arrow keys to look, and `+` and `-` to zoom. `R` resets the view. |
 
 Open **Layers** to switch layers on and off. **Layers → Data credits** lists every source.
@@ -51,8 +52,8 @@ To pin the clock, add `?time=2026-11-09T06:00:00Z` to the URL.
 > **Status: prototype.** This is built for exploring and it's under active development. It
 > has been checked in desktop and headless browsers. Frame rates on phones and headsets
 > (the targets are the Pixel 6 Pro and Quest 3S) have not been measured yet. The AR window
-> onto your real floor ([spec](spec/mobile.md)) and a native Quest app are planned but not
-> built.
+> onto your floor ([spec](spec/mobile.md)) is new and has not been tried on a phone yet.
+> A native Quest app is planned but not built.
 
 ## Real data, with sources
 

@@ -193,7 +193,8 @@
       }
       #reset-offset,
       #layers-toggle,
-      #cardboard-toggle {
+      #cardboard-toggle,
+      #ar-toggle {
         position: fixed;
         z-index: 1;
         top: calc(env(safe-area-inset-top) + 58px);
@@ -217,15 +218,21 @@
         top: calc(env(safe-area-inset-top) + 110px);
         right: calc(env(safe-area-inset-right) + 12px);
       }
+      #ar-toggle {
+        top: calc(env(safe-area-inset-top) + 162px);
+        right: calc(env(safe-area-inset-right) + 12px);
+      }
       #reset-offset:active,
       #layers-toggle:active,
       #cardboard-toggle:active,
+      #ar-toggle:active,
       #layers-toggle[aria-expanded='true'] {
         background: rgba(60, 70, 120, 0.9);
       }
       #reset-offset:focus-visible,
       #layers-toggle:focus-visible,
       #cardboard-toggle:focus-visible,
+      #ar-toggle:focus-visible,
       .layer-switch input:focus-visible {
         outline: 2px solid #9fdcff;
         outline-offset: 2px;
@@ -255,7 +262,8 @@
       }
       /* On a phone the open panel is nearly as wide as the screen: the button it would half cover steps aside. */
       @media (max-width: 520px) {
-        body.layers-open #cardboard-toggle {
+        body.layers-open #cardboard-toggle,
+        body.layers-open #ar-toggle {
           visibility: hidden;
         }
       }
@@ -434,8 +442,47 @@
       body.stereo #reset-offset,
       body.stereo #layers-toggle,
       body.stereo #layers-panel,
-      body.stereo #cardboard-toggle {
+      body.stereo #cardboard-toggle,
+      body.stereo #ar-toggle {
         display: none;
+      }
+      /* AR: the camera fills the screen and the WebXR overlay is all that shows over it. */
+      #ar-overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        font: 600 15px/1.3 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+      }
+      #ar-overlay[hidden] {
+        display: none;
+      }
+      #ar-overlay .ar-status {
+        position: absolute;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom) + 24px);
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: calc(100vw - 32px);
+        margin: 0;
+        padding: 10px 14px;
+        text-align: center;
+        background: rgba(12, 14, 32, 0.72);
+        border-radius: 14px;
+      }
+      #ar-overlay .ar-exit {
+        position: absolute;
+        top: calc(env(safe-area-inset-top) + 16px);
+        right: calc(env(safe-area-inset-right) + 16px);
+        min-height: 44px;
+        padding: 10px 16px;
+        font: inherit;
+        color: inherit;
+        background: rgba(20, 24, 48, 0.85);
+        border: 1px solid rgba(160, 180, 255, 0.45);
+        border-radius: 22px;
+        pointer-events: auto;
+        touch-action: manipulation;
       }
       #hud {
         position: fixed;

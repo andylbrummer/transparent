@@ -40,6 +40,9 @@ import {
   type LayerSwitch,
 } from './ui/layers-panel';
 import { CardboardToggle } from './ui/cardboard';
+import { ARControls } from './ui/ar-controls';
+import { ARRunner } from './xr/ar/runner';
+import { headingAxis, headingOfXrForward, xrYawDeg } from './xr/ar/frame';
 import { allCredits } from './ui/credits';
 import { createClock } from './clock';
 import { LAYER_DEFINITIONS } from './layers/registry';
@@ -133,7 +136,8 @@ export function init(): App | null {
     1e9
   );
 
-  const renderer = new THREE.WebGLRenderer({ antialias: wantsMultisampling(window.devicePixelRatio) });
+  // A stencil buffer for AR, where the portal masks every layer to the window in the floor.
+  const renderer = new THREE.WebGLRenderer({ antialias: wantsMultisampling(window.devicePixelRatio), stencil: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
@@ -322,7 +326,40 @@ export function init(): App | null {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
   }
 
+  // Placed rooms need a position: the window opens onto the ground under the fix.
+  const arAim = new THREE.PerspectiveCamera();
+  const arControls = new ARControls(
+    container,
+    () => void arRunner.start().catch(() => arControls.setRefusal('AR failed to start')),
+    () => void arRunner.stop()
+  );
+  const arRunner = new ARRunner({
+    renderer,
+    scene,
+    controls: arControls,
+    getPosition: () => sensorState.position,
+    headingOfXrForward: (xrQuaternion, position) => {
+      const attitude = sensors.getAttitude();
+      if (attitude) {
+        // The phone as the compass sees it, aimed as the ordinary view aims it, nudge included.
+        look.updateCamera(arAim, position, attitude, screen.orientation?.angle ?? 0);
+        return headingOfXrForward(xrQuaternion, arAim.quaternion, position.lat, position.lon);
+      }
+      if (sensorState.heading === null) return null;
+      // A heading alone: take it as that of the axis the phone is aimed along.
+      const axis = headingAxis(xrQuaternion).applyQuaternion(xrQuaternion);
+      return (((sensorState.heading - xrYawDeg(axis)) % 360) + 360) % 360;
+    },
+    onChange: (active) => {
+      if (active && cardboard.isActive()) cardboard.exit();
+      layersPanel.setOpen(false);
+      // Back from AR: the ordinary camera and canvas size again.
+      if (!active) onResize();
+    },
+  });
+
   function renderHud(): void {
+    arControls.setAvailable(availableModes.includes('ar') && sensorState.position !== null);
     const modes = availableModes.length > 0 ? availableModes.join('/') : 'probing…';
     imageryShown = globe.hasSurfaceImagery();
     const imagery = surfaceImageryNote(imageryStatus, imageryShown);
@@ -336,6 +373,8 @@ export function init(): App | null {
   });
 
   const onResize = (): void => {
+    // The XR session owns the framebuffer while it presents.
+    if (renderer.xr.isPresenting) return;
     const w = window.innerWidth;
     const h = window.innerHeight;
     camera.aspect = w / h;
@@ -397,25 +436,28 @@ export function init(): App | null {
   lazyLayers.setResolution(window.innerWidth, window.innerHeight);
 
   let frameCount = 0;
-  let rafId = 0;
   let lastFrameMs = performance.now();
 
-  function animate(): void {
-    rafId = requestAnimationFrame(animate);
-    // No position, no view: anywhere else would show the wrong planet.
+  // The renderer's loop, not window rAF: the window stops its frames while an XR session presents.
+  function animate(_time: number, frame?: XRFrame): void {
+    const ar = arRunner.isActive();
+    // No position, no view: anywhere else would show the wrong planet. In AR, nothing until the window is open.
     const position = sensorState.position;
-    globe.getMesh().visible = position !== null;
-    geoRoot.visible = position !== null;
-    inertialRoot.visible = position !== null;
-    skyRoot.visible = position !== null;
-    labels.setVisible(position !== null);
-    compassBar.setVisible(position !== null);
+    const showEarth = position !== null && (!ar || arRunner.isPlaced());
+    globe.getMesh().visible = showEarth;
+    geoRoot.visible = showEarth;
+    inertialRoot.visible = showEarth;
+    skyRoot.visible = showEarth;
+    labels.setVisible(position !== null && !ar);
+    compassBar.setVisible(position !== null && !ar);
     const width = window.innerWidth;
     const height = window.innerHeight;
-    const stereo = position !== null && cardboard.isActive();
+    const stereo = !ar && position !== null && cardboard.isActive();
     const nowMs = performance.now();
+    // In AR the camera is the device's, put in the Earth frame where the window was placed.
+    if (ar) arRunner.update(frame, camera);
     if (position) {
-      look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
+      if (!ar) look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
       // Turn the sky to where the Earth's rotation has it now.
       const date = clock.now();
       const m = icrsToEcefMatrix(date);
@@ -430,7 +472,10 @@ export function init(): App | null {
     // A layer swaps the surface map without telling anyone: the HUD's note about it follows.
     if (imageryStatus !== 'ready' && globe.hasSurfaceImagery() !== imageryShown) renderHud();
     labels.setSkyThroughEarth(skyUniforms.uBelowHorizon.value > 0);
-    if (stereo) {
+    if (ar) {
+      if (showEarth) globe.update(camera, xrFramebufferHeight());
+      renderer.render(scene, arRunner.renderCamera);
+    } else if (stereo) {
       const eyeWidth = Math.floor(width / 2);
       stereoRig.update(camera, eyeWidth, height);
       labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
@@ -446,9 +491,16 @@ export function init(): App | null {
     frameCount++;
   }
 
+  function xrFramebufferHeight(): number {
+    const layer = renderer.xr.getBaseLayer();
+    if (layer && 'framebufferHeight' in layer) return layer.framebufferHeight;
+    if (layer && 'textureHeight' in layer) return layer.textureHeight;
+    return renderer.domElement.height;
+  }
+
   sensors.start();
   renderHud();
-  animate();
+  renderer.setAnimationLoop(animate);
 
   // Capability probing decides which session buttons are offered. It must not
   // block first paint, so the globe is already animating when this lands.
@@ -470,7 +522,9 @@ export function init(): App | null {
     getVisibleLabels: () => labels.visibleNames(),
     getDate: () => clock.now(),
     dispose() {
-      cancelAnimationFrame(rafId);
+      renderer.setAnimationLoop(null);
+      arRunner.dispose();
+      arControls.dispose();
       sensors.stop();
       window.removeEventListener('resize', onResize);
       screen.orientation?.removeEventListener('change', renderHud);
