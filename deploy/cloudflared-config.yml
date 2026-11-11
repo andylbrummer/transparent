@@ -1,6 +1,0 @@
-tunnel: 7c76c280-d396-40ba-91c0-b14bf632dccf
-credentials-file: /etc/cloudflared/creds.json
-ingress:
-  - hostname: transparent.sbdev.io
-    service: http://web:80
-  - service: http_status:404
