@@ -1,0 +1,165 @@
+{
+ "width": 512,
+ "height": 256,
+ "radiusKm": 3480.0,
+ "scaleNt": 1200000.0,
+ "maxDegree": 10,
+ "epochs": [
+  {
+   "year": 1900,
+   "file": "geo/core-field/1900.png",
+   "definitive": false,
+   "reversedSouth": 0.1364
+  },
+  {
+   "year": 1905,
+   "file": "geo/core-field/1905.png",
+   "definitive": false,
+   "reversedSouth": 0.137
+  },
+  {
+   "year": 1910,
+   "file": "geo/core-field/1910.png",
+   "definitive": false,
+   "reversedSouth": 0.1391
+  },
+  {
+   "year": 1915,
+   "file": "geo/core-field/1915.png",
+   "definitive": false,
+   "reversedSouth": 0.1421
+  },
+  {
+   "year": 1920,
+   "file": "geo/core-field/1920.png",
+   "definitive": false,
+   "reversedSouth": 0.1458
+  },
+  {
+   "year": 1925,
+   "file": "geo/core-field/1925.png",
+   "definitive": false,
+   "reversedSouth": 0.1496
+  },
+  {
+   "year": 1930,
+   "file": "geo/core-field/1930.png",
+   "definitive": false,
+   "reversedSouth": 0.1531
+  },
+  {
+   "year": 1935,
+   "file": "geo/core-field/1935.png",
+   "definitive": false,
+   "reversedSouth": 0.1579
+  },
+  {
+   "year": 1940,
+   "file": "geo/core-field/1940.png",
+   "definitive": false,
+   "reversedSouth": 0.1584
+  },
+  {
+   "year": 1945,
+   "file": "geo/core-field/1945.png",
+   "definitive": true,
+   "reversedSouth": 0.1998
+  },
+  {
+   "year": 1950,
+   "file": "geo/core-field/1950.png",
+   "definitive": true,
+   "reversedSouth": 0.1973
+  },
+  {
+   "year": 1955,
+   "file": "geo/core-field/1955.png",
+   "definitive": true,
+   "reversedSouth": 0.1766
+  },
+  {
+   "year": 1960,
+   "file": "geo/core-field/1960.png",
+   "definitive": true,
+   "reversedSouth": 0.1647
+  },
+  {
+   "year": 1965,
+   "file": "geo/core-field/1965.png",
+   "definitive": true,
+   "reversedSouth": 0.1586
+  },
+  {
+   "year": 1970,
+   "file": "geo/core-field/1970.png",
+   "definitive": true,
+   "reversedSouth": 0.1704
+  },
+  {
+   "year": 1975,
+   "file": "geo/core-field/1975.png",
+   "definitive": true,
+   "reversedSouth": 0.1763
+  },
+  {
+   "year": 1980,
+   "file": "geo/core-field/1980.png",
+   "definitive": true,
+   "reversedSouth": 0.1833
+  },
+  {
+   "year": 1985,
+   "file": "geo/core-field/1985.png",
+   "definitive": true,
+   "reversedSouth": 0.185
+  },
+  {
+   "year": 1990,
+   "file": "geo/core-field/1990.png",
+   "definitive": true,
+   "reversedSouth": 0.186
+  },
+  {
+   "year": 1995,
+   "file": "geo/core-field/1995.png",
+   "definitive": true,
+   "reversedSouth": 0.1953
+  },
+  {
+   "year": 2000,
+   "file": "geo/core-field/2000.png",
+   "definitive": true,
+   "reversedSouth": 0.1979
+  },
+  {
+   "year": 2005,
+   "file": "geo/core-field/2005.png",
+   "definitive": true,
+   "reversedSouth": 0.2003
+  },
+  {
+   "year": 2010,
+   "file": "geo/core-field/2010.png",
+   "definitive": true,
+   "reversedSouth": 0.2023
+  },
+  {
+   "year": 2015,
+   "file": "geo/core-field/2015.png",
+   "definitive": true,
+   "reversedSouth": 0.2049
+  },
+  {
+   "year": 2020,
+   "file": "geo/core-field/2020.png",
+   "definitive": true,
+   "reversedSouth": 0.209
+  },
+  {
+   "year": 2025,
+   "file": "geo/core-field/2025.png",
+   "definitive": true,
+   "reversedSouth": 0.2114
+  }
+ ]
+}
