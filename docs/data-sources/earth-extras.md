@@ -711,3 +711,43 @@ not read as public domain.
 **Looked at** (`~/review-loop/shots/drill-holes/`): the Pacific and the
 Atlantic from the far side, the named holes legible. Not run on a phone or
 headset.
+
+## Caves with a known depth (added 2026-11-11)
+
+| Layer | What | Source and citation | Licence | URL | Baked or live | Attribution string |
+| --- | --- | --- | --- | --- | --- | --- |
+| Caves with a known depth (`deep-caves`, off) | 253 caves with a position and a vertical depth (P4511, highest entrance to lowest point) | Wikidata, one SPARQL query (instance of cave, Q35509, or any subclass) at query.wikidata.org, asked on 2026-11-11 with the pipeline's generic User-Agent | CC0 1.0 | https://www.wikidata.org/wiki/Property:P4511 | Baked: `tools/pipeline/generate_deep_caves.py` → `app/public/geo/deep-caves.json` (9.5 kB, 4.4 kB gzipped) | Wikidata (CC0) |
+
+**What is drawn.** A triangle per cave, coloured and sized by depth band
+(under 100 m, 100–300 m, 300 m–1 km, over 1 km); the eight caves of 500 m and
+more are named. Of several depths on one item the greatest is kept; two items
+within 1 km are one cave entered twice and the deeper is kept. The query,
+name rules (English Wikipedia title, else English label) and position parsing
+are `generate_landmarks.py`'s, whose `deep-places` set already takes the
+caves of a kilometre and more.
+
+**Uneven coverage, said in the caption.** Wikidata has a depth for 507
+cave items with positions; 171 of the 253 caves kept lie in and around
+Bulgaria. Many
+famous deep systems (the Lamprechtsofen, Réseau Jean Bernard, Sistema Huautla)
+have no depth on Wikidata and are missing. The layer shows what Wikidata
+states, not a census of deep caves.
+
+**Wikidata and Wikipedia disagree at the top.** Wikidata gives Veryovkina
+2,212 m and Krubera 2,199 m, so Veryovkina is first in the file; Krubera's
+English article calls it "the deepest known cave on Earth" and Veryovkina's
+gives 2,209 m "as of 2025", second after Krubera. The labels give Wikidata's
+numbers and the caption claims no ranking, only that the three deepest
+(Veryovkina, Krubera, Sarma) lie within 2 km of each other in the Arabika
+Massif.
+
+**Checked** (`tools/pipeline/test_deep_caves.py`, 14 checks): CC0 recorded;
+over 200 caves; every depth positive and every position on the globe; deepest
+first; no two caves within 1 km; the three deepest are the Arabika caves, in
+the massif's box, each over 1.8 km; Veryovkina within 15 m of its article's
+2,209 m; Hranice Abyss 520 m (its article: 519.5 m) near Hranice, Czech
+Republic; the app's naming threshold. App: `deep-caves.test.ts` (4).
+
+**Looked at** (`~/review-loop/shots/deep-caves/`): Europe, and the Arabika
+Massif close up (Krubera and Veryovkina named; Sarma's label gives way to
+theirs). Not run on a phone or headset.
