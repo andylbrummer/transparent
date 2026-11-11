@@ -174,3 +174,96 @@ Run by the pipeline's tests (`tools/pipeline/test_cables.py`,
   filling in a form was not checked in this session.
 - **Protected areas (WDPA).** Skipped, as the brief said (licence).
 - **Railways, roads, Great Wall geometry.** Not reached.
+
+## Oil and gas fields, petroleum provinces (added 2026-11-11)
+
+Two more "Human world" layers, both lazy, off by default and baked. Numbers
+as measured on 2026-11-11 (UTC).
+
+### Licence-sensitive: needs Andy's decision
+
+**Oil and gas fields: the database is CC BY 4.0, but where its field
+outlines came from is shaky.** OGIM v3.0 is published on Zenodo under CC BY
+4.0, and that is what the layer credits. Its fields layer is gathered from
+16 upstream sources, and three of them state no licence and have an unclear
+origin. Together they are 5,622 of the 17,181 fields drawn:
+
+- **Source 22** (2,740 fields, dated 2014-01-01): a website, now defunct.
+  It supplies *every* field in Saudi Arabia, Kuwait, Qatar, Iran, Iraq,
+  the UAE, Oman, Nigeria and Australia (checked), among others.
+- **Source 181** (1,057 fields, dated 2016-08-01): a thread on a GIS forum
+  whose original creator is unknown. It supplies all 1,049 Russian fields.
+- **Source 166** (1,825 fields, dated 2017-06-24): an ArcGIS Online item of
+  unclear provenance. It supplies Egypt, Libya and Algeria.
+
+The layer is shipped on OGIM's licence, with the caption naming the website
+and the forum. If that is not enough, delete `oil-gas-fields.{png,json}` and
+the `oil-gas-fields` layer, or re-bake without sources 22, 166 and 181. That
+would leave no fields at all in the Gulf, Russia or North Africa, which is
+most of the world's oil.
+
+### Datasets
+
+| Layer (`id`) | What | Source and citation | Licence | URL | Baked | Attribution |
+| --- | --- | --- | --- | --- | --- | --- |
+| Oil and gas fields (`oil-gas-fields`) | 17,181 of 17,742 field outlines, each with a fluid normalised from free text (oil 4,424; gas 2,653; oil and gas 871; not given 9,233); labels for 24 of the largest fields the data names | Omara, M., Gautam, R., O'Brien, M. et al. (2023), Developing a spatially explicit global oil and gas infrastructure database for characterizing methane emission sources at high resolution, Earth Syst. Sci. Data 15, 3761–3790, doi:10.5194/essd-15-3761-2023; OGIM v3.0, Zenodo record 22835235, layer `Oil_and_Natural_Gas_Fields` | CC BY 4.0 (upstream: see above) | https://zenodo.org/records/22835235 | `generate_oil_gas_fields.py` → `oil-gas-fields.png` (71 kB, 4096×2048: red = fluid class, blue = coverage) and `.json` (5 kB). The 3.4 GB GeoPackage is fetched once by `ranged_fetch.py` | OGIM v3.0, Omara et al. 2023 (CC BY 4.0) |
+| Petroleum provinces (USGS, 2000) (`petroleum-provinces`) | 939 provinces (1,023 polygon records); 141 assessed: 96 records mainly oil, 37 mainly gas, 9 with no main commodity; known and undiscovered volumes of the 14 that are labelled | U.S. Geological Survey World Energy Assessment Team (2000), USGS World Petroleum Assessment 2000 — Description and Results, Digital Data Series DDS-60; shapefile "Geologic Provinces of the World, 2000 World Petroleum Assessment, all defined provinces" | Public domain (U.S. Government; use constraints "None.") | https://www.sciencebase.gov/catalog/item/60ad2fd7d34e4043c850edb3 | `generate_petroleum_provinces.py` → `petroleum-provinces.png` (162 kB, 2048×1024: red = class, green = outlines, blue = coverage) and `.json` | USGS World Petroleum Assessment 2000 (public domain) |
+
+OGIM's own basins layer is **not** used. The provinces come from the USGS
+instead.
+
+### What was verified, against what
+
+`test_oil_gas_fields.py` (60 checks) and `test_petroleum_provinces.py` (30
+checks) read the source files again and check the baked pictures and JSON
+against them. Among them:
+
+- **Counts.** 17,742 records, with 173 Italian and 388 Mexican records left
+  out. The province commodity counts match the shapefile's `O_G` field.
+- **Gaps.** No field in China, Brazil, Venezuela, Argentina, Colombia or
+  Malaysia. No US field in Oklahoma, Kansas or Louisiana. Texas appears only
+  in Mexican fields that cross the border. There is no US (EIA) field
+  offshore in the Gulf of Mexico. Alaska and some of California are present.
+- **Provenance.** The Saudi, Kuwaiti, Qatari and Iranian fields are
+  source 22 only. Russia's fields are more than 95% source 181.
+- **Areas.** Areas computed from the outlines match the table's `AREA_KM2`:
+  median ratio 0.998 over 9,991 fields. The drawn area (1.48 M km²) is
+  between 1 and 2 times the true area (0.87 M km²), because fields smaller
+  than a pixel are grown to one.
+- **Positions.** Prudhoe Bay, Troll, Samotlor, Groningen, Burgan and North
+  Field are each within 1° of where those fields are.
+- **Labels.** Every label sits on a covered pixel of its own class.
+- **Provinces.** Every province record has a covered point inside it. The
+  Ghawar (Shedgum, Haradh), Burgan, North Field, Samotlor and Troll field
+  outlines fall in assessed provinces. The top-ranked province is West
+  Siberian Basin, with 354,730 MMBOE known.
+- **App tests.** The vitest files `oil-gas-fields.test.ts` (7 tests) and
+  `petroleum-provinces.test.ts` (5 tests) check the JSON, the label text,
+  the captions and the legends.
+
+### Notes and limits
+
+- **The field map is far from complete, and the caption says where.**
+  - In the US, the only data is the EIA's 2005 basin maps (OGIM sources
+    143–145).
+  - There is nothing for six large producers.
+  - Ghawar, the largest oil field, appears only as its parts (Shedgum,
+    Haradh, …).
+  - Italy's source (36) is left out because it lists exploration permits
+    and production concessions, not fields. Mexico's "areas with resources"
+    (232) are left out; its reserve fields (233) are kept.
+- **Fluids are as the data has them, odd cases included.** Condensate is
+  counted as gas. The data labels Urengoy "oil" and Shedgum "gas", and they
+  are shown that way. More than half the fields state no fluid.
+- **Small fields look larger than they are.** At 4096×2048 a pixel is about
+  10 km at the equator.
+- **The province volumes are of 2000.** "Found by 2000" means known
+  petroleum: cumulative production plus remaining reserves, in barrels of
+  oil equivalent. The USGS drew these from commercial databases
+  (Petroconsultants, NRG Associates) and published them only in aggregate.
+- **The United States was not reassessed in 2000.** The USGS's 1995
+  national assessment stood (DDS-60 executive summary), so the US provinces
+  are outlined but not coloured.
+- **Holes.** Provinces with holes (the Canadian Shield around Hudson Bay)
+  are drawn first, so their holes do not erase the provinces inside them.
+  The same applies to the fields.
