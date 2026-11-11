@@ -13,7 +13,7 @@ beneath you, all where they really are.
 ![Three.js + WebXR](https://img.shields.io/badge/Three.js-WebXR-black?logo=three.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
 
-**[Open the live app →](https://andylbrummer.github.io/transparent/)**
+**[Open the live app →](https://andylbrummer.github.io/transparent/)** · mirror at [transparent.sbdev.io](https://transparent.sbdev.io/)
 
 <img src="docs/images/through-the-earth.jpg" alt="Looking straight down from Texas through a transparent Earth: the Indian Ocean, Australia and Africa on the far side, plate boundaries and subduction zones drawn on them, the core in the middle" width="820">
 
