@@ -17,6 +17,8 @@
  *   --wait MS       settle time before the shot, default 4000
  *   --w --h --dpr   viewport, default 1280 800 1
  *   --panel         open the layers panel
+ *   --clean         hide the debug HUD line, the buttons and the compass bar, for publishing
+ *   --no-hud        hide only the debug HUD line
  *   --url URL       default http://127.0.0.1:5173/
  *   --software      render with SwiftShader instead of the machine's GPU
  *
@@ -107,6 +109,9 @@ await page.evaluate(
   }
 );
 if (has('panel')) await page.click('#layers-toggle');
+// Layer panels (a wave clock, a year slider) carry data and stay; the app's own chrome goes.
+const hidden = has('clean') ? '#hud, #layers-toggle, #reset-offset, #cardboard-toggle, #ar-toggle, .compass-bar' : has('no-hud') ? '#hud' : null;
+if (hidden) await page.addStyleTag({ content: `${hidden} { visibility: hidden !important; }` });
 await page.waitForTimeout(Number(opt('wait', 4000)));
 
 const info = await page.evaluate(async () => {
