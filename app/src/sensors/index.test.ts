@@ -5,6 +5,7 @@ import {
   blendDegrees,
   compassAlphaOffset,
   createSensorController,
+  FALLBACK_POSITION,
   magneticHeadingFromOrientation,
   type SensorState,
 } from './index';
@@ -320,6 +321,40 @@ describe('createSensorController', () => {
     controller.stop();
   });
 
+  it('stands in at the fallback position when location is denied, until a real fix arrives', () => {
+    const geo = installGeolocation();
+    const seen: SensorState[] = [];
+    const controller = createSensorController((s) => seen.push(s));
+    controller.start();
+
+    geo.fail(1);
+    const denied = seen[seen.length - 1];
+    expect(denied.position).toEqual(FALLBACK_POSITION);
+    expect(denied.fallback).toBe(true);
+    expect(denied.declination).not.toBeNull();
+
+    geo.emit(30);
+    const fixed = seen[seen.length - 1];
+    expect(fixed.position).toEqual({ lat: 30.2672, lon: -97.7431 });
+    expect(fixed.fallback).toBe(false);
+    controller.stop();
+  });
+
+  it('keeps a real fix when a later reading fails', () => {
+    const geo = installGeolocation();
+    const seen: SensorState[] = [];
+    const controller = createSensorController((s) => seen.push(s));
+    controller.start();
+
+    geo.emit(30);
+    geo.fail(3);
+    const last = seen[seen.length - 1];
+    expect(last.fix.phase).toBe('unavailable');
+    expect(last.position).toEqual({ lat: 30.2672, lon: -97.7431 });
+    expect(last.fallback).toBe(false);
+    controller.stop();
+  });
+
   it('detaches its listeners and geolocation watch on stop', () => {
     const geo = installGeolocation();
     const seen: SensorState[] = [];
@@ -343,6 +378,8 @@ describe('createSensorController', () => {
     controller.start();
 
     expect(seen[seen.length - 1].fix.phase).toBe('unavailable');
+    expect(seen[seen.length - 1].position).toEqual(FALLBACK_POSITION);
+    expect(seen[seen.length - 1].fallback).toBe(true);
     controller.stop();
   });
 });

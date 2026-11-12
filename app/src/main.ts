@@ -18,7 +18,7 @@ import { QuakeLayer, type QuakeData } from './render/quakes';
 import { StereoRig } from './render/stereo';
 import { icrsToEcefMatrix } from '@transparent-earth/core';
 import { createLookController, type LookController } from './input/look';
-import { createSensorController, type SensorState } from './sensors';
+import { createSensorController, FALLBACK_PLACE, type SensorState } from './sensors';
 import {
   probeCapabilities,
   surfaceImageryNote,
@@ -87,9 +87,9 @@ function formatFix(state: SensorState): string {
         ? 'locating…'
         : `locating… ±${Math.round(state.fix.accuracy)} m`;
     case 'denied':
-      return 'location permission denied';
+      return state.fallback ? `location permission denied, showing ${FALLBACK_PLACE}` : 'location permission denied';
     case 'unavailable':
-      return 'location unavailable';
+      return state.fallback ? `location unavailable, showing ${FALLBACK_PLACE}` : 'location unavailable';
   }
 }
 
@@ -299,6 +299,7 @@ export function init(): App | null {
     headingReason: 'insufficient_samples',
     declination: null,
     fix: { phase: 'acquiring', accuracy: null },
+    fallback: false,
   };
 
   const lazyLayers = new LayerManager(
@@ -441,7 +442,7 @@ export function init(): App | null {
   // The renderer's loop, not window rAF: the window stops its frames while an XR session presents.
   function animate(_time: number, frame?: XRFrame): void {
     const ar = arRunner.isActive();
-    // No position, no view: anywhere else would show the wrong planet. In AR, nothing until the window is open.
+    // No position, no view. Without a fix the sensors stand in at FALLBACK_POSITION, and the HUD says so. In AR, nothing until the window is open.
     const position = sensorState.position;
     const showEarth = position !== null && (!ar || arRunner.isPlaced());
     globe.getMesh().visible = showEarth;

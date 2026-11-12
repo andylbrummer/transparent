@@ -28,6 +28,14 @@ export interface SurfacePosition {
 }
 
 /**
+ * Where the view stands when the browser gives no location: denied, unavailable
+ * or absent. A black screen tells a visitor nothing; a labelled stand-in shows
+ * what the app does. Austin, Texas, where the app is made.
+ */
+export const FALLBACK_POSITION: SurfacePosition = { lat: 30.27, lon: -97.74 };
+export const FALLBACK_PLACE = 'Austin, Texas';
+
+/**
  * Device attitude as W3C DeviceOrientation Euler angles in degrees, with
  * alpha referenced to true north: the device frame is Rz(alpha)·Rx(beta)·Ry(gamma)
  * in East-North-Up.
@@ -55,6 +63,8 @@ export interface SensorState {
   /** Magnetic declination at `position`, degrees east of true north; null before a fix. */
   readonly declination: number | null;
   readonly fix: FixStatus;
+  /** True while `position` is FALLBACK_POSITION standing in for a fix the browser would not give. */
+  readonly fallback: boolean;
 }
 
 export type HeadingUnavailableReason = RejectReason | 'awaiting_position';
@@ -143,6 +153,7 @@ export function createSensorController(callback: SensorCallback): SensorControll
     headingReason: 'insufficient_samples',
     declination: null,
     fix: { phase: 'acquiring', accuracy: null },
+    fallback: false,
   };
   let running = false;
   // The gate's latest verdict, still magnetic; state.heading is its true-north view.
@@ -222,15 +233,29 @@ export function createSensorController(callback: SensorCallback): SensorControll
       // moves declination by thousandths of a degree.
       declination: magneticDeclination(latitude, longitude, 0, decimalYear(new Date(position.timestamp))),
       fix: nextFixState(state.fix, { accuracy }, false),
+      fallback: false,
     };
     state = { ...state, ...trueHeadingState() };
     emit();
   }
 
+  /** Stand at FALLBACK_POSITION until a real fix arrives; a fix already taken is kept. */
+  function fallBack(phase: 'denied' | 'unavailable'): void {
+    state = state.position !== null && !state.fallback
+      ? { ...state, fix: { phase } }
+      : {
+          ...state,
+          position: FALLBACK_POSITION,
+          declination: magneticDeclination(FALLBACK_POSITION.lat, FALLBACK_POSITION.lon, 0, decimalYear(new Date())),
+          fix: { phase },
+          fallback: true,
+        };
+    state = { ...state, ...trueHeadingState() };
+  }
+
   function onPositionError(error: GeolocationPositionError): void {
     if (!running) return;
-    const phase = error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable';
-    state = { ...state, fix: { phase } };
+    fallBack(error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable');
     emit();
   }
 
@@ -254,7 +279,7 @@ export function createSensorController(callback: SensorCallback): SensorControll
           maximumAge: 0,
         });
       } else {
-        state = { ...state, fix: { phase: 'unavailable' } };
+        fallBack('unavailable');
       }
 
       if (typeof window !== 'undefined') {
