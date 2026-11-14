@@ -51,16 +51,26 @@ export class StereoRig {
     this.right.name = 'right-eye';
   }
 
-  /** Place both eyes either side of the head camera, for eye viewports eyeWidth×height CSS px. */
+  /**
+   * Place both eyes either side of the head camera, at its height above the
+   * ground, for eye viewports eyeWidth×height CSS px.
+   *
+   * The head's right axis is a straight line, not the ground: half a
+   * baseline along it, a roll of 0.1° puts the low eye under the surface,
+   * where the globe draws the ground's underside in place of the sky. So
+   * each eye is pulled back to the head's distance from the Earth's centre;
+   * a rolled head only narrows the baseline, by cos(roll).
+   */
   update(head: THREE.PerspectiveCamera, eyeWidth: number, height: number): void {
     const toeIn = toeInRad(this.baselineM, this.convergenceM);
+    const headRadius = head.position.length();
     for (const [eye, side] of [
       [this.left, -1],
       [this.right, 1],
     ] as const) {
       // Camera-local +x is the head's right; local +y its up, so turning about it toes the eye in.
       this.offset.set((side * this.baselineM) / 2, 0, 0).applyQuaternion(head.quaternion);
-      eye.position.copy(head.position).add(this.offset);
+      eye.position.copy(head.position).add(this.offset).setLength(headRadius);
       this.toeIn.setFromAxisAngle(this.up, side * toeIn);
       eye.quaternion.copy(head.quaternion).multiply(this.toeIn);
       const aspect = eyeWidth / height;

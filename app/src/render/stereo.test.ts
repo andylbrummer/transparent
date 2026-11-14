@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
+import { EARTH_RADIUS_M } from '@transparent-earth/core';
+import { EYE_HEIGHT_M } from '../input/look';
 import { CARDBOARD_BASELINE_M, CARDBOARD_CONVERGENCE_M, StereoRig, disparityRad } from './stereo';
 
 const DEG = 180 / Math.PI;
 
-function headCamera(): THREE.PerspectiveCamera {
+/** A head standing at the north pole, looking level along +x, rolled clockwise by `rollDeg`. */
+function headCamera(rollDeg = 0): THREE.PerspectiveCamera {
   const head = new THREE.PerspectiveCamera(60, 2, 0.1, 1e9);
-  head.position.set(1000, 2000, 3000);
-  head.quaternion.setFromEuler(new THREE.Euler(0.3, -0.7, 0.2));
+  head.position.set(0, 0, EARTH_RADIUS_M + EYE_HEIGHT_M);
+  head.up.set(0, 0, 1);
+  head.lookAt(1e6, 0, EARTH_RADIUS_M + EYE_HEIGHT_M);
+  head.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -rollDeg / DEG));
   head.updateMatrixWorld();
   return head;
 }
@@ -29,7 +34,7 @@ describe('StereoRig', () => {
 
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(head.quaternion);
     const between = rig.right.position.clone().sub(rig.left.position);
-    expect(between.length()).toBeCloseTo(CARDBOARD_BASELINE_M, 3);
+    expect(between.length() / CARDBOARD_BASELINE_M).toBeCloseTo(1, 5);
     expect(between.normalize().dot(right)).toBeCloseTo(1, 9);
 
     // Both eye axes pass through the point straight ahead at the convergence distance.
@@ -40,6 +45,19 @@ describe('StereoRig', () => {
       expect(axis.dot(toAhead)).toBeCloseTo(1, 9);
     }
     expect(rig.left.aspect).toBeCloseTo(600 / 1080, 9);
+  });
+
+  it('keeps both eyes at the head height when the head rolls, so neither is under the ground', () => {
+    const head = headCamera(2);
+    const rig = new StereoRig();
+    rig.update(head, 600, 1080);
+
+    const headRadius = head.position.length();
+    for (const eye of [rig.left, rig.right]) {
+      expect(eye.position.length() - headRadius).toBeCloseTo(0, 4);
+    }
+    const between = rig.right.position.clone().sub(rig.left.position);
+    expect(between.length() / CARDBOARD_BASELINE_M).toBeCloseTo(Math.cos(2 / DEG), 5);
   });
 
   it('renders each eye into its own half of the canvas', () => {
