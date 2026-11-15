@@ -27,30 +27,39 @@ describe('disparityRad', () => {
 });
 
 describe('StereoRig', () => {
-  it('sets the eyes a baseline apart along the head right, toed in to meet at the convergence distance', () => {
+  it('sets the eyes a baseline apart along the head right, looking parallel', () => {
     const head = headCamera();
     const rig = new StereoRig();
-    rig.update(head, 600, 1080);
+    rig.update(head, 600, 1080, 400);
 
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(head.quaternion);
     const between = rig.right.position.clone().sub(rig.left.position);
     expect(between.length() / CARDBOARD_BASELINE_M).toBeCloseTo(1, 5);
     expect(between.normalize().dot(right)).toBeCloseTo(1, 9);
-
-    // Both eye axes pass through the point straight ahead at the convergence distance.
-    const ahead = new THREE.Vector3(0, 0, -CARDBOARD_CONVERGENCE_M).applyQuaternion(head.quaternion).add(head.position);
-    for (const eye of [rig.left, rig.right]) {
-      const axis = new THREE.Vector3(0, 0, -1).applyQuaternion(eye.quaternion);
-      const toAhead = ahead.clone().sub(eye.position).normalize();
-      expect(axis.dot(toAhead)).toBeCloseTo(1, 9);
-    }
+    for (const eye of [rig.left, rig.right]) expect(eye.quaternion.angleTo(head.quaternion)).toBeCloseTo(0, 9);
     expect(rig.left.aspect).toBeCloseTo(600 / 1080, 9);
+  });
+
+  it('lands the point at the convergence distance on spots the image spacing apart, either side of the middle', () => {
+    const head = headCamera();
+    const rig = new StereoRig();
+    const eyeWidth = 600;
+    const spacingPx = 400;
+    rig.update(head, eyeWidth, 1080, spacingPx);
+
+    const ahead = new THREE.Vector3(0, 0, -CARDBOARD_CONVERGENCE_M).applyQuaternion(head.quaternion).add(head.position);
+    // CSS px across the whole screen: the right eye's viewport starts at eyeWidth.
+    const screenX = (eye: THREE.PerspectiveCamera, x0: number): number => x0 + ((ahead.clone().project(eye).x + 1) / 2) * eyeWidth;
+    expect(screenX(rig.left, 0)).toBeCloseTo(eyeWidth - spacingPx / 2, 3);
+    expect(screenX(rig.right, eyeWidth)).toBeCloseTo(eyeWidth + spacingPx / 2, 3);
+    // Not exactly level: held at the head's height, each eye sits 31 m lower on the curve, about 8 µrad.
+    expect(ahead.clone().project(rig.left).y).toBeCloseTo(0, 4);
   });
 
   it('keeps both eyes at the head height when the head rolls, so neither is under the ground', () => {
     const head = headCamera(2);
     const rig = new StereoRig();
-    rig.update(head, 600, 1080);
+    rig.update(head, 600, 1080, 400);
 
     const headRadius = head.position.length();
     for (const eye of [rig.left, rig.right]) {

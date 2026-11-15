@@ -135,7 +135,8 @@ describe('LabelLayer', () => {
     layer.setStereo(true);
     const rig = new StereoRig();
     const eyeWidth = WIDTH / 2;
-    rig.update(cameraAimedAt(-119.5, 37.0), eyeWidth, HEIGHT);
+    // Spots an eye width apart: each at the middle of its eye's half.
+    rig.update(cameraAimedAt(-119.5, 37.0), eyeWidth, HEIGHT, eyeWidth);
     layer.update(rig.left, eyeWidth, HEIGHT, rig.right);
 
     const x = (selector: string): number => {

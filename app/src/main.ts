@@ -478,7 +478,7 @@ export function init(): App | null {
       renderer.render(scene, arRunner.renderCamera);
     } else if (stereo) {
       const eyeWidth = Math.floor(width / 2);
-      stereoRig.update(camera, eyeWidth, height);
+      stereoRig.update(camera, eyeWidth, height, eyeWidth);
       labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
       stereoRig.render(renderer, scene, width, height, (eye) => globe.update(eye, renderer.domElement.height));
     } else {
