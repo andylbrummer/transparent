@@ -5,6 +5,19 @@ import { DEFAULT_SURFACE_GAIN, GlobeRenderer, TWILIGHT_SUN_ELEVATION_DEG } from 
 import { PREM_LAYERS } from './prem';
 
 describe('GlobeRenderer', () => {
+  it('shows every shell and the surface until one is switched off', () => {
+    const globe = new GlobeRenderer();
+    const shown = (globe.getMesh().material as THREE.ShaderMaterial).uniforms.uLayerShown.value as Float32Array;
+    expect([...shown]).toEqual(PREM_LAYERS.map(() => 1));
+    globe.setShellVisible('crust', false);
+    globe.setShellVisible('outer core', false);
+    expect(globe.isShellVisible('crust')).toBe(false);
+    expect(globe.isShellVisible('inner core')).toBe(true);
+    expect([...shown]).toEqual(PREM_LAYERS.map((l) => (l.name === 'crust' || l.name === 'outer core' ? 0 : 1)));
+    globe.setShellVisible('crust', true);
+    expect(globe.isShellVisible('crust')).toBe(true);
+  });
+
   it('never frustum-culls its fullscreen quad', () => {
     expect(new GlobeRenderer().getMesh().frustumCulled).toBe(false);
   });

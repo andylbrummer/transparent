@@ -219,6 +219,8 @@ export function init(): App | null {
       labels.setKindsVisible(target.labels, visible);
     } else if ('lazy' in target) {
       lazyLayers.setVisible(target.lazy, visible);
+    } else if ('shell' in target) {
+      globe.setShellVisible(target.shell, visible);
     } else {
       const object = interiorObjects[target.interior];
       if (object) object.visible = visible;
@@ -326,6 +328,8 @@ export function init(): App | null {
   );
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
+    // The globe is there from the start, without waiting on the map data.
+    if ('shell' in layer.target) applyLayer(layer, layerVisibility[layer.id]);
   }
 
   // Placed rooms need a position: the window opens onto the ground under the fix.

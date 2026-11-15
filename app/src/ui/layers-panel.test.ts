@@ -138,7 +138,7 @@ describe('LayersPanel with lazy layers', () => {
     expect(input('boundaries').checked).toBe(true);
     expect(input('faults').checked).toBe(false);
     const sections = [...new Set(switches.map((s) => s.section))];
-    expect(sections).toEqual(['Weather', 'Surface lines', 'Inside the Earth', 'Sky maps', 'Labels']);
+    expect(sections).toEqual(['Weather', 'Surface', 'Surface lines', 'Inside the Earth', 'Sky maps', 'Labels']);
   });
 
   it('starts as a list of closed sections, each saying how much of it is on', () => {

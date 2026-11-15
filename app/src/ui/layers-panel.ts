@@ -2,7 +2,8 @@
  * Layers panel: one switch per thing drawn through the Earth.
  *
  * Each switch names what it controls - surface line layers, label kinds,
- * or one of the interior layers - so the app applies them generically.
+ * one of the interior layers, or a boundary of the globe itself - so the
+ * app applies them generically.
  * Choices persist per browser in localStorage under LAYERS_STORAGE_KEY.
  * The panel doubles as the legend: each switch shows the colours it draws.
  */
@@ -10,6 +11,7 @@
 import { OUTLINE_STYLES, SPREADING_RIBBON_MYR, spreadingRampGradient, type OutlineLayerName } from '../render/outlines';
 import type { LabelKind } from '../render/labels';
 import { PLUME_COLOR, depthRampGradient } from '../render/interior';
+import { PREM_LAYERS, type PremLayerName } from '../render/prem';
 import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
 
 export type InteriorLayerName = 'quakes' | 'plumes';
@@ -18,6 +20,8 @@ export type LayerTarget =
   | { readonly lines: readonly OutlineLayerName[] }
   | { readonly labels: readonly LabelKind[] }
   | { readonly interior: InteriorLayerName }
+  /** A boundary the globe draws: the top of this PREM layer ('crust': the surface). */
+  | { readonly shell: PremLayerName }
   /** A lazy layer from src/layers, by id. */
   | { readonly lazy: string };
 
@@ -63,7 +67,49 @@ const FAULTS: readonly OutlineLayerName[] = ['fault-normal', 'fault-reverse', 'f
 const POLITICAL: readonly OutlineLayerName[] = ['coastline', 'borders', 'states'];
 const DEPTH_LEGEND_KM = 700;
 
+const shellLegend = (name: PremLayerName): string => {
+  const [r, g, b] = PREM_LAYERS.find((layer) => layer.name === name)!.color.map((c) => Math.round(c * 255));
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 export const LAYER_SWITCHES: readonly LayerSwitch[] = [
+  {
+    id: 'globe-surface',
+    label: 'Continents and oceans',
+    section: 'Surface',
+    target: { shell: 'crust' },
+    legend: 'linear-gradient(to right, #1d3b6e, #2f5f8a 45%, #5c7a3a 55%, #a08860)',
+    caption: 'the far side of the planet, seen through it; the maps below are drawn on it',
+  },
+  {
+    id: 'shell-moho',
+    label: 'Base of the crust (Moho)',
+    section: 'Inside the Earth',
+    target: { shell: 'upper mantle' },
+    legend: shellLegend('upper mantle'),
+    caption: 'PREM, 24 km down: a glass shell drawn where the view grazes it',
+  },
+  {
+    id: 'shell-670',
+    label: 'Top of the lower mantle (670 km)',
+    section: 'Inside the Earth',
+    target: { shell: 'lower mantle' },
+    legend: shellLegend('lower mantle'),
+  },
+  {
+    id: 'shell-core',
+    label: 'Core–mantle boundary (2,890 km)',
+    section: 'Inside the Earth',
+    target: { shell: 'outer core' },
+    legend: shellLegend('outer core'),
+  },
+  {
+    id: 'shell-inner-core',
+    label: 'Inner core (5,150 km)',
+    section: 'Inside the Earth',
+    target: { shell: 'inner core' },
+    legend: shellLegend('inner core'),
+  },
   {
     id: 'quakes',
     label: 'Earthquakes, M5+ since 1973',

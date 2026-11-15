@@ -11,6 +11,8 @@ export const PREM_LAYERS = [
   { name: 'crust', radiusKm: 6371.0, color: [0.3, 0.6, 0.3] as const, alpha: 0.15 },
 ] as const;
 
+export type PremLayerName = (typeof PREM_LAYERS)[number]['name'];
+
 /** Convert PREM layer radii to origin-relative shader units (meters) */
 export function premRadiiToMeters(): Float32Array {
   const radii = new Float32Array(PREM_LAYERS.length);

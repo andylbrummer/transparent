@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
-import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas } from './prem';
+import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas, type PremLayerName } from './prem';
 import { readProjectionFrame, type ProjectionFrame } from './view-ray';
 
 /**
@@ -61,6 +61,8 @@ const FRAGMENT_SHADER = `
   uniform float uLayerC[LAYERS];
   uniform vec3 uLayerColors[LAYERS];
   uniform float uLayerAlphas[LAYERS];
+  // 1 shows a boundary, 0 hides it: each is a switch in the layers panel.
+  uniform float uLayerShown[LAYERS];
   uniform sampler2D uSurface;
   uniform float uSurfaceReady;
   uniform float uSurfaceGain;
@@ -121,13 +123,13 @@ const FRAGMENT_SHADER = `
       }
       // Only ever reached on exit: the far side, the destination of the
       // view, shown nearly opaque.
-      a = 0.9;
+      a = 0.9 * uLayerShown[i];
     } else {
       // Glass shells: clear face-on - eight face-on crossings of even a few
       // percent each stack into a haze over the far side - so only the rim,
       // where the ray grazes the boundary, draws the structure.
       tint = uLayerColors[i];
-      a = uLayerAlphas[i] * rim;
+      a = uLayerAlphas[i] * rim * uLayerShown[i];
     }
     color += trans * a * tint;
     trans *= 1.0 - a;
@@ -190,6 +192,7 @@ export class GlobeRenderer {
       uLayerC: { value: new Float32Array(LAYER_COUNT) },
       uLayerColors: { value: premColors() },
       uLayerAlphas: { value: premAlphas() },
+      uLayerShown: { value: new Float32Array(LAYER_COUNT).fill(1) },
       uSurface: { value: null as THREE.Texture | null },
       uSurfaceReady: { value: 0 },
       uSurfaceGain: { value: DEFAULT_SURFACE_GAIN },
@@ -218,6 +221,21 @@ export class GlobeRenderer {
 
   getMesh(): THREE.Mesh {
     return this.mesh;
+  }
+
+  /**
+   * Show or hide the boundary at the top of a PREM layer: 'crust' is the
+   * surface itself - the continents and oceans on the far side - and the
+   * rest are the glass shells inside.
+   */
+  setShellVisible(name: PremLayerName, visible: boolean): void {
+    const index = PREM_LAYERS.findIndex((layer) => layer.name === name);
+    (this.material.uniforms.uLayerShown.value as Float32Array)[index] = visible ? 1 : 0;
+  }
+
+  isShellVisible(name: PremLayerName): boolean {
+    const index = PREM_LAYERS.findIndex((layer) => layer.name === name);
+    return (this.material.uniforms.uLayerShown.value as Float32Array)[index] === 1;
   }
 
   /**
