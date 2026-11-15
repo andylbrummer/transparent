@@ -8,6 +8,10 @@
  * lock needs fullscreen); each refusal is reported and the split view
  * still runs, since the viewer can rotate the phone by hand.
  *
+ * The system drops a wake lock whenever the page is hidden (notification
+ * shade, app switch, power button) and may drop it on its own; while in
+ * Cardboard it is taken again as soon as the page shows.
+ *
  * Leaving: a tap anywhere (the viewer's button taps the screen), or
  * leaving fullscreen with the system back gesture.
  *
@@ -27,7 +31,9 @@ export interface CardboardPlatform {
   isFullscreen(): boolean;
   lockLandscape(): Promise<void>;
   unlockOrientation(): void;
-  requestWakeLock(): Promise<{ release(): Promise<void> }>;
+  /** A screen wake lock; `onLost` runs when the system releases it. */
+  requestWakeLock(onLost: () => void): Promise<{ release(): Promise<void> }>;
+  isPageVisible(): boolean;
 }
 
 export const BROWSER_PLATFORM: CardboardPlatform = {
@@ -41,10 +47,13 @@ export const BROWSER_PLATFORM: CardboardPlatform = {
     await orientation.lock('landscape');
   },
   unlockOrientation: () => screen.orientation?.unlock?.(),
-  requestWakeLock: async () => {
+  requestWakeLock: async (onLost) => {
     if (!('wakeLock' in navigator)) throw new Error('navigator.wakeLock is not supported');
-    return navigator.wakeLock.request('screen');
+    const sentinel = await navigator.wakeLock.request('screen');
+    sentinel.addEventListener('release', onLost);
+    return sentinel;
   },
+  isPageVisible: () => document.visibilityState === 'visible',
 };
 
 export class CardboardToggle {
@@ -54,10 +63,14 @@ export class CardboardToggle {
   private calibrating = false;
   private enteredFullscreen = false;
   private wakeLock: { release(): Promise<void> } | null = null;
+  private wakeLockPending = false;
   private readonly onButtonClick = (): void => void this.enter();
   private readonly onCalibrateClick = (): void => void this.enter(true);
   private readonly onFullscreenChange = (): void => {
     if (this.active && this.enteredFullscreen && !this.platform.isFullscreen()) this.exit();
+  };
+  private readonly onVisibilityChange = (): void => {
+    if (this.active && this.platform.isPageVisible()) void this.holdWakeLock();
   };
 
   /** Calls `onChange` as stereo turns on and off. */
@@ -80,6 +93,7 @@ export class CardboardToggle {
     this.calibrateButton.addEventListener('click', this.onCalibrateClick);
     parent.append(this.button, this.calibrateButton);
     document.addEventListener('fullscreenchange', this.onFullscreenChange);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
 
   isActive(): boolean {
@@ -122,12 +136,27 @@ export class CardboardToggle {
     } catch (error) {
       console.error('cardboard: landscape lock refused', error);
     }
+    await this.holdWakeLock();
+  }
+
+  /** Take the screen wake lock unless it is held or being asked for; taken again whenever the system drops it. */
+  private async holdWakeLock(): Promise<void> {
+    if (this.wakeLock || this.wakeLockPending) return;
+    this.wakeLockPending = true;
     try {
-      const lock = await this.platform.requestWakeLock();
+      const lock = await this.platform.requestWakeLock(() => {
+        if (this.wakeLock !== lock) return;
+        this.wakeLock = null;
+        console.info('cardboard: wake lock dropped by the system');
+        // Hidden, it waits for visibilitychange: a hidden page cannot hold one.
+        if (this.active && this.platform.isPageVisible()) void this.holdWakeLock();
+      });
       if (this.active) this.wakeLock = lock;
       else void lock.release();
     } catch (error) {
       console.error('cardboard: wake lock refused', error);
+    } finally {
+      this.wakeLockPending = false;
     }
   }
 
@@ -151,6 +180,7 @@ export class CardboardToggle {
     this.button.removeEventListener('click', this.onButtonClick);
     this.calibrateButton.removeEventListener('click', this.onCalibrateClick);
     document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.button.remove();
     this.calibrateButton.remove();
   }

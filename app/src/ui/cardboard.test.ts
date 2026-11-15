@@ -4,6 +4,8 @@ import { CardboardToggle, STEREO_BODY_CLASS, type CardboardPlatform } from './ca
 
 function fakePlatform(overrides: Partial<CardboardPlatform> = {}) {
   let fullscreen = false;
+  let visible = true;
+  const lost: (() => void)[] = [];
   const release = vi.fn(async () => undefined);
   const platform: CardboardPlatform & { release: typeof release } = {
     requestFullscreen: vi.fn(async () => {
@@ -15,11 +17,24 @@ function fakePlatform(overrides: Partial<CardboardPlatform> = {}) {
     isFullscreen: () => fullscreen,
     lockLandscape: vi.fn(async () => undefined),
     unlockOrientation: vi.fn(),
-    requestWakeLock: vi.fn(async () => ({ release })),
+    requestWakeLock: vi.fn(async (onLost: () => void) => {
+      lost.push(onLost);
+      return { release };
+    }),
+    isPageVisible: () => visible,
     release,
     ...overrides,
   };
-  return { platform, leaveFullscreen: () => (fullscreen = false) };
+  return {
+    platform,
+    leaveFullscreen: () => (fullscreen = false),
+    /** The system drops the latest lock, as Chrome does when the page hides. */
+    dropWakeLock: () => lost.at(-1)!(),
+    setVisible: (shown: boolean) => {
+      visible = shown;
+      document.dispatchEvent(new Event('visibilitychange'));
+    },
+  };
 }
 
 afterEach(() => {
@@ -126,6 +141,35 @@ describe('CardboardToggle', () => {
     expect(toggle.isCalibrating()).toBe(true);
     expect(document.body.classList.contains(CALIBRATING_BODY_CLASS)).toBe(true);
     toggle.exit();
+    toggle.dispose();
+  });
+
+  it('takes the wake lock again when the system drops it, once the page shows', async () => {
+    const { platform, dropWakeLock, setVisible } = fakePlatform();
+    const toggle = new CardboardToggle(document.createElement('div'), () => undefined, platform);
+    await toggle.enter();
+    expect(platform.requestWakeLock).toHaveBeenCalledTimes(1);
+
+    // Dropped while showing (some Android builds): asked for again at once.
+    dropWakeLock();
+    await vi.waitFor(() => expect(platform.requestWakeLock).toHaveBeenCalledTimes(2));
+
+    // Dropped because the page hid: asked for again only when it shows.
+    setVisible(false);
+    dropWakeLock();
+    await Promise.resolve();
+    expect(platform.requestWakeLock).toHaveBeenCalledTimes(2);
+    setVisible(true);
+    await vi.waitFor(() => expect(platform.requestWakeLock).toHaveBeenCalledTimes(3));
+    // Showing again with the lock held asks for nothing more.
+    setVisible(true);
+    expect(platform.requestWakeLock).toHaveBeenCalledTimes(3);
+
+    // Out of Cardboard, neither brings it back.
+    toggle.exit();
+    dropWakeLock();
+    setVisible(true);
+    expect(platform.requestWakeLock).toHaveBeenCalledTimes(3);
     toggle.dispose();
   });
 
