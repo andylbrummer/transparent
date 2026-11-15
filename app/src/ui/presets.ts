@@ -143,6 +143,36 @@ export const LAYER_PRESETS: readonly LayerPreset[] = [
     ],
   },
   {
+    id: 'milky-way-detail',
+    label: 'Milky Way up close',
+    description: 'zoom in on the Galaxy’s star clouds and dust lanes, and on Hubble’s pictures of Andromeda and other galaxies',
+    on: [...SKY_THROUGH, 'stars', 'milky-way', 'nearby-galaxies', 'survey-hst', 'sky-landmarks'],
+  },
+  {
+    id: 'stars-and-dust',
+    label: 'Stars and dust',
+    description: 'the Galaxy’s starlight with the far-infrared glow of the dust that hides it: the dark lanes light up',
+    on: [...SKY_THROUGH, 'stars', 'milky-way', 'map-dust-100um'],
+  },
+  {
+    id: 'through-the-dust',
+    label: 'Through the dust',
+    description: 'near-infrared light passes the dust: the Galaxy’s bulge and centre, hidden from the eye, in full',
+    on: [...SKY_THROUGH, 'stars', 'survey-2mass'],
+  },
+  {
+    id: 'glowing-gas',
+    label: 'Glowing gas',
+    description: 'hydrogen lit by hot young stars over the starlight: Orion, the Gum Nebula and the star-forming arms',
+    on: [...SKY_THROUGH, 'stars', 'milky-way', 'map-h-alpha', 'deep-sky-objects'],
+  },
+  {
+    id: 'high-energy',
+    label: 'High-energy sky',
+    description: 'gamma rays from the Galaxy’s plane and beyond, with the pulsars and supernova remnants that make them',
+    on: [...SKY_THROUGH, 'stars', 'map-gamma-fermi', 'pulsars', 'supernova-remnants'],
+  },
+  {
     id: 'cosmology',
     label: 'Cosmology',
     description: 'the universe at large: the microwave background, the galaxy web, quasars and the most distant bursts',

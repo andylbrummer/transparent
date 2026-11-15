@@ -30,7 +30,7 @@ describe('LAYER_PRESETS', () => {
     expect(preset('inside').on).not.toContain('political');
     expect(preset('inside').on).not.toContain('stars');
     expect(preset('inside').on).toEqual(expect.arrayContaining(['shell-core', 'shell-inner-core', 'quakes']));
-    for (const id of ['solar-system', 'deep-space', 'cosmology']) {
+    for (const id of ['solar-system', 'deep-space', 'milky-way-detail', 'stars-and-dust', 'through-the-dust', 'glowing-gas', 'high-energy', 'cosmology']) {
       expect(preset(id).on.filter((on) => on === 'globe-surface' || on.startsWith('shell-')), id).toEqual([]);
       expect(preset(id).on, id).toContain('sky-below-horizon');
     }
