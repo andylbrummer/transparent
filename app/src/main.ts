@@ -40,6 +40,7 @@ import {
   type LayerSwitch,
 } from './ui/layers-panel';
 import { CardboardToggle } from './ui/cardboard';
+import { CardboardCalibration, headRollRad } from './ui/cardboard-calibration';
 import { ARControls } from './ui/ar-controls';
 import { ARRunner } from './xr/ar/runner';
 import { headingAxis, headingOfXrForward, xrYawDeg } from './xr/ar/frame';
@@ -398,9 +399,14 @@ export function init(): App | null {
   // Pointer events cover mouse and touch alike; the look controller tracks
   // each pointer id, so one finger turns and two pinch.
   const onPointerDown = (e: PointerEvent): void => {
-    // In the viewer the only input is its button, which taps the screen: leave.
+    // In the viewer the only input is its button, which taps the screen: keep the calibration, or leave.
     if (cardboard.isActive()) {
-      cardboard.exit();
+      if (cardboard.isCalibrating()) {
+        cardboardCalibration.save();
+        cardboard.finishCalibration();
+      } else {
+        cardboard.exit();
+      }
       return;
     }
     if (!orientationPermissionAsked) {
@@ -424,6 +430,7 @@ export function init(): App | null {
   window.addEventListener('keydown', onKeyDown);
 
   const stereoRig = new StereoRig();
+  const cardboardCalibration = new CardboardCalibration(container, localStorage);
   const cardboard = new CardboardToggle(container, (stereo) => {
     // Entering is a tap on the button, so iOS can still be asked for the compass here.
     if (stereo && !orientationPermissionAsked) {
@@ -455,6 +462,7 @@ export function init(): App | null {
     const height = window.innerHeight;
     const stereo = !ar && position !== null && cardboard.isActive();
     const nowMs = performance.now();
+    const deltaMs = nowMs - lastFrameMs;
     // In AR the camera is the device's, put in the Earth frame where the window was placed.
     if (ar) arRunner.update(frame, camera);
     if (position) {
@@ -467,7 +475,7 @@ export function init(): App | null {
       skyRoot.quaternion.copy(inertialRoot.quaternion);
       skyRoot.position.copy(camera.position);
       skyUniforms.uObserverUp.value.copy(camera.position).normalize();
-      lazyLayers.update({ date, camera, position, deltaMs: nowMs - lastFrameMs, eyes: stereo ? 2 : 1 });
+      lazyLayers.update({ date, camera, position, deltaMs, eyes: stereo ? 2 : 1 });
     }
     lastFrameMs = nowMs;
     // A layer swaps the surface map without telling anyone: the HUD's note about it follows.
@@ -478,7 +486,10 @@ export function init(): App | null {
       renderer.render(scene, arRunner.renderCamera);
     } else if (stereo) {
       const eyeWidth = Math.floor(width / 2);
-      stereoRig.update(camera, eyeWidth, height, eyeWidth);
+      if (cardboard.isCalibrating()) {
+        cardboardCalibration.update(headRollRad(camera, skyUniforms.uObserverUp.value), deltaMs, width, height);
+      }
+      stereoRig.update(camera, eyeWidth, height, cardboardCalibration.spacingPx());
       labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
       stereoRig.render(renderer, scene, width, height, (eye) => globe.update(eye, renderer.domElement.height));
     } else {
@@ -538,6 +549,7 @@ export function init(): App | null {
       quakes?.dispose();
       layersPanel.dispose();
       cardboard.dispose();
+      cardboardCalibration.dispose();
       lazyLayers.dispose();
       labels.dispose();
       renderer.dispose();

@@ -194,6 +194,7 @@
       #reset-offset,
       #layers-toggle,
       #cardboard-toggle,
+      #cardboard-calibrate,
       #ar-toggle {
         position: fixed;
         z-index: 1;
@@ -222,9 +223,14 @@
         top: calc(env(safe-area-inset-top) + 162px);
         right: calc(env(safe-area-inset-right) + 12px);
       }
+      #cardboard-calibrate {
+        top: calc(env(safe-area-inset-top) + 214px);
+        right: calc(env(safe-area-inset-right) + 12px);
+      }
       #reset-offset:active,
       #layers-toggle:active,
       #cardboard-toggle:active,
+      #cardboard-calibrate:active,
       #ar-toggle:active,
       #layers-toggle[aria-expanded='true'] {
         background: rgba(60, 70, 120, 0.9);
@@ -232,6 +238,7 @@
       #reset-offset:focus-visible,
       #layers-toggle:focus-visible,
       #cardboard-toggle:focus-visible,
+      #cardboard-calibrate:focus-visible,
       #ar-toggle:focus-visible,
       .layer-switch input:focus-visible {
         outline: 2px solid #9fdcff;
@@ -263,6 +270,7 @@
       /* On a phone the open panel is nearly as wide as the screen: the button it would half cover steps aside. */
       @media (max-width: 520px) {
         body.layers-open #cardboard-toggle,
+        body.layers-open #cardboard-calibrate,
         body.layers-open #ar-toggle {
           visibility: hidden;
         }
@@ -443,8 +451,39 @@
       body.stereo #layers-toggle,
       body.stereo #layers-panel,
       body.stereo #cardboard-toggle,
+      body.stereo #cardboard-calibrate,
       body.stereo #ar-toggle {
         display: none;
+      }
+      /* Calibrating: one readout per eye, under its convergence spot, so merged they read as one. */
+      #cardboard-calibration {
+        display: none;
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        font: 600 12px/1.2 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+      }
+      body.cardboard-calibrating #cardboard-calibration {
+        display: block;
+      }
+      .cardboard-calibration__readout {
+        position: absolute;
+        transform: translate(-50%, 36px);
+        white-space: nowrap;
+        padding: 4px 8px;
+        background: rgba(12, 14, 32, 0.7);
+        border-radius: 8px;
+      }
+      /* The spot itself: a small cross to lay the star on. */
+      .cardboard-calibration__readout::before {
+        content: '+';
+        position: absolute;
+        left: 50%;
+        top: -36px;
+        transform: translate(-50%, -50%);
+        font-size: 20px;
+        color: #9fdcff;
       }
       /* AR: the camera fills the screen and the WebXR overlay is all that shows over it. */
       #ar-overlay {

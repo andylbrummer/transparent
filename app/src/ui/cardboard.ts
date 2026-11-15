@@ -10,7 +10,13 @@
  *
  * Leaving: a tap anywhere (the viewer's button taps the screen), or
  * leaving fullscreen with the system back gesture.
+ *
+ * The Calibrate button enters the same way, calibrating: the head's tilt
+ * sets the image spacing (ui/cardboard-calibration) and the first tap
+ * keeps it and carries on in Cardboard, rather than leaving.
  */
+
+import { CALIBRATING_BODY_CLASS } from './cardboard-calibration';
 
 export const STEREO_BODY_CLASS = 'stereo';
 
@@ -43,10 +49,13 @@ export const BROWSER_PLATFORM: CardboardPlatform = {
 
 export class CardboardToggle {
   private readonly button: HTMLButtonElement;
+  private readonly calibrateButton: HTMLButtonElement;
   private active = false;
+  private calibrating = false;
   private enteredFullscreen = false;
   private wakeLock: { release(): Promise<void> } | null = null;
   private readonly onButtonClick = (): void => void this.enter();
+  private readonly onCalibrateClick = (): void => void this.enter(true);
   private readonly onFullscreenChange = (): void => {
     if (this.active && this.enteredFullscreen && !this.platform.isFullscreen()) this.exit();
   };
@@ -63,7 +72,13 @@ export class CardboardToggle {
     this.button.textContent = 'Cardboard';
     this.button.title = 'Split the view for a Cardboard viewer; tap to leave';
     this.button.addEventListener('click', this.onButtonClick);
-    parent.appendChild(this.button);
+    this.calibrateButton = document.createElement('button');
+    this.calibrateButton.id = 'cardboard-calibrate';
+    this.calibrateButton.type = 'button';
+    this.calibrateButton.textContent = 'Calibrate';
+    this.calibrateButton.title = 'Cardboard, with head tilt setting the image spacing; tap to keep it';
+    this.calibrateButton.addEventListener('click', this.onCalibrateClick);
+    parent.append(this.button, this.calibrateButton);
     document.addEventListener('fullscreenchange', this.onFullscreenChange);
   }
 
@@ -71,10 +86,22 @@ export class CardboardToggle {
     return this.active;
   }
 
-  async enter(): Promise<void> {
+  isCalibrating(): boolean {
+    return this.calibrating;
+  }
+
+  /** Stop calibrating and stay in Cardboard. */
+  finishCalibration(): void {
+    this.calibrating = false;
+    document.body.classList.remove(CALIBRATING_BODY_CLASS);
+  }
+
+  async enter(calibrate = false): Promise<void> {
     if (this.active) return;
     this.active = true;
+    this.calibrating = calibrate;
     document.body.classList.add(STEREO_BODY_CLASS);
+    document.body.classList.toggle(CALIBRATING_BODY_CLASS, calibrate);
     this.onChange(true);
     // Fullscreen first: Chrome only locks orientation for a fullscreen page.
     try {
@@ -100,6 +127,7 @@ export class CardboardToggle {
   exit(): void {
     if (!this.active) return;
     this.active = false;
+    this.finishCalibration();
     document.body.classList.remove(STEREO_BODY_CLASS);
     this.platform.unlockOrientation();
     if (this.enteredFullscreen && this.platform.isFullscreen()) {
@@ -114,7 +142,9 @@ export class CardboardToggle {
   dispose(): void {
     this.exit();
     this.button.removeEventListener('click', this.onButtonClick);
+    this.calibrateButton.removeEventListener('click', this.onCalibrateClick);
     document.removeEventListener('fullscreenchange', this.onFullscreenChange);
     this.button.remove();
+    this.calibrateButton.remove();
   }
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { CALIBRATING_BODY_CLASS } from './cardboard-calibration';
 import { CardboardToggle, STEREO_BODY_CLASS, type CardboardPlatform } from './cardboard';
 
 function fakePlatform(overrides: Partial<CardboardPlatform> = {}) {
@@ -84,6 +85,33 @@ describe('CardboardToggle', () => {
     expect(onChange).toHaveBeenLastCalledWith(false);
     expect(platform.exitFullscreen).not.toHaveBeenCalled();
     toggle.dispose();
+  });
+
+  it('enters calibrating on the Calibrate button, and finishing stays in stereo', async () => {
+    const parent = document.createElement('div');
+    const onChange = vi.fn();
+    const { platform } = fakePlatform();
+    const toggle = new CardboardToggle(parent, onChange, platform);
+
+    (parent.querySelector('#cardboard-calibrate') as HTMLButtonElement).click();
+    expect(onChange).toHaveBeenCalledWith(true);
+    expect(toggle.isCalibrating()).toBe(true);
+    expect(document.body.classList.contains(CALIBRATING_BODY_CLASS)).toBe(true);
+    await vi.waitFor(() => expect(platform.requestWakeLock).toHaveBeenCalled());
+
+    toggle.finishCalibration();
+    expect(toggle.isCalibrating()).toBe(false);
+    expect(toggle.isActive()).toBe(true);
+    expect(document.body.classList.contains(CALIBRATING_BODY_CLASS)).toBe(false);
+
+    // Leaving mid-calibration clears it too.
+    toggle.exit();
+    await toggle.enter(true);
+    toggle.exit();
+    expect(toggle.isCalibrating()).toBe(false);
+    expect(document.body.classList.contains(CALIBRATING_BODY_CLASS)).toBe(false);
+    toggle.dispose();
+    expect(parent.children.length).toBe(0);
   });
 
   it('releases a wake lock granted after it already left', async () => {
