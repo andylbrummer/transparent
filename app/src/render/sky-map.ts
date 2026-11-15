@@ -53,7 +53,9 @@ const FRAGMENT_SHADER = `
     vec3 rd = viewRay();
     vec3 m = uWorldToMap * rd;
     vec2 uv = vec2(0.5 - atan(m.y, m.x) / (2.0 * PI), asin(clamp(m.z, -1.0, 1.0)) / PI + 0.5);
-    float horizon = mix(uBelowHorizon * uThroughEarth, 1.0, smoothstep(-0.005, 0.005, dot(rd, uObserverUp)));
+    // The whole sky undimmed (uBelowHorizon 1) overrides the map's own dimming through the Earth.
+    float below = uBelowHorizon >= 1.0 ? 1.0 : uBelowHorizon * uThroughEarth;
+    float horizon = mix(below, 1.0, smoothstep(-0.005, 0.005, dot(rd, uObserverUp)));
     gl_FragColor = vec4(texture2D(uMap, uv).rgb * uGain * horizon, 1.0);
   }
 `;

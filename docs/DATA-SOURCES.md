@@ -239,6 +239,7 @@ files and can be removed without touching other layers.
 | Layer | Default | What | Source | Licence |
 | --- | --- | --- | --- | --- |
 | Sky through the Earth (`sky-below-horizon`) | on | computed in the app; no outside data | | |
+| Whole sky, undimmed (`sky-whole`) | off | computed in the app; no outside data | | |
 | Stars (`stars`) | on | Star positions, magnitudes and colours | [The Hipparcos and Tycho Catalogues, ESA SP-1200 (1997), via CDS VizieR I/239](https://www.cosmos.esa.int/web/hipparcos/catalogues) | free use with acknowledgement |
 |  |  | Positions of seven close binaries Hipparcos could not solve (ξ UMa, ξ Sco and five fainter) | [SIMBAD astronomical database, CDS Strasbourg](https://simbad.cds.unistra.fr/simbad/) | free use with acknowledgement |
 |  |  | Star names | [IAU Catalog of Star Names, IAU Working Group on Star Names](https://www.iau.org/public/themes/naming_stars/) | CC BY 4.0 |

@@ -75,10 +75,11 @@ const FRAGMENT_SHADER = `
   uniform float uHorizonSin;
   // Angle one pixel subtends, so the horizon line stays a pixel wide at any zoom.
   uniform float uPixelAngle;
+  // HORIZON_ALPHA while the horizon line is shown, 0 while the whole sky is.
+  uniform float uHorizonAlpha;
 
   const vec3 SPACE = vec3(0.01, 0.012, 0.03);
   const vec3 HORIZON_COLOR = vec3(0.75, 0.85, 1.0);
-  const float HORIZON_ALPHA = 0.55;
 
   // Ray/sphere roots for a sphere at the origin, given b = dot(ro, rd) and
   // c = |ro|^2 - r^2. Uses the cancellation-free form: one root from
@@ -166,11 +167,13 @@ const FRAGMENT_SHADER = `
     // With the ground clear, a drawn horizon is what keeps "level" legible.
     float elevationSin = dot(rd, normalize(ro));
     float horizon = 1.0 - smoothstep(0.5 * uPixelAngle, 1.5 * uPixelAngle, abs(elevationSin - uHorizonSin));
-    color = mix(color, HORIZON_COLOR, horizon * HORIZON_ALPHA);
+    color = mix(color, HORIZON_COLOR, horizon * uHorizonAlpha);
 
     gl_FragColor = vec4(color, 1.0);
   }
 `;
+
+const HORIZON_ALPHA = 0.55;
 
 export class GlobeRenderer {
   private material: THREE.ShaderMaterial;
@@ -201,6 +204,7 @@ export class GlobeRenderer {
       uSunDirection: { value: new THREE.Vector3(1, 0, 0) },
       uHorizonSin: { value: 0 },
       uPixelAngle: { value: 0.002 },
+      uHorizonAlpha: { value: HORIZON_ALPHA },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -298,6 +302,11 @@ export class GlobeRenderer {
     this.material.uniforms.uSurface.value = shown;
     this.material.uniforms.uSurfaceReady.value = shown ? 1 : 0;
     this.material.uniforms.uSurfaceGain.value = this.overrideImagery ? this.overrideGain : DEFAULT_SURFACE_GAIN;
+  }
+
+  /** The drawn horizon keeps "level" legible; with the whole sky shown there is no ground to be level with. */
+  setHorizonLineShown(shown: boolean): void {
+    this.material.uniforms.uHorizonAlpha.value = shown ? HORIZON_ALPHA : 0;
   }
 
   /** viewportHeightPx: drawing-buffer height, which sets the horizon line's width. */

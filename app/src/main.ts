@@ -55,6 +55,7 @@ import { IDENTIFY_MAX_ANGLE_RAD, respondToSpeech } from './voice/respond';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import { SKY_RADIUS_M, type SkyUniforms } from './layers/types';
+import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
 
 /** geology.json: labels plus the plume conduits under classified hotspots. */
 interface GeologyData extends LabelData {
@@ -553,6 +554,7 @@ export function init(): App | null {
     // A layer swaps the surface map without telling anyone: the HUD's note about it follows.
     if (imageryStatus !== 'ready' && globe.hasSurfaceImagery() !== imageryShown) renderHud();
     labels.setSkyThroughEarth(skyUniforms.uBelowHorizon.value > 0);
+    globe.setHorizonLineShown(skyUniforms.uBelowHorizon.value < WHOLE_SKY_BRIGHTNESS);
     if (ar) {
       if (showEarth) globe.update(camera, xrFramebufferHeight());
       renderer.render(scene, arRunner.renderCamera);
