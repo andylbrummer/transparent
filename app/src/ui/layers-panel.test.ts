@@ -267,6 +267,19 @@ describe('LayersPanel with lazy layers', () => {
     expect(input('cmb').checked).toBe(false);
   });
 
+  it('flips a switch by id as a tap would, its group and the save following', () => {
+    const { panel, changes, input, stored } = setup(JSON.stringify({ cmb: true }));
+    panel.setLayer('x-ray', true);
+    expect(changes).toEqual([
+      ['cmb', false],
+      ['x-ray', true],
+    ]);
+    expect(input('x-ray').checked).toBe(true);
+    expect(input('cmb').checked).toBe(false);
+    expect(JSON.parse(stored.get(LAYERS_STORAGE_KEY)!)).toMatchObject({ cmb: false, 'x-ray': true });
+    expect(() => panel.setLayer('no-such-layer', true)).toThrow('no layer switch no-such-layer');
+  });
+
   it('shows and clears a status chip beside a lazy switch', () => {
     const { parent, panel } = setup();
     const chip = parent.querySelector<HTMLElement>('input[data-layer="clouds"] + span .layer-switch__status')!;

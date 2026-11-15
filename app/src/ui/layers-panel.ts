@@ -397,6 +397,28 @@ export class LayersPanel {
     return block;
   }
 
+  /** Flip one switch, as a tap on it would: its exclusive group follows, and the choice is saved. */
+  setLayer(id: string, visible: boolean): void {
+    const layer = this.switches.find((s) => s.id === id);
+    if (!layer) throw new Error(`no layer switch ${id}`);
+    this.visibility[layer.id] = visible;
+    this.inputs.get(layer.id)!.checked = visible;
+    // Exclusive group: the others go off before this one comes on.
+    if (visible && layer.exclusiveGroup) {
+      for (const other of this.switches) {
+        if (other.id === layer.id || other.exclusiveGroup !== layer.exclusiveGroup || !this.visibility[other.id]) continue;
+        this.visibility[other.id] = false;
+        this.inputs.get(other.id)!.checked = false;
+        this.onChange(other, false);
+      }
+    }
+    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
+    this.onChange(layer, visible);
+    // An exclusive group can reach into another section.
+    for (const name of this.sections.keys()) this.updateSection(name);
+    this.updatePresets();
+  }
+
   /** Set every switch as `preset` has it: those going off first, so an exclusive group never has two on. */
   applyPreset(preset: LayerPreset): void {
     const target = presetVisibility(preset, this.switches);
@@ -446,23 +468,7 @@ export class LayersPanel {
     input.type = 'checkbox';
     input.checked = this.visibility[layer.id];
     input.dataset.layer = layer.id;
-    input.addEventListener('change', () => {
-      this.visibility[layer.id] = input.checked;
-      // Exclusive group: the others go off before this one comes on.
-      if (input.checked && layer.exclusiveGroup) {
-        for (const other of this.switches) {
-          if (other.id === layer.id || other.exclusiveGroup !== layer.exclusiveGroup || !this.visibility[other.id]) continue;
-          this.visibility[other.id] = false;
-          this.inputs.get(other.id)!.checked = false;
-          this.onChange(other, false);
-        }
-      }
-      this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
-      this.onChange(layer, input.checked);
-      // An exclusive group can reach into another section.
-      for (const name of this.sections.keys()) this.updateSection(name);
-      this.updatePresets();
-    });
+    input.addEventListener('change', () => this.setLayer(layer.id, input.checked));
     this.inputs.set(layer.id, input);
     const text = document.createElement('span');
     text.className = 'layer-switch__text';
