@@ -114,6 +114,21 @@ describe('CardboardToggle', () => {
     expect(parent.children.length).toBe(0);
   });
 
+  it('starts calibrating from inside stereo, and only there', async () => {
+    const parent = document.createElement('div');
+    const { platform } = fakePlatform();
+    const toggle = new CardboardToggle(parent, vi.fn(), platform);
+    toggle.beginCalibration();
+    expect(toggle.isCalibrating()).toBe(false);
+
+    await toggle.enter();
+    toggle.beginCalibration();
+    expect(toggle.isCalibrating()).toBe(true);
+    expect(document.body.classList.contains(CALIBRATING_BODY_CLASS)).toBe(true);
+    toggle.exit();
+    toggle.dispose();
+  });
+
   it('releases a wake lock granted after it already left', async () => {
     let grant: (lock: { release(): Promise<void> }) => void = () => undefined;
     const release = vi.fn(async () => undefined);

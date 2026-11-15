@@ -47,6 +47,10 @@ import { ARRunner } from './xr/ar/runner';
 import { headingAxis, headingOfXrForward, xrYawDeg } from './xr/ar/frame';
 import { allCredits } from './ui/credits';
 import { createClock } from './clock';
+import { VoiceControl, cancelBrowserSpeech, createBrowserRecognizer, speakWithBrowser } from './voice/voice-control';
+import { VoiceOverlay } from './voice/voice-overlay';
+import { createTalkButton } from './voice/talk-button';
+import { IDENTIFY_MAX_ANGLE_RAD, respondToSpeech } from './voice/respond';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import { SKY_RADIUS_M, type SkyUniforms } from './layers/types';
@@ -445,8 +449,41 @@ export function init(): App | null {
     }
     layersPanel.setOpen(false);
     labels.setStereo(stereo);
+    // Nothing can be pressed in the viewer: the microphone stays open for the wake word.
+    voice.setWakeListening(stereo);
     onResize();
   });
+
+  const voiceOverlay = new VoiceOverlay(container);
+  const voicePresets = [defaultPreset(layerSwitches), ...LAYER_PRESETS];
+  const voice = new VoiceControl({
+    createRecognizer: createBrowserRecognizer,
+    speak: (text) => speakWithBrowser(text, navigator.language),
+    cancelSpeech: cancelBrowserSpeech,
+    lang: navigator.language,
+    onStatus: (status) => voiceOverlay.show(status),
+    respond: (alternatives) =>
+      respondToSpeech(alternatives, {
+        vocabulary: { presets: voicePresets, switches: layerSwitches },
+        applyPreset: (preset) => layersPanel.applyPreset(preset),
+        setLayer: (id, visible) => layersPanel.setLayer(id, visible),
+        nameInView: () => labels.nameNearestViewCenter(camera, IDENTIFY_MAX_ANGLE_RAD),
+        isInCardboard: () => cardboard.isActive(),
+        isCalibrating: () => cardboard.isCalibrating(),
+        calibrate: () => {
+          // Fullscreen needs a tap, so a spoken entry may stay windowed (enter reports it).
+          if (cardboard.isActive()) cardboard.beginCalibration();
+          else void cardboard.enter(true);
+        },
+        keepCalibration: () => {
+          cardboardCalibration.save();
+          cardboard.finishCalibration();
+        },
+        exitCardboard: () => cardboard.exit(),
+        resetView: () => look.resetOffset(),
+      }),
+  });
+  const removeTalkButton = voice.isSupported() ? createTalkButton(container, voice) : () => undefined;
   lazyLayers.setResolution(window.innerWidth, window.innerHeight);
 
   let frameCount = 0;
@@ -506,6 +543,7 @@ export function init(): App | null {
       }
       renderer.render(scene, camera);
     }
+    if (voiceOverlay.isShown()) voiceOverlay.place(stereo, width, height, cardboardCalibration.spacingPx());
     frameCount++;
   }
 
@@ -556,6 +594,9 @@ export function init(): App | null {
       layersPanel.dispose();
       cardboard.dispose();
       cardboardCalibration.dispose();
+      voice.dispose();
+      voiceOverlay.dispose();
+      removeTalkButton();
       lazyLayers.dispose();
       labels.dispose();
       renderer.dispose();

@@ -90,6 +90,13 @@ export class CardboardToggle {
     return this.calibrating;
   }
 
+  /** Start calibrating from inside Cardboard (asked for by voice: no button to press). */
+  beginCalibration(): void {
+    if (!this.active) return;
+    this.calibrating = true;
+    document.body.classList.add(CALIBRATING_BODY_CLASS);
+  }
+
   /** Stop calibrating and stay in Cardboard. */
   finishCalibration(): void {
     this.calibrating = false;
