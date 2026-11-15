@@ -18,6 +18,8 @@ Usage (needs healpy, numpy, pillow: tools/pipeline/.cache/venv):
     python3 tools/pipeline/test_milkyway.py
 """
 
+from pathlib import Path
+
 import healpy as hp
 import numpy as np
 from PIL import Image
@@ -60,28 +62,33 @@ def correlation(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.corrcoef(a.ravel(), b.ravel())[0, 1])
 
 
-def brightness(ra: float, dec: float, radius_px: int = 6) -> float:
-    """Mean grey level of the deepest tile around (ra, dec), read the way the app reads a tile: row u, column v."""
+def patch(root: Path, ra: float, dec: float, radius_px: int, mode: str) -> np.ndarray:
+    """The deepest tile under `root` around (ra, dec) in PIL `mode`, read the way the app reads a tile: row u, column v."""
     nside = 2 ** (MAX_ORDER + TILE_BITS)
     sub_pixel = int(hp.ang2pix(nside, ra, dec, nest=True, lonlat=True))
     tile, sub = divmod(sub_pixel, 4**TILE_BITS)
     u = sum(((sub >> (2 * bit)) & 1) << bit for bit in range(TILE_BITS))
     v = sum(((sub >> (2 * bit + 1)) & 1) << bit for bit in range(TILE_BITS))
-    image = grey(tile_path(MAX_ORDER, tile))
-    return float(image[max(0, u - radius_px) : u + radius_px + 1, max(0, v - radius_px) : v + radius_px + 1].mean())
+    image = np.asarray(Image.open(tile_path(root, MAX_ORDER, tile)).convert(mode), dtype=float)
+    return image[max(0, u - radius_px) : u + radius_px + 1, max(0, v - radius_px) : v + radius_px + 1]
+
+
+def brightness(ra: float, dec: float, radius_px: int = 6) -> float:
+    """Mean grey level of the plain tiles around (ra, dec)."""
+    return float(patch(OUTPUT, ra, dec, radius_px, "L").mean())
 
 
 def main() -> None:
-    missing = [(order, n) for order in range(MAX_ORDER + 1) for n in range(12 * 4**order) if not tile_path(order, n).exists()]
+    missing = [(order, n) for order in range(MAX_ORDER + 1) for n in range(12 * 4**order) if not tile_path(OUTPUT, order, n).exists()]
     check(not missing, f"every tile of orders 0-{MAX_ORDER} is written ({len(missing)} missing)")
     size_mb = sum(path.stat().st_size for path in OUTPUT.rglob("*.jpg")) / 2**20
     check(size_mb < BUDGET_MB, f"{size_mb:.1f} MB, under the {BUDGET_MB} MB budget")
-    first = Image.open(tile_path(0, 0))
+    first = Image.open(tile_path(OUTPUT, 0, 0))
     check(first.size == (TILE_PX, TILE_PX) and first.mode == "RGB", f"tiles are {first.size[0]}x{first.size[1]} {first.mode}")
 
     for tile in LAYOUT_TILES:
         dss = blocks(grey(cached_fetch(f"{DSS_BASE}/Norder{MAX_ORDER}/Dir0/Npix{tile}.jpg", f"hips/DSSColor-{MAX_ORDER}-{tile}.jpg")))
-        ours = grey(tile_path(MAX_ORDER, tile))
+        ours = grey(tile_path(OUTPUT, MAX_ORDER, tile))
         scores = {name: correlation(blocks(layout(ours)), dss) for name, layout in LAYOUTS.items()}
         others = max(score for name, score in scores.items() if name != "as written")
         check(

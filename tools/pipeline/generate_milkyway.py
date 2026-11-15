@@ -41,6 +41,7 @@ Raw downloads are cached in tools/pipeline/.cache/ (the EXR is 434 MB).
 """
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import healpy as hp
@@ -80,8 +81,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = REPO_ROOT / "app" / "public" / "sky" / "milkyway"
 
 
-def tile_path(order: int, ipix: int) -> Path:
-    return OUTPUT / f"Norder{order}" / f"Dir{ipix // 10000 * 10000}" / f"Npix{ipix}.jpg"
+def tile_path(root: Path, order: int, ipix: int) -> Path:
+    return root / f"Norder{order}" / f"Dir{ipix // 10000 * 10000}" / f"Npix{ipix}.jpg"
 
 
 def read_exr(path: Path) -> np.ndarray:
@@ -163,7 +164,8 @@ def sample_tile(linear: np.ndarray, ipix: int, offsets: np.ndarray) -> np.ndarra
     ra, dec = hp.pix2ang(nside, ipix * 4**TILE_BITS + offsets, nest=True, lonlat=True)
     x = (width / 2 - ra / 360 * width - 0.5) % width
     y = np.clip(height / 2 - dec / 180 * height - 0.5, 0, height - 1)
-    x0 = np.floor(x).astype(np.int64)
+    # A tiny negative x wraps to exactly `width` in floating point: the index wraps with it.
+    x0 = np.floor(x).astype(np.int64) % width
     y0 = np.floor(y).astype(np.int64)
     fx = (x - x0)[..., None].astype(np.float32)
     fy = (y - y0)[..., None].astype(np.float32)
@@ -184,37 +186,47 @@ def parent_tile(children: list[np.ndarray]) -> np.ndarray:
     return parent
 
 
-def write_tile(order: int, ipix: int, linear: np.ndarray, black: float, white: float) -> int:
-    path = tile_path(order, ipix)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image = Image.fromarray((tone_map(linear, black, white) * 255 + 0.5).astype(np.uint8), "RGB")
-    image.save(path, "JPEG", quality=JPEG_QUALITY, optimize=True)
-    return path.stat().st_size
-
-
-def main() -> None:
+def load_denoised() -> tuple[np.ndarray, float, float]:
+    """(the source in linear light, denoised; black; white above black)."""
     linear = read_exr(cached_fetch(SOURCE_URL, "milkyway_2020_16k.exr", timeout=1800))
     print(f"source {linear.shape[1]}x{linear.shape[0]}, linear range {linear.min():.4f}..{linear.max():.4f}")
     black, white = measure_levels(linear)
-    linear = denoise(linear, black, white)
-    offsets = tile_pixel_offsets()
-    if OUTPUT.exists():
-        shutil.rmtree(OUTPUT)
+    return denoise(linear, black, white), black, white
+
+
+def write_tiles(root: Path, top_tile: Callable[[int], np.ndarray], to_display: Callable[[np.ndarray], np.ndarray]) -> None:
+    """
+    Every tile of orders 0 to MAX_ORDER under `root`, replacing what is there: `top_tile` makes each tile of
+    MAX_ORDER, each lower order averages its four children in the same space, `to_display` turns a tile into
+    display values 0..1 for the JPEG.
+    """
+    if root.exists():
+        shutil.rmtree(root)
     sizes = {order: 0 for order in range(MAX_ORDER + 1)}
-    # One order-0 tile at a time: its order-2 descendants in linear light are about 50 MB.
+    # One order-0 tile at a time: its order-2 descendants as float are about 50 MB.
     per_base = 4**MAX_ORDER
     for base in range(12):
-        level = [sample_tile(linear, base * per_base + k, offsets) for k in range(per_base)]
+        level = [top_tile(base * per_base + k) for k in range(per_base)]
         for order in range(MAX_ORDER, -1, -1):
             first = base * 4**order
             for k, tile in enumerate(level):
-                sizes[order] += write_tile(order, first + k, tile, black, white)
+                path = tile_path(root, order, first + k)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                image = Image.fromarray((np.clip(to_display(tile), 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
+                image.save(path, "JPEG", quality=JPEG_QUALITY, optimize=True)
+                sizes[order] += path.stat().st_size
             if order > 0:
                 level = [parent_tile(level[4 * k : 4 * k + 4]) for k in range(len(level) // 4)]
         print(f"order-0 tile {base} done")
     for order, size in sizes.items():
         print(f"order {order}: {12 * 4**order} tiles, {size / 2**20:.1f} MB")
-    print(f"wrote {OUTPUT.relative_to(REPO_ROOT)} ({sum(sizes.values()) / 2**20:.1f} MB)")
+    print(f"wrote {root.relative_to(REPO_ROOT)} ({sum(sizes.values()) / 2**20:.1f} MB)")
+
+
+def main() -> None:
+    linear, black, white = load_denoised()
+    offsets = tile_pixel_offsets()
+    write_tiles(OUTPUT, lambda ipix: sample_tile(linear, ipix, offsets), lambda tile: tone_map(tile, black, white))
 
 
 if __name__ == "__main__":
