@@ -60,6 +60,24 @@ describe('LabelLayer', () => {
     layer.dispose();
   });
 
+  it('names the shown label nearest the middle of the view, within the angle asked', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, [{ labels: [label('California', -119.5, 37.0, 1), label('Nevada', -116.6, 39.3, 1)] }]);
+    const atNevada = cameraAimedAt(-116.6, 39.3);
+    layer.update(atNevada, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['California', 'Nevada']);
+    expect(layer.nameNearestViewCenter(atNevada, 0.2)).toBe('Nevada');
+
+    const atCalifornia = cameraAimedAt(-119.5, 37.0);
+    layer.update(atCalifornia, WIDTH, HEIGHT);
+    expect(layer.nameNearestViewCenter(atCalifornia, 0.2)).toBe('California');
+    // Nevada is a few degrees off the middle: too far for a tight window.
+    const between = cameraAimedAt(-118.0, 38.2);
+    layer.update(between, WIDTH, HEIGHT);
+    expect(layer.nameNearestViewCenter(between, 0.001)).toBeNull();
+    layer.dispose();
+  });
+
   it('keeps the higher-priority label where two collide', () => {
     const parent = document.createElement('div');
     const layer = new LabelLayer(parent, [

@@ -236,6 +236,7 @@ export class LabelLayer {
   private readonly skyRotation = new THREE.Matrix4();
   private readonly view = new THREE.Vector3();
   private readonly up = new THREE.Vector3();
+  private readonly forward = new THREE.Vector3();
   private skyThroughEarth = true;
   private readonly boxes: number[] = [];
   private readonly hiddenKinds = new Set<LabelKind>();
@@ -412,6 +413,28 @@ export class LabelLayer {
   /** Names currently shown, in placement order. Instrumentation for tests and the harness. */
   visibleNames(): string[] {
     return this.placed.filter((p) => p.visible).map((p) => p.name);
+  }
+
+  /**
+   * The shown name nearest the middle of `camera`'s view, within
+   * `maxAngleRad` of it, as its text reads; null if none is that near. For
+   * "what's that?": the camera is the head's, so it is the middle of both
+   * eyes too.
+   */
+  nameNearestViewCenter(camera: THREE.Camera, maxAngleRad: number): string | null {
+    camera.updateMatrixWorld();
+    const forward = this.forward.set(0, 0, -1).transformDirection(camera.matrixWorld);
+    let best: PlacedLabel | null = null;
+    let bestCos = Math.cos(maxAngleRad);
+    for (const placed of this.placed) {
+      if (!placed.visible) continue;
+      const cos = this.worldPoint(placed, camera).sub(camera.position).normalize().dot(forward);
+      if (cos > bestCos) {
+        best = placed;
+        bestCos = cos;
+      }
+    }
+    return best ? (best.element.textContent ?? best.name) : null;
   }
 
   /** Where a placed label's point is in the world, written into `this.view`. */
