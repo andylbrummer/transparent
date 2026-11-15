@@ -143,10 +143,11 @@ export const LAYER_PRESETS: readonly LayerPreset[] = [
     ],
   },
   {
-    id: 'milky-way-detail',
-    label: 'Milky Way up close',
-    description: 'zoom in on the Galaxy’s star clouds and dust lanes, and on Hubble’s pictures of Andromeda and other galaxies',
-    on: [...SKY_THROUGH, 'stars', 'milky-way', 'nearby-galaxies', 'survey-hst', 'sky-landmarks'],
+    id: 'enhanced-sky',
+    label: 'Enhanced sky',
+    description:
+      'the whole sphere of the sky as an astronomy book prints it: the Milky Way finished for looks, with glowing nebulae, and Hubble’s and Webb’s pictures to zoom into',
+    on: ['sky-whole', 'stars', 'milky-way-enhanced', 'survey-hst', 'survey-jwst'],
   },
   {
     id: 'stars-and-dust',

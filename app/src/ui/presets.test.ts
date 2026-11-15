@@ -30,10 +30,12 @@ describe('LAYER_PRESETS', () => {
     expect(preset('inside').on).not.toContain('political');
     expect(preset('inside').on).not.toContain('stars');
     expect(preset('inside').on).toEqual(expect.arrayContaining(['shell-core', 'shell-inner-core', 'quakes']));
-    for (const id of ['solar-system', 'deep-space', 'milky-way-detail', 'stars-and-dust', 'through-the-dust', 'glowing-gas', 'high-energy', 'cosmology']) {
+    for (const id of ['solar-system', 'deep-space', 'enhanced-sky', 'stars-and-dust', 'through-the-dust', 'glowing-gas', 'high-energy', 'cosmology']) {
       expect(preset(id).on.filter((on) => on === 'globe-surface' || on.startsWith('shell-')), id).toEqual([]);
-      expect(preset(id).on, id).toContain('sky-below-horizon');
+      // Exactly one of the below-horizon switches: they set the same brightness.
+      expect(preset(id).on.filter((on) => on === 'sky-below-horizon' || on === 'sky-whole'), id).toHaveLength(1);
     }
+    expect(preset('enhanced-sky').on).toContain('sky-whole');
   });
 });
 

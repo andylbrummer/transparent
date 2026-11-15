@@ -56,14 +56,16 @@ describe('parseCommand', () => {
     expect(does('clear all')).toBe('preset:nothing');
     expect(does('default')).toBe('preset:default');
     expect(does('stars and dust')).toBe('preset:stars-and-dust');
-    expect(does('show the milky way up close')).toBe('preset:milky-way-detail');
-    expect(does('enhanced sky')).toBe('preset:milky-way-detail');
+    expect(does('show the milky way up close')).toBe('preset:enhanced-sky');
+    expect(does('enhanced sky')).toBe('preset:enhanced-sky');
+    expect(does('coffee table view')).toBe('preset:enhanced-sky');
     expect(does('high energy')).toBe('preset:high-energy');
   });
 
   it('keeps a layer’s own name for the layer, even where a preset is about it', () => {
     expect(does('show milky way')).toBe('on:milky-way');
     expect(does('show dust')).toBe('on:map-dust-100um');
+    expect(does('show whole sky')).toBe('on:sky-whole');
   });
 
   it('turns a layer on or off however the phrase is put', () => {
