@@ -47,6 +47,7 @@ import { ARRunner } from './xr/ar/runner';
 import { headingAxis, headingOfXrForward, xrYawDeg } from './xr/ar/frame';
 import { allCredits } from './ui/credits';
 import { createClock } from './clock';
+import { reloadIfRedeployed, type BuildCheck } from './build-check';
 import { VoiceControl, cancelBrowserSpeech, createBrowserRecognizer, speakWithBrowser } from './voice/voice-control';
 import { VoiceOverlay } from './voice/voice-overlay';
 import { createTalkButton } from './voice/talk-button';
@@ -311,6 +312,30 @@ export function init(): App | null {
     fallback: false,
   };
 
+  // A layer that fails may be code from a build the site no longer serves; one check covers a burst of failures.
+  let buildCheck: Promise<BuildCheck> | null = null;
+  function checkBuildAfterLoadFailure(): void {
+    if (buildCheck) return;
+    buildCheck = reloadIfRedeployed({
+      runningEntryUrl: import.meta.url,
+      pageUrl: new URL(import.meta.env.BASE_URL, window.location.href).href,
+      fetchPage: async (url) => {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+        return response.text();
+      },
+      storage: localStorage,
+      reload: () => window.location.reload(),
+    });
+    buildCheck
+      .then((result) => {
+        if (result === 'stale-after-reload') console.error('build check: reloaded for the new build, but the browser still runs the old one');
+      })
+      .catch((error: unknown) => console.error('build check failed', error))
+      .finally(() => {
+        buildCheck = null;
+      });
+  }
   const lazyLayers = new LayerManager(
     LAYER_DEFINITIONS,
     {
@@ -330,7 +355,8 @@ export function init(): App | null {
       getPosition: () => sensorState.position,
       addLabels: (spec) => labels.addGroup(spec),
     },
-    (id, text, tone) => layersPanel.setStatus(id, text, tone)
+    (id, text, tone) => layersPanel.setStatus(id, text, tone),
+    checkBuildAfterLoadFailure
   );
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);

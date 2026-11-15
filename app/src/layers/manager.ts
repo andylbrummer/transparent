@@ -26,7 +26,9 @@ export class LayerManager {
   constructor(
     definitions: readonly LayerDefinition[],
     private readonly shared: SharedLayerContext,
-    private readonly onStatus: (id: string, text: string | null, tone: StatusTone) => void
+    private readonly onStatus: (id: string, text: string | null, tone: StatusTone) => void,
+    /** After a layer fails to load and says so: the page may be an old build whose code is gone (build-check). */
+    private readonly onLoadFailed: (id: string) => void
   ) {
     for (const definition of definitions) {
       this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: false });
@@ -71,6 +73,7 @@ export class LayerManager {
       console.error(`layer "${id}" failed to load`, error);
       // Fail visibly: the switch keeps a chip saying so. Switching it on again retries.
       this.status(id, 'unavailable', 'error');
+      this.onLoadFailed(id);
     } finally {
       slot.loading = false;
     }

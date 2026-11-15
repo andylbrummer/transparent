@@ -34,7 +34,7 @@ describe('LayerManager', () => {
   it('loads a layer only when it is first switched on', async () => {
     const instance = fakeInstance();
     const load = vi.fn(async () => instance);
-    const manager = new LayerManager([definition('stars', load)], shared, () => {});
+    const manager = new LayerManager([definition('stars', load)], shared, () => {}, () => {});
     expect(load).not.toHaveBeenCalled();
     manager.setVisible('stars', true);
     manager.setVisible('stars', true);
@@ -49,6 +49,7 @@ describe('LayerManager', () => {
     const manager = new LayerManager(
       [definition('clouds', () => new Promise<LayerInstance>((resolve) => (finish = resolve)))],
       shared,
+      () => {},
       () => {}
     );
     manager.setVisible('clouds', true);
@@ -66,6 +67,7 @@ describe('LayerManager', () => {
     const manager = new LayerManager(
       [definition('a', async () => a), definition('b', async () => b)],
       shared,
+      () => {},
       () => {}
     );
     manager.setResolution(400, 800);
@@ -88,7 +90,8 @@ describe('LayerManager', () => {
         }),
       ],
       shared,
-      (id, text, tone) => statuses.push([id, text, tone])
+      (id, text, tone) => statuses.push([id, text, tone]),
+      () => {}
     );
     manager.setVisible('plain', true);
     manager.setVisible('live', true);
@@ -105,10 +108,17 @@ describe('LayerManager', () => {
     const statuses: (string | null)[] = [];
     const instance = fakeInstance();
     const load = vi.fn<LayerDefinition['load']>().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(instance);
-    const manager = new LayerManager([definition('wind', load)], shared, (_id, text) => statuses.push(text));
+    const failed: string[] = [];
+    const manager = new LayerManager(
+      [definition('wind', load)],
+      shared,
+      (_id, text) => statuses.push(text),
+      (id) => failed.push(id)
+    );
     manager.setVisible('wind', true);
     await settle();
     expect(statuses.at(-1)).toBe('unavailable');
+    expect(failed).toEqual(['wind']);
     manager.setVisible('wind', false);
     manager.setVisible('wind', true);
     await settle();
@@ -124,6 +134,7 @@ describe('LayerManager', () => {
     const manager = new LayerManager(
       [definition('early', async () => early), definition('late', () => new Promise<LayerInstance>((r) => (finish = r)))],
       shared,
+      () => {},
       () => {}
     );
     manager.setVisible('early', true);
