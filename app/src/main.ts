@@ -376,7 +376,10 @@ export function init(): App | null {
     imageryShown = globe.hasSurfaceImagery();
     const imagery = surfaceImageryNote(imageryStatus, imageryShown);
     const geo = geoStatus === 'ready' ? '' : ` · map data ${geoStatus}`;
-    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${formatScreen()} · ${appState.mode} · ${modes}${imagery}${geo}`;
+    // Read after leaving Cardboard: inside it the HUD is hidden.
+    const wakeLockProblem = cardboard.getWakeLockProblem();
+    const awake = wakeLockProblem ? ` · screen wake lock refused (${wakeLockProblem})` : '';
+    hud.textContent = `${formatHeading(sensorState)} · ${formatFix(sensorState)} · ${formatScreen()} · ${appState.mode} · ${modes}${imagery}${geo}${awake}`;
   }
 
   const sensors = createSensorController((next) => {

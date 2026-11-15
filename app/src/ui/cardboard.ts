@@ -64,6 +64,7 @@ export class CardboardToggle {
   private enteredFullscreen = false;
   private wakeLock: { release(): Promise<void> } | null = null;
   private wakeLockPending = false;
+  private wakeLockProblem: string | null = null;
   private readonly onButtonClick = (): void => void this.enter();
   private readonly onCalibrateClick = (): void => void this.enter(true);
   private readonly onFullscreenChange = (): void => {
@@ -124,6 +125,8 @@ export class CardboardToggle {
     document.body.classList.add(STEREO_BODY_CLASS);
     document.body.classList.toggle(CALIBRATING_BODY_CLASS, calibrate);
     this.onChange(true);
+    // Asked for at once: it needs neither fullscreen nor the landscape lock, and must not wait on either settling.
+    const awake = this.holdWakeLock();
     // Fullscreen first: Chrome only locks orientation for a fullscreen page.
     try {
       await this.platform.requestFullscreen();
@@ -136,7 +139,12 @@ export class CardboardToggle {
     } catch (error) {
       console.error('cardboard: landscape lock refused', error);
     }
-    await this.holdWakeLock();
+    await awake;
+  }
+
+  /** Why the screen may sleep in Cardboard: the last wake-lock refusal, until one is granted. */
+  getWakeLockProblem(): string | null {
+    return this.wakeLockProblem;
   }
 
   /** Take the screen wake lock unless it is held or being asked for; taken again whenever the system drops it. */
@@ -151,10 +159,12 @@ export class CardboardToggle {
         // Hidden, it waits for visibilitychange: a hidden page cannot hold one.
         if (this.active && this.platform.isPageVisible()) void this.holdWakeLock();
       });
+      this.wakeLockProblem = null;
       if (this.active) this.wakeLock = lock;
       else void lock.release();
     } catch (error) {
       console.error('cardboard: wake lock refused', error);
+      this.wakeLockProblem = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     } finally {
       this.wakeLockPending = false;
     }

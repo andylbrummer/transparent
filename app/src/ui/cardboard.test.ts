@@ -77,10 +77,11 @@ describe('CardboardToggle', () => {
 
     await toggle.enter();
     expect(toggle.isActive()).toBe(true);
+    // The wake lock is asked for first, so it settles first.
     expect(errors.mock.calls.map((call) => call[0])).toEqual([
+      'cardboard: wake lock refused',
       'cardboard: fullscreen refused',
       'cardboard: landscape lock refused',
-      'cardboard: wake lock refused',
     ]);
     toggle.exit();
     // Never entered fullscreen, so never tries to leave it.
@@ -170,6 +171,23 @@ describe('CardboardToggle', () => {
     dropWakeLock();
     setVisible(true);
     expect(platform.requestWakeLock).toHaveBeenCalledTimes(3);
+    toggle.dispose();
+  });
+
+  it('asks for the wake lock without waiting on the landscape lock, and keeps why it was refused', async () => {
+    const { platform } = fakePlatform({
+      // Some phones never settle the orientation lock.
+      lockLandscape: vi.fn(() => new Promise<void>(() => undefined)),
+      requestWakeLock: vi.fn(async () => {
+        throw new DOMException('Wake Lock permission request denied', 'NotAllowedError');
+      }),
+    });
+    const toggle = new CardboardToggle(document.createElement('div'), () => undefined, platform);
+    void toggle.enter();
+    await vi.waitFor(() => expect(toggle.getWakeLockProblem()).toBe('NotAllowedError: Wake Lock permission request denied'));
+    toggle.exit();
+    // Still there after leaving, for the HUD.
+    expect(toggle.getWakeLockProblem()).toMatch(/^NotAllowedError/);
     toggle.dispose();
   });
 
