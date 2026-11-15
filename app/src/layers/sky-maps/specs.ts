@@ -40,6 +40,14 @@ export interface SkyMapSpec {
 export const DEFAULT_THROUGH_EARTH = 0.5;
 
 const LAMBDA_LICENCE = 'public (NASA LAMBDA archive), citation requested';
+/** The H-alpha map: its own sky map, and the glow laid into the enhanced Milky Way. */
+export const H_ALPHA_CREDIT: Credit = {
+  what: 'Full-sky H-alpha composite',
+  source:
+    'Finkbeiner D.P. 2003, ApJS 146, 407, from the Wisconsin H-Alpha Mapper (WHAM), the Virginia Tech Spectral-Line Survey (VTSS) and the Southern H-Alpha Sky Survey Atlas (SHASSA), which are supported by the National Science Foundation; from NASA LAMBDA',
+  licence: LAMBDA_LICENCE,
+  url: 'https://lambda.gsfc.nasa.gov/product/foreground/fg_halpha_info.html',
+};
 // Black at zero, so a sky with no anisotropy adds no light.
 const CMB_LEGEND = 'linear-gradient(90deg, #99e6ff, #1a66ff 25%, #000 50%, #ff4d0d 75%, #ffe666)';
 const COBE_CREDIT: Credit = {
@@ -193,15 +201,7 @@ export const SKY_MAP_SPECS: readonly SkyMapSpec[] = [
       'the red light of ionised hydrogen at 656 nm (Finkbeiner 2003, from WHAM, VTSS and SHASSA): nebulae and bubbles blown by hot stars · 0.3 → 500 rayleighs',
     gain: 0.9,
     throughEarth: 0.3,
-    credits: [
-      {
-        what: 'Full-sky H-alpha composite',
-        source:
-          'Finkbeiner D.P. 2003, ApJS 146, 407, from the Wisconsin H-Alpha Mapper (WHAM), the Virginia Tech Spectral-Line Survey (VTSS) and the Southern H-Alpha Sky Survey Atlas (SHASSA), which are supported by the National Science Foundation; from NASA LAMBDA',
-        licence: LAMBDA_LICENCE,
-        url: 'https://lambda.gsfc.nasa.gov/product/foreground/fg_halpha_info.html',
-      },
-    ],
+    credits: [H_ALPHA_CREDIT],
   },
   {
     id: 'map-xray-rosat',
