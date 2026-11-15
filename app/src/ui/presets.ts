@@ -146,8 +146,9 @@ export const LAYER_PRESETS: readonly LayerPreset[] = [
     id: 'enhanced-sky',
     label: 'Enhanced sky',
     description:
-      'the whole sphere of the sky as an astronomy book prints it: the Milky Way finished for looks, with glowing nebulae, and Hubble’s and Webb’s pictures to zoom into',
-    on: ['sky-whole', 'stars', 'milky-way-enhanced', 'survey-hst', 'survey-jwst'],
+      'the whole sphere of the sky as an astronomy book prints it: the Milky Way finished for looks, with glowing nebulae, and Hubble’s pictures to zoom into',
+    // Not Webb: its patches are too small to find without the rings it draws, and the rings clutter the plates.
+    on: ['sky-whole', 'stars', 'milky-way-enhanced', 'survey-hst'],
   },
   {
     id: 'stars-and-dust',
