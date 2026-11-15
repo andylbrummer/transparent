@@ -11,6 +11,7 @@ import {
   type LayerSwitch,
 } from './layers-panel';
 import type { LayerDefinition } from '../layers/types';
+import { defaultPreset, type LayerPreset } from './presets';
 
 describe('loadLayerVisibility', () => {
   it('gives every switch its default when nothing is saved', () => {
@@ -276,6 +277,44 @@ describe('LayersPanel with lazy layers', () => {
     expect(chip.dataset.tone).toBe('stale');
     panel.setStatus('clouds', null);
     expect(chip.hidden).toBe(true);
+  });
+
+  it('sets every switch from a preset, turning off before on, and lights the preset it matches', () => {
+    const parent = document.createElement('div');
+    const switches = switchesWithLazyLayers(definitions);
+    const changes: [string, boolean][] = [];
+    const stored = new Map<string, string>();
+    const sky: LayerPreset = { id: 'sky', label: 'Sky', description: 'x-ray sky', on: ['x-ray'] };
+    const panel = new LayersPanel(
+      parent,
+      loadLayerVisibility(JSON.stringify({ cmb: true }), switches),
+      (layer: LayerSwitch, visible: boolean) => changes.push([layer.id, visible]),
+      { setItem: (key, value) => stored.set(key, value) },
+      { switches, presets: [defaultPreset(switches), sky] }
+    );
+    const button = (id: string): HTMLButtonElement => parent.querySelector<HTMLButtonElement>(`.layers-preset[data-preset="${id}"]`)!;
+    expect(button('sky').getAttribute('aria-pressed')).toBe('false');
+    expect(button('default').getAttribute('aria-pressed')).toBe('false');
+
+    button('sky').click();
+    // Everything that was on goes off first: an exclusive group is never doubled.
+    expect(changes.at(-1)).toEqual(['x-ray', true]);
+    expect(changes.filter(([, on]) => on)).toEqual([['x-ray', true]]);
+    expect(changes.map(([id]) => id)).toContain('cmb');
+    expect(parent.querySelector<HTMLInputElement>('input[data-layer="x-ray"]')!.checked).toBe(true);
+    expect(parent.querySelector<HTMLInputElement>('input[data-layer="boundaries"]')!.checked).toBe(false);
+    expect(JSON.parse(stored.get(LAYERS_STORAGE_KEY)!)).toMatchObject({ 'x-ray': true, cmb: false, boundaries: false });
+    expect(button('sky').getAttribute('aria-pressed')).toBe('true');
+
+    // A switch flipped by hand leaves the preset.
+    const quakes = parent.querySelector<HTMLInputElement>('input[data-layer="quakes"]')!;
+    quakes.checked = true;
+    quakes.dispatchEvent(new Event('change'));
+    expect(button('sky').getAttribute('aria-pressed')).toBe('false');
+
+    panel.applyPreset(defaultPreset(switches));
+    expect(button('default').getAttribute('aria-pressed')).toBe('true');
+    panel.dispose();
   });
 
   it('lists the data credits with a link to each source', () => {

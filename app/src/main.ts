@@ -41,6 +41,7 @@ import {
 } from './ui/layers-panel';
 import { CardboardToggle } from './ui/cardboard';
 import { CardboardCalibration, headRollRad } from './ui/cardboard-calibration';
+import { LAYER_PRESETS, defaultPreset } from './ui/presets';
 import { ARControls } from './ui/ar-controls';
 import { ARRunner } from './xr/ar/runner';
 import { headingAxis, headingOfXrForward, xrYawDeg } from './xr/ar/frame';
@@ -292,6 +293,7 @@ export function init(): App | null {
     switches: layerSwitches,
     credits: allCredits(LAYER_DEFINITIONS),
     openSections: loadOpenSections(localStorage.getItem(SECTIONS_STORAGE_KEY)),
+    presets: [defaultPreset(layerSwitches), ...LAYER_PRESETS],
   });
 
   const appState: AppState = DEFAULT_STATE;

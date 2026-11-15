@@ -13,6 +13,7 @@ import type { LabelKind } from '../render/labels';
 import { PLUME_COLOR, depthRampGradient } from '../render/interior';
 import { PREM_LAYERS, type PremLayerName } from '../render/prem';
 import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
+import { matchesPreset, presetVisibility, type LayerPreset } from './presets';
 
 export type InteriorLayerName = 'quakes' | 'plumes';
 
@@ -240,6 +241,8 @@ export interface LayersPanelOptions {
    * of its sections, each saying how much of it is on.
    */
   readonly openSections?: Readonly<Record<string, boolean>>;
+  /** One-tap views, shown above the sections; each sets every switch. */
+  readonly presets?: readonly LayerPreset[];
 }
 
 interface SectionParts {
@@ -259,6 +262,7 @@ export class LayersPanel {
   private readonly inputs = new Map<string, HTMLInputElement>();
   private readonly chips = new Map<string, HTMLElement>();
   private readonly sections = new Map<string, SectionParts>();
+  private readonly presetButtons = new Map<LayerPreset, HTMLButtonElement>();
   /** Sections as the user has them, kept apart from what a filter forces open. */
   private readonly openSections: Record<string, boolean>;
   private filtering = false;
@@ -301,6 +305,7 @@ export class LayersPanel {
     this.noMatches.textContent = 'No layer of that name.';
     this.noMatches.hidden = true;
     this.panel.appendChild(this.noMatches);
+    if (options.presets && options.presets.length > 0) this.panel.appendChild(this.renderPresets(options.presets));
 
     // One collapsible block per section.
     for (const layer of this.switches) {
@@ -316,6 +321,7 @@ export class LayersPanel {
       section.block.appendChild(row);
     }
     for (const name of this.sections.keys()) this.updateSection(name);
+    this.updatePresets();
     if (options.credits && options.credits.length > 0) this.panel.appendChild(renderCredits(options.credits));
     parent.append(this.button, this.panel);
   }
@@ -369,6 +375,48 @@ export class LayersPanel {
     }
     this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
     this.updateSection(name);
+    this.updatePresets();
+  }
+
+  private renderPresets(presets: readonly LayerPreset[]): HTMLElement {
+    const block = document.createElement('div');
+    block.className = 'layers-presets';
+    block.setAttribute('role', 'group');
+    block.setAttribute('aria-label', 'Presets');
+    for (const preset of presets) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'layers-preset';
+      button.dataset.preset = preset.id;
+      button.textContent = preset.label;
+      button.title = preset.description;
+      button.addEventListener('click', () => this.applyPreset(preset));
+      this.presetButtons.set(preset, button);
+      block.appendChild(button);
+    }
+    return block;
+  }
+
+  /** Set every switch as `preset` has it: those going off first, so an exclusive group never has two on. */
+  applyPreset(preset: LayerPreset): void {
+    const target = presetVisibility(preset, this.switches);
+    const changed = this.switches.filter((layer) => this.visibility[layer.id] !== target[layer.id]);
+    changed.sort((a, b) => Number(target[a.id]) - Number(target[b.id]));
+    for (const layer of changed) {
+      this.visibility[layer.id] = target[layer.id];
+      this.inputs.get(layer.id)!.checked = target[layer.id];
+      this.onChange(layer, target[layer.id]);
+    }
+    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
+    for (const name of this.sections.keys()) this.updateSection(name);
+    this.updatePresets();
+  }
+
+  /** Mark the preset the switches stand at, if any. */
+  private updatePresets(): void {
+    for (const [preset, button] of this.presetButtons) {
+      button.setAttribute('aria-pressed', String(matchesPreset(preset, this.visibility, this.switches)));
+    }
   }
 
   /** Show only the switches that answer the filter box, in sections opened to show them. */
@@ -413,6 +461,7 @@ export class LayersPanel {
       this.onChange(layer, input.checked);
       // An exclusive group can reach into another section.
       for (const name of this.sections.keys()) this.updateSection(name);
+      this.updatePresets();
     });
     this.inputs.set(layer.id, input);
     const text = document.createElement('span');
