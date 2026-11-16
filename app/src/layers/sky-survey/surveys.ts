@@ -43,11 +43,20 @@ export interface CloseupField {
   readonly coverage: string;
 }
 
-const ESA_TILES: Credit = {
+export const ESA_TILES: Credit = {
   what: 'Tile service (HiPS)',
   source: 'ESASky, ESAC Science Data Centre, European Space Agency; HiPS format by the Centre de Données astronomiques de Strasbourg',
   licence: 'free use with acknowledgement',
   url: 'https://sky.esa.int/',
+};
+
+/** The photographic sky: its own survey, and the galaxies cut from it for the enhanced Milky Way. */
+export const DSS_COLOR_CREDIT: Credit = {
+  what: 'Digitized Sky Survey 2, colour composition (Palomar and UK Schmidt plates)',
+  source:
+    'The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. Government grant NAG W-2166; coloured and cut into HiPS by CDS, Strasbourg',
+  licence: 'copyright of the plate-owning institutions (STScI/AURA, Caltech, AAO, ROE); use with acknowledgement, see STScI’s terms',
+  url: 'https://archive.stsci.edu/dss/copyright.html',
 };
 
 export const SURVEYS: readonly SurveySpec[] = [
@@ -63,16 +72,7 @@ export const SURVEYS: readonly SurveySpec[] = [
     frame: 'equatorial',
     floor: 0.07,
     gain: 1.25,
-    credits: [
-      {
-        what: 'Digitized Sky Survey 2, colour composition (Palomar and UK Schmidt plates)',
-        source:
-          'The Digitized Sky Surveys were produced at the Space Telescope Science Institute under U.S. Government grant NAG W-2166; coloured and cut into HiPS by CDS, Strasbourg',
-        licence: 'copyright of the plate-owning institutions (STScI/AURA, Caltech, AAO, ROE); use with acknowledgement, see STScI’s terms',
-        url: 'https://archive.stsci.edu/dss/copyright.html',
-      },
-      ESA_TILES,
-    ],
+    credits: [DSS_COLOR_CREDIT, ESA_TILES],
   },
   {
     id: 'survey-2mass',

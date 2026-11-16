@@ -67,6 +67,13 @@ export interface CloudSpec extends SpecBase {
 export type DeepSkySpec = CatalogSpec | CloudSpec;
 
 const HEASARC = 'https://heasarc.gsfc.nasa.gov/';
+/** The Local Volume catalogue: these markers, and the galaxies picked out for the enhanced Milky Way. */
+export const NEARBY_GALAXIES_CREDIT: Credit = {
+  what: 'Galaxies of the Local Volume and their distances',
+  source: 'Karachentsev I.D., Makarov D.I., Kaisina E.I. 2013, AJ 145, 101: Updated Nearby Galaxy Catalog, CDS J/AJ/145/101',
+  licence: 'free use with citation (CDS VizieR)',
+  url: 'https://ui.adsabs.harvard.edu/abs/2013AJ....145..101K',
+};
 const PUBLISHED = 'published catalogue, free use with citation';
 
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
@@ -410,14 +417,7 @@ export const DEEP_SKY_SPECS: readonly DeepSkySpec[] = [
     sizePx: (_value, className) => (className === 'local-group' ? 8 : 5.5),
     labelRank: 6.51,
     labelColor: '#ffe3b3',
-    credits: [
-      {
-        what: 'Galaxies of the Local Volume and their distances',
-        source: 'Karachentsev I.D., Makarov D.I., Kaisina E.I. 2013, AJ 145, 101: Updated Nearby Galaxy Catalog, CDS J/AJ/145/101',
-        licence: 'free use with citation (CDS VizieR)',
-        url: 'https://ui.adsabs.harvard.edu/abs/2013AJ....145..101K',
-      },
-    ],
+    credits: [NEARBY_GALAXIES_CREDIT],
   },
   {
     kind: 'cloud',

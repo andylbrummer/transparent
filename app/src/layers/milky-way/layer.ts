@@ -9,12 +9,15 @@
  *   the starlight as Gaia measured it, toned for the eye;
  * - enhanced, app/public/sky/milkyway-enhanced (generate_milkyway_enhanced.py):
  *   finished as an astronomy book prints it - local contrast cutting the
- *   dust lanes, stronger colour, and the H-alpha glow of the nebulae in red.
+ *   dust lanes, stronger colour, the H-alpha glow of the nebulae in red,
+ *   and Andromeda and the other bright galaxies Gaia barely records, cut
+ *   from the Digitized Sky Survey's colour plates.
  */
 
 import type { Credit, LayerDefinition } from '../types';
-import type { SurveySpec } from '../sky-survey/surveys';
+import { DSS_COLOR_CREDIT, ESA_TILES, type SurveySpec } from '../sky-survey/surveys';
 import { H_ALPHA_CREDIT } from '../sky-maps/specs';
+import { NEARBY_GALAXIES_CREDIT } from '../deep-sky/specs';
 
 /** The deepest order written, for both finishes: beyond it the source is grain. */
 const MILKY_WAY_MAX_ORDER = 2;
@@ -91,10 +94,11 @@ const finishes: LayerDefinition[] = [
     id: 'milky-way-enhanced',
     label: 'Milky Way, enhanced',
     order: 31,
-    caption: 'the Milky Way as an astronomy book prints it: dust lanes cut deeper, colours raised, glowing hydrogen in red',
+    caption:
+      'the Milky Way as an astronomy book prints it: dust lanes cut deeper, colours raised, glowing hydrogen in red, Andromeda and the bright galaxies from photographic plates',
     tiles: 'sky/milkyway-enhanced',
     gain: MILKY_WAY_ENHANCED_GAIN,
-    credits: [DEEP_STAR_MAPS_CREDIT, H_ALPHA_CREDIT],
+    credits: [DEEP_STAR_MAPS_CREDIT, H_ALPHA_CREDIT, DSS_COLOR_CREDIT, ESA_TILES, NEARBY_GALAXIES_CREDIT],
   }),
 ];
 

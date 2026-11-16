@@ -3,7 +3,8 @@
 Data checks for generate_milkyway_enhanced.py's output: every tile is
 there, the set fits its budget, the tiles keep the plain tiles' layout,
 and the finish did what it is for - nebulae glow red where the sky has
-them, the Milky Way's shape is unchanged, and empty sky stays dark.
+them, the bright galaxies Gaia misses are there, the Milky Way's shape is
+unchanged, and empty sky stays dark.
 
 Layout: the enhanced tiles are compared with the plain ones
 (test_milkyway.py checks those against DSS) block by block, as written
@@ -31,6 +32,22 @@ NEBULAE = {
     "the Lagoon Nebula": (270.9, -24.38),
     "the Carina Nebula": (161.0, -59.7),
 }
+
+
+# Galaxies (ICRS from SIMBAD) all but missing from the Gaia map: each must stand out here, and not in the plain tiles.
+GALAXIES = {
+    "Andromeda, M31": (10.685, 41.269),
+    "the Triangulum Galaxy, M33": (23.462, 30.660),
+    "Bode's Galaxy, M81": (148.888, 69.065),
+    "Centaurus A": (201.365, -43.019),
+    "the Sculptor Galaxy, NGC 253": (11.888, -25.288),
+    "the Pinwheel, M101": (210.802, 54.349),
+}
+GALAXY_LIFT = 60
+
+
+def plain_brightness(ra: float, dec: float, radius_px: int) -> float:
+    return float(patch(PLAIN, ra, dec, radius_px, "L").mean())
 
 
 def colour(ra: float, dec: float, radius_px: int = 4) -> tuple[float, float, float]:
@@ -68,6 +85,13 @@ def main() -> None:
     # Mirrored nebulae are no test of that - Orion's and Carina's mirror images fall on the plane's own H-alpha.
     r, g, b = colour(270.89, -30.03, 12)
     check(r < g + RED_ABOVE_GREEN / 2, f"Baade's Window, starlight without gas, is not red (rgb {r:.0f} {g:.0f} {b:.0f})")
+
+    for name, (ra, dec) in GALAXIES.items():
+        ours, plain = brightness(ra, dec, 1), plain_brightness(ra, dec, 1)
+        check(ours > plain + GALAXY_LIFT, f"{name} shows ({ours:.0f}; {plain:.0f} in the plain tiles)")
+    # Andromeda is a disc three degrees long, not a dot: lit well out along its major axis (position angle 35 deg).
+    disc = brightness(10.685 + 0.8 * 0.57 / 0.75, 41.269 + 0.8 * 0.82, 1)
+    check(disc > 60, f"Andromeda's disc reaches 0.8 deg from the nucleus ({disc:.0f})")
 
     # The Milky Way's shape survives the finish: the bulge bright, the Great Rift dark beside the Scutum cloud.
     bulge = brightness(270.89, -30.03)
