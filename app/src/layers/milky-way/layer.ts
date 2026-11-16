@@ -11,16 +11,25 @@
  *   finished as an astronomy book prints it - local contrast cutting the
  *   dust lanes, stronger colour, the H-alpha glow of the nebulae in red,
  *   and Andromeda and the other bright galaxies Gaia barely records, cut
- *   from the Digitized Sky Survey's colour plates.
+ *   from the Digitized Sky Survey's colour plates. Around each galaxy the
+ *   tiles go deeper, to about a thousand pixels across it, and its name
+ *   is on the sky (galaxies.json beside the tiles).
  */
 
-import type { Credit, LayerDefinition } from '../types';
+import * as THREE from 'three';
+import { raDecToUnit } from '@transparent-earth/core';
+import type { LabelGroup } from '../../render/labels';
+import type { Credit, LayerContext, LayerDefinition } from '../types';
+import { DeepTiles, type DeepTilesFile } from '../sky-survey/coverage';
 import { DSS_COLOR_CREDIT, ESA_TILES, type SurveySpec } from '../sky-survey/surveys';
 import { H_ALPHA_CREDIT } from '../sky-maps/specs';
 import { NEARBY_GALAXIES_CREDIT } from '../deep-sky/specs';
 
-/** The deepest order written, for both finishes: beyond it the source is grain. */
+/** The deepest order written for the whole sky, for both finishes: beyond it the source is grain. */
 const MILKY_WAY_MAX_ORDER = 2;
+/** Galaxy names: ranked just over the stars' names, like the deep-sky showpieces; under the galaxy's core, not on it. */
+const GALAXY_LABEL_RANK = 6.39;
+const GALAXY_LABEL_STYLE = { fontPx: 11, color: '#ffe3c8', italic: true, offsetYPx: 14 } as const;
 
 /**
  * How much of the plain map's light is added to the view. The tiles are
@@ -48,6 +57,25 @@ interface MilkyWayFinish {
   readonly tiles: string;
   readonly gain: number;
   readonly credits: readonly Credit[];
+  /** Under the tiles: the galaxies drawn deeper than the whole sky, with their names. */
+  readonly galaxies?: string;
+}
+
+/** What generate_milkyway_enhanced.py writes as galaxies.json. */
+interface GalaxiesFile extends DeepTilesFile {
+  /** Largest first. */
+  readonly galaxies: readonly { readonly label: string; readonly ra: number; readonly dec: number }[];
+}
+
+async function loadGalaxies(context: LayerContext, file: string): Promise<{ deepTiles: DeepTiles; labels: LabelGroup }> {
+  const data = await context.fetchJson<GalaxiesFile>(context.assetUrl(file));
+  const labels = context.addLabels({
+    rank: GALAXY_LABEL_RANK,
+    style: GALAXY_LABEL_STYLE,
+    frame: 'sky',
+    labels: data.galaxies.map((galaxy, i) => ({ text: galaxy.label, priority: i, position: new THREE.Vector3(...raDecToUnit(galaxy.ra, galaxy.dec)) })),
+  });
+  return { deepTiles: DeepTiles.parse(data), labels };
 }
 
 function milkyWayLayer(finish: MilkyWayFinish): LayerDefinition {
@@ -60,6 +88,7 @@ function milkyWayLayer(finish: MilkyWayFinish): LayerDefinition {
     caption: finish.caption,
     credits: finish.credits,
     load: async (context) => {
+      const galaxies = finish.galaxies ? await loadGalaxies(context, finish.galaxies) : null;
       const spec: SurveySpec = {
         id: finish.id,
         label: finish.label,
@@ -68,14 +97,26 @@ function milkyWayLayer(finish: MilkyWayFinish): LayerDefinition {
         bases: [context.assetUrl(finish.tiles)],
         extension: 'jpg',
         minOrder: 0,
-        maxOrder: MILKY_WAY_MAX_ORDER,
+        maxOrder: galaxies ? galaxies.deepTiles.maxOrder : MILKY_WAY_MAX_ORDER,
         frame: 'equatorial',
         // The tiles are black wherever there is no Milky Way: all of their light is added.
         floor: 0,
         gain: finish.gain,
         credits: finish.credits,
       };
-      return (await import('../sky-survey/survey')).createSurveyLayer(context, spec);
+      const survey = (await import('../sky-survey/survey')).createSurveyLayer(context, spec, galaxies?.deepTiles ?? null);
+      if (!galaxies) return survey;
+      return {
+        ...survey,
+        setVisible(visible) {
+          survey.setVisible(visible);
+          galaxies.labels.setVisible(visible);
+        },
+        dispose() {
+          survey.dispose();
+          galaxies.labels.remove();
+        },
+      };
     },
   };
 }
@@ -95,8 +136,9 @@ const finishes: LayerDefinition[] = [
     label: 'Milky Way, enhanced',
     order: 31,
     caption:
-      'the Milky Way as an astronomy book prints it: dust lanes cut deeper, colours raised, glowing hydrogen in red, Andromeda and the bright galaxies from photographic plates',
+      'the Milky Way as an astronomy book prints it: dust lanes cut deeper, colours raised, glowing hydrogen in red, Andromeda and the bright galaxies from photographic plates, named, sharp to their spiral arms when zoomed in',
     tiles: 'sky/milkyway-enhanced',
+    galaxies: 'sky/milkyway-enhanced/galaxies.json',
     gain: MILKY_WAY_ENHANCED_GAIN,
     credits: [DEEP_STAR_MAPS_CREDIT, H_ALPHA_CREDIT, DSS_COLOR_CREDIT, ESA_TILES, NEARBY_GALAXIES_CREDIT],
   }),

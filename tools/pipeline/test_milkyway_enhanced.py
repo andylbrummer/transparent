@@ -4,7 +4,9 @@ Data checks for generate_milkyway_enhanced.py's output: every tile is
 there, the set fits its budget, the tiles keep the plain tiles' layout,
 and the finish did what it is for - nebulae glow red where the sky has
 them, the bright galaxies Gaia misses are there, the Milky Way's shape is
-unchanged, and empty sky stays dark.
+unchanged, and empty sky stays dark. The galaxies' close-ups: galaxies.json
+lists exactly the deep tiles written, names the galaxies, and a close-up
+holds detail its order-2 ancestor does not.
 
 Layout: the enhanced tiles are compared with the plain ones
 (test_milkyway.py checks those against DSS) block by block, as written
@@ -14,15 +16,21 @@ Usage (needs healpy, numpy, pillow: tools/pipeline/.cache/venv):
     python3 tools/pipeline/test_milkyway_enhanced.py
 """
 
+import json
+
+import healpy as hp
+import numpy as np
 from PIL import Image
 
 from generate_milkyway import MAX_ORDER, TILE_PX, tile_path
 from generate_milkyway import OUTPUT as PLAIN
-from generate_milkyway_enhanced import OUTPUT
+from generate_milkyway_enhanced import GALAXIES_FILE, OUTPUT, window_of_ancestor
 from geo_test_support import check, finish
 from test_milkyway import LAYOUT_TILES, LAYOUTS, blocks, correlation, grey, patch
 
 BUDGET_MB = 12
+# The galaxies' close-ups, on top: about 10 MB as written.
+CLOSEUP_BUDGET_MB = 14
 RED_ABOVE_GREEN = 50
 
 # H-alpha regions (ICRS from SIMBAD): each must read red over its starlight, red standing well above green.
@@ -44,6 +52,39 @@ GALAXIES = {
     "the Pinwheel, M101": (210.802, 54.349),
 }
 GALAXY_LIFT = 60
+# Labels the sky must show, as the deep-sky layer names them.
+GALAXY_LABELS = ("M31 Andromeda Galaxy", "M33 Triangulum Galaxy", "M81 Bode's Galaxy", "M51 Whirlpool Galaxy", "Centaurus A", "Sculptor Galaxy")
+# Close-ups checked for detail: (name, ICRS centre, order). Fine detail is the mean absolute difference between
+# neighbouring pixels; a close-up must hold several times what its ancestor's window, enlarged, does.
+CLOSEUPS = (("M51", (202.47, 47.195), 8), ("NGC 253", (11.888, -25.288), 8), ("M31", (10.685, 41.269), 6))
+DETAIL_GAIN = 3.0
+
+
+def detail(tile: np.ndarray) -> float:
+    return float(np.abs(np.diff(tile, axis=0)).mean() + np.abs(np.diff(tile, axis=1)).mean())
+
+
+def check_closeups() -> None:
+    listed = json.loads(GALAXIES_FILE.read_text())
+    tiles = {int(order): set(pixels) for order, pixels in listed["tiles"].items()}
+    check(listed["wholeSkyOrder"] == MAX_ORDER and min(tiles) == MAX_ORDER + 1, f"close-ups start at order {min(tiles)}, under the whole sky's {MAX_ORDER}")
+    written = {(int(path.parts[-3][len("Norder") :]), int(path.stem[len("Npix") :])) for path in OUTPUT.glob("Norder*/Dir*/Npix*.jpg")}
+    deep_written = {(order, ipix) for order, ipix in written if order > MAX_ORDER}
+    deep_listed = {(order, ipix) for order, pixels in tiles.items() for ipix in pixels}
+    check(deep_written == deep_listed, f"galaxies.json lists the {len(deep_listed)} close-up tiles written ({len(deep_written ^ deep_listed)} differ)")
+    labels = [galaxy["label"] for galaxy in listed["galaxies"]]
+    missing = [label for label in GALAXY_LABELS if label not in labels]
+    check(not missing, f"{len(labels)} galaxies named, the showpieces among them (missing: {missing or 'none'})")
+    unnamed = [label for label in labels if label.startswith(("MESSIER", "Holm", "Leo")) and " " not in label]
+    check(not unnamed, f"no catalogue shorthand in the names ({unnamed or 'none'})")
+    for name, (ra, dec), order in CLOSEUPS:
+        ipix = int(hp.ang2pix(2**order, ra, dec, lonlat=True, nest=True))
+        check(ipix in tiles.get(order, set()), f"{name} has a close-up at order {order}")
+        closeup = np.asarray(Image.open(tile_path(OUTPUT, order, ipix)).convert("L"), dtype=np.float32)
+        ancestor = np.asarray(Image.open(tile_path(OUTPUT, MAX_ORDER, ipix >> 2 * (order - MAX_ORDER))).convert("L"), dtype=np.float32)
+        enlarged = window_of_ancestor(ancestor[..., None], order, ipix)[..., 0]
+        sharp, soft = detail(closeup), detail(enlarged)
+        check(sharp > DETAIL_GAIN * soft, f"{name}'s close-up holds detail its order-2 tile does not ({sharp:.1f} against {soft:.1f})")
 
 
 def plain_brightness(ra: float, dec: float, radius_px: int) -> float:
@@ -60,10 +101,13 @@ def brightness(ra: float, dec: float, radius_px: int = 6) -> float:
 
 
 def main() -> None:
+    check_closeups()
     missing = [(order, n) for order in range(MAX_ORDER + 1) for n in range(12 * 4**order) if not tile_path(OUTPUT, order, n).exists()]
     check(not missing, f"every tile of orders 0-{MAX_ORDER} is written ({len(missing)} missing)")
-    size_mb = sum(path.stat().st_size for path in OUTPUT.rglob("*.jpg")) / 2**20
-    check(size_mb < BUDGET_MB, f"{size_mb:.1f} MB, under the {BUDGET_MB} MB budget")
+    size_mb = sum(path.stat().st_size for order in range(MAX_ORDER + 1) for path in OUTPUT.glob(f"Norder{order}/Dir*/*.jpg")) / 2**20
+    check(size_mb < BUDGET_MB, f"the whole sky is {size_mb:.1f} MB, under the {BUDGET_MB} MB budget")
+    closeup_mb = sum(path.stat().st_size for path in OUTPUT.rglob("*.jpg")) / 2**20 - size_mb
+    check(closeup_mb < CLOSEUP_BUDGET_MB, f"the close-ups are {closeup_mb:.1f} MB, under the {CLOSEUP_BUDGET_MB} MB budget")
     first = Image.open(tile_path(OUTPUT, 0, 0))
     check(first.size == (TILE_PX, TILE_PX) and first.mode == "RGB", f"tiles are {first.size[0]}x{first.size[1]} {first.mode}")
 
