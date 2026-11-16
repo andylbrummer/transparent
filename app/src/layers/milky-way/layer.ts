@@ -69,7 +69,13 @@ interface MilkyWayFinish {
 /** What generate_milkyway_enhanced.py writes as cutouts.json. */
 interface CutoutsFile extends DeepTilesFile {
   /** Largest first. */
-  readonly cutouts: readonly { readonly label: string; readonly kind: CutoutKind; readonly ra: number; readonly dec: number }[];
+  readonly cutouts: readonly {
+    readonly label: string;
+    readonly kind: CutoutKind;
+    readonly ra: number;
+    readonly dec: number;
+    readonly diameterDeg: number;
+  }[];
 }
 
 async function loadCutouts(context: LayerContext, file: string): Promise<{ deepTiles: DeepTiles; labels: LabelGroup[] }> {
@@ -82,7 +88,13 @@ async function loadCutouts(context: LayerContext, file: string): Promise<{ deepT
       frame: 'sky',
       labels: ranked
         .filter((cutout) => cutout.kind === kind)
-        .map((cutout) => ({ text: cutout.label, priority: cutout.priority, position: new THREE.Vector3(...raDecToUnit(cutout.ra, cutout.dec)) })),
+        .map((cutout) => ({
+          text: cutout.label,
+          priority: cutout.priority,
+          position: new THREE.Vector3(...raDecToUnit(cutout.ra, cutout.dec)),
+          // What the Cardboard spyglass frames.
+          extentDeg: cutout.diameterDeg,
+        })),
     }),
   );
   return { deepTiles: DeepTiles.parse(data), labels };

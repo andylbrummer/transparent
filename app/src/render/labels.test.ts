@@ -275,6 +275,51 @@ describe('LabelLayer groups', () => {
     layer.dispose();
   });
 
+  it('offers the shown sky name under the view as a spyglass target, with its size, following the sky', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, []);
+    const camera = cameraAimedAt(-119.5, 37.0);
+    const lookDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const turned = new THREE.Matrix4().makeRotationFromQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), lookDirection)
+    );
+    layer.addGroup({
+      rank: 1,
+      style,
+      frame: 'sky',
+      labels: [{ text: 'Pole', priority: 0, position: new THREE.Vector3(0, 0, 1), extentDeg: 3 }],
+    });
+    // An earth label at the same spot is not a sky target.
+    layer.addGroup({ rank: 2, style, frame: 'earth', labels: [{ text: 'Ground', priority: 0, position: surface(-119.5, 37.0) }] });
+    layer.update(camera, WIDTH, HEIGHT, undefined, turned);
+    const target = layer.skyTargetNearViewCenter(camera, 0.05)!;
+    expect(target).toMatchObject({ name: 'Pole', extentDeg: 3 });
+    expect(target.directionInto(new THREE.Vector3()).angleTo(lookDirection)).toBeCloseTo(0, 9);
+    // The same object every frame: the spyglass's dwell keys on it.
+    expect(layer.skyTargetNearViewCenter(camera, 0.05)).toBe(target);
+    layer.update(camera, WIDTH, HEIGHT, undefined, new THREE.Matrix4());
+    expect(target.directionInto(new THREE.Vector3()).angleTo(new THREE.Vector3(0, 0, 1))).toBeCloseTo(0, 9);
+    layer.dispose();
+  });
+
+  it('hides names inside the spyglass hole and shows them again when it shuts', () => {
+    const parent = document.createElement('div');
+    const layer = new LabelLayer(parent, [{ labels: [label('California', -119.5, 37.0, 1)] }]);
+    const camera = cameraAimedAt(-119.5, 37.0);
+    const lookDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    layer.setSpyglassHole(lookDirection, 0.1);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual([]);
+    // Away from the hole the name is not covered.
+    layer.setSpyglassHole(lookDirection.clone().negate(), 0.1);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['California']);
+    layer.setSpyglassHole(null);
+    layer.update(camera, WIDTH, HEIGHT);
+    expect(layer.visibleNames()).toEqual(['California']);
+    layer.dispose();
+  });
+
   it('gives a group added in stereo its right-eye twins', () => {
     const parent = document.createElement('div');
     const layer = new LabelLayer(parent, []);

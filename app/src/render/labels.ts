@@ -127,6 +127,18 @@ export interface GroupLabel {
    * infinity. Read every frame, so a layer may move it (a satellite, a planet).
    */
   readonly position: THREE.Vector3;
+  /** Its size on the sky, degrees, for one with a size (a galaxy, a nebula): what the spyglass frames. */
+  readonly extentDeg?: number;
+}
+
+/** A name on the sky near the view's centre: what the spyglass can open on. */
+export interface SkyTarget {
+  /** The same object every frame for the same name. */
+  readonly key: unknown;
+  readonly name: string;
+  readonly extentDeg: number | null;
+  /** Where it is now, a world unit vector, written into `out`. */
+  directionInto(out: THREE.Vector3): THREE.Vector3;
 }
 
 export interface LabelGroupSpec {
@@ -182,6 +194,10 @@ interface PlacedLabel {
   readonly halfHeight: number;
   /** Added to the projected y: the text's offset from its point. */
   readonly offsetY: number;
+  /** A group label's size on the sky, degrees; null without one. */
+  readonly extentDeg: number | null;
+  /** This label as a spyglass target, made the first time it is one. */
+  target: SkyTarget | null;
   /** The offset in use this frame: offsetY, or its opposite where that side was taken. */
   shownOffsetY: number;
   /** Where the element was last put, in tenths of a CSS pixel; NaN before the first time. */
@@ -237,6 +253,10 @@ export class LabelLayer {
   private readonly view = new THREE.Vector3();
   private readonly up = new THREE.Vector3();
   private readonly forward = new THREE.Vector3();
+  private readonly hole = new THREE.Vector3();
+  private readonly toPoint = new THREE.Vector3();
+  /** Cosine of the spyglass hole's radius; 2 (no direction that close) with none. */
+  private holeCos = 2;
   private skyThroughEarth = true;
   private readonly boxes: number[] = [];
   private readonly hiddenKinds = new Set<LabelKind>();
@@ -286,6 +306,8 @@ export class LabelLayer {
         halfWidth: size.width / 2,
         halfHeight: size.height / 2,
         offsetY: 0,
+        extentDeg: null,
+        target: null,
         shownOffsetY: 0,
         shownX: NaN,
         shownY: NaN,
@@ -382,6 +404,8 @@ export class LabelLayer {
         halfWidth: (label.text.length * style.fontPx * em + LABEL_PADDING_PX) / 2,
         halfHeight: (style.fontPx * 1.3 + LABEL_PADDING_PX) / 2,
         offsetY: style.offsetYPx ?? 0,
+        extentDeg: label.extentDeg ?? null,
+        target: null,
         shownOffsetY: style.offsetYPx ?? 0,
         shownX: NaN,
         shownY: NaN,
@@ -422,19 +446,48 @@ export class LabelLayer {
    * eyes too.
    */
   nameNearestViewCenter(camera: THREE.Camera, maxAngleRad: number): string | null {
+    const best = this.nearestViewCenter(camera, maxAngleRad, () => true);
+    return best ? (best.element.textContent ?? best.name) : null;
+  }
+
+  /** The shown name on the sky nearest the view's centre, within `maxAngleRad` of it, as a spyglass target. */
+  skyTargetNearViewCenter(camera: THREE.Camera, maxAngleRad: number): SkyTarget | null {
+    const best = this.nearestViewCenter(camera, maxAngleRad, (placed) => placed.group?.frame === 'sky');
+    if (!best) return null;
+    best.target ??= {
+      key: best,
+      name: best.element.textContent ?? best.name,
+      extentDeg: best.extentDeg,
+      // ICRS turned onto the world by this frame's sky rotation: the sky turns under a long look.
+      directionInto: (out) => out.copy(best.position).applyMatrix4(this.skyRotation).normalize(),
+    };
+    return best.target;
+  }
+
+  /**
+   * Hide the names inside the spyglass's window - `radiusRad` about the
+   * world direction `direction` - where they would float over the
+   * magnified sky at their unmagnified places; null when it is shut.
+   */
+  setSpyglassHole(direction: THREE.Vector3 | null, radiusRad = 0): void {
+    if (direction) this.hole.copy(direction);
+    this.holeCos = direction ? Math.cos(radiusRad) : 2;
+  }
+
+  private nearestViewCenter(camera: THREE.Camera, maxAngleRad: number, eligible: (placed: PlacedLabel) => boolean): PlacedLabel | null {
     camera.updateMatrixWorld();
     const forward = this.forward.set(0, 0, -1).transformDirection(camera.matrixWorld);
     let best: PlacedLabel | null = null;
     let bestCos = Math.cos(maxAngleRad);
     for (const placed of this.placed) {
-      if (!placed.visible) continue;
+      if (!placed.visible || !eligible(placed)) continue;
       const cos = this.worldPoint(placed, camera).sub(camera.position).normalize().dot(forward);
       if (cos > bestCos) {
         best = placed;
         bestCos = cos;
       }
     }
-    return best ? (best.element.textContent ?? best.name) : null;
+    return best;
   }
 
   /** Where a placed label's point is in the world, written into `this.view`. */
@@ -483,6 +536,7 @@ export class LabelLayer {
       const sky = frame !== 'earth';
       if ((sky ? shownSky < MAX_VISIBLE_SKY_LABELS : shown < MAX_VISIBLE_LABELS) && enabled) {
         this.worldPoint(placed, camera);
+        const inHole = this.holeCos <= 1 && this.toPoint.copy(this.view).sub(camera.position).normalize().dot(this.hole) > this.holeCos;
         if (sky) {
           below = this.view.dot(this.up) < camera.position.dot(this.up);
           if (below) {
@@ -494,7 +548,7 @@ export class LabelLayer {
         }
         this.view.applyMatrix4(camera.matrixWorldInverse);
         // Camera looks down -Z: anything at z >= 0 is behind the viewer.
-        if ((!below || show) && this.view.z < 0) {
+        if (!inHole && (!below || show) && this.view.z < 0) {
           this.view.applyMatrix4(camera.projectionMatrix);
           x = (this.view.x * 0.5 + 0.5) * width;
           const pointY = (0.5 - this.view.y * 0.5) * height;
