@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { HeadGestures, REFRACTORY_MS, type HeadGesture } from './head-gestures';
+import { HeadGestures, REFRACTORY_MS, headRollSinceRad, type HeadGesture } from './head-gestures';
 
 const FRAME_MS = 1000 / 60;
 const DEG = Math.PI / 180;
@@ -84,5 +84,26 @@ describe('HeadGestures', () => {
     expect(run(gestures, 0.6, shake)).toEqual(['shake']);
     expect(REFRACTORY_MS).toBeLessThan(500);
     expect(run(gestures, 0.5, nod)).toEqual(['nod']);
+  });
+});
+
+describe('headRollSinceRad', () => {
+  /** BASE turned in its own frame: yaw, pitch, then roll left, degrees. */
+  const turned = (yawDeg: number, pitchDeg: number, rollDeg: number): THREE.Quaternion =>
+    BASE.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(pitchDeg * DEG, yawDeg * DEG, rollDeg * DEG, 'YXZ')));
+
+  it('reads a roll to the left as positive, to the right as negative', () => {
+    expect(headRollSinceRad(BASE, turned(0, 0, 15))).toBeCloseTo(15 * DEG, 9);
+    expect(headRollSinceRad(BASE, turned(0, 0, -15))).toBeCloseTo(-15 * DEG, 9);
+  });
+
+  it('reads looking about as next to no roll', () => {
+    expect(Math.abs(headRollSinceRad(BASE, turned(10, 8, 0)))).toBeLessThan(1 * DEG);
+  });
+
+  it('reads the roll alike at the zenith', () => {
+    const up = new THREE.Quaternion().setFromEuler(new THREE.Euler(90 * DEG, 0, 0, 'YXZ'));
+    const rolled = up.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -20 * DEG));
+    expect(headRollSinceRad(up, rolled)).toBeCloseTo(-20 * DEG, 9);
   });
 });

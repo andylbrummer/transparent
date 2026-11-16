@@ -17,11 +17,15 @@
  * evenly in log scale, to frame the object; looking RELEASE_DEG away from
  * it closes it the same way.
  *
- * Head gestures (input/head-gestures) drive it hands-free: a nod opens it
- * at once on the name just looked at, or, open, magnifies it a level
- * (NOD_ZOOM_FACTOR); a shake backs out a level, and from the first one
+ * Hands-free, a nod or the viewer's button goes deeper: opens it at once
+ * on the name just looked at, or, open, magnifies it a level
+ * (NOD_ZOOM_FACTOR); a shake goes back a level, and from the first one
  * closes it. A shake during a stare, or just after one, refuses that
  * name until the view leaves it, as a key's closing does.
+ *
+ * While it is open, rolling the head zooms it smoothly (tilt): right to
+ * magnify, left to widen, faster the further past ROLL_DEAD_ZONE_DEG,
+ * counted from the head's roll when it opened - however it rests then.
  *
  * A keyboard paired with the phone drives it too (onKeyDown): Enter opens
  * the window on the name under the view at once, or closes it; + and -
@@ -32,7 +36,7 @@
  */
 
 import * as THREE from 'three';
-import type { HeadGesture } from '../input/head-gestures';
+import { headRollSinceRad } from '../input/head-gestures';
 
 /** The window's diameter, degrees of the eye's view. */
 export const SPYGLASS_DEG = 30;
@@ -56,6 +60,12 @@ export const MIN_FRAMING_DEG = 0.05;
 export const KEY_ZOOM_FACTOR = 1.25;
 /** One nod's magnification, a shake's undoing it. */
 export const NOD_ZOOM_FACTOR = 2;
+/** Head roll that does nothing, either way: a head at rest is rarely level. */
+export const ROLL_DEAD_ZONE_DEG = 8;
+/** Head roll at which the zoom is fastest. */
+export const ROLL_FULL_DEG = 25;
+/** The fastest roll zoom: doublings (or halvings) of the magnification a second. */
+export const ROLL_MAX_DOUBLINGS_PER_S = 1.5;
 /** A name held still on this recently is still the one a nod means: the nod itself moves the view off it. */
 export const RECENT_MS = 1500;
 
@@ -97,6 +107,18 @@ export function framingDeg(target: SpyglassTarget): number {
 
 const smoothstep = (t: number): number => t * t * (3 - 2 * t);
 
+/**
+ * The roll zoom's speed for a head rolled `rollRad` (positive left),
+ * doublings of the magnification a second: positive, magnifying, for a
+ * roll right; nothing within the dead zone, rising to the most at
+ * ROLL_FULL_DEG.
+ */
+export function rollZoomDoublingsPerS(rollRad: number): number {
+  const rollDeg = THREE.MathUtils.radToDeg(Math.abs(rollRad));
+  const past = THREE.MathUtils.clamp((rollDeg - ROLL_DEAD_ZONE_DEG) / (ROLL_FULL_DEG - ROLL_DEAD_ZONE_DEG), 0, 1);
+  return -Math.sign(rollRad) * past * ROLL_MAX_DOUBLINGS_PER_S;
+}
+
 /** `framedDeg` magnified by `factor`, within MIN_FRAMING_DEG and no magnification. */
 const zoomed = (framedDeg: number, factor: number): number => THREE.MathUtils.clamp(framedDeg / factor, MIN_FRAMING_DEG, SPYGLASS_DEG);
 
@@ -109,6 +131,9 @@ export class Spyglass {
   private readonly targetDirection = new THREE.Vector3();
   /** The name a key closed the window on, kept shut while it stays under the view. */
   private dismissed: SpyglassTarget | null = null;
+  /** The head's orientation when the window opened, the roll zoom's level; unset while shut. */
+  private readonly rollFrom = new THREE.Quaternion();
+  private hasRollFrom = false;
   /** The last name held still on, and how long ago. */
   private recent: { target: SpyglassTarget; ageMs: number } | null = null;
 
@@ -165,26 +190,52 @@ export class Spyglass {
     this.hasLastForward = false;
     this.dismissed = null;
     this.recent = null;
+    this.hasRollFrom = false;
   }
 
-  /** A nod or shake (input/head-gestures); `candidate` as for update. */
-  onHeadGesture(gesture: HeadGesture, candidate: SpyglassTarget | null): void {
+  /** One frame's roll zoom, with the head at world `orientation`; after update. */
+  tilt(orientation: THREE.Quaternion, deltaMs: number): void {
     const state = this.state;
-    if (gesture === 'nod') {
-      if (state.kind === 'open') this.stepDepth(1);
-      else this.toggle(candidate ?? this.recent?.target ?? null);
+    if (state.kind !== 'open') {
+      this.hasRollFrom = false;
       return;
     }
+    if (!this.hasRollFrom) {
+      this.rollFrom.copy(orientation);
+      this.hasRollFrom = true;
+      return;
+    }
+    const doublings = rollZoomDoublingsPerS(headRollSinceRad(this.rollFrom, orientation)) * (deltaMs / 1000);
+    if (doublings !== 0) this.zoomBy(2 ** doublings);
+  }
+
+  /**
+   * Into the spyglass: open it at once on the name just looked at - the
+   * one stared at, `candidate` under the view, else the name held still on
+   * within RECENT_MS, since a nod moves the view off what it means - or,
+   * open, magnify it a level. A nod, or the viewer's button.
+   */
+  deeper(candidate: SpyglassTarget | null): void {
+    if (this.state.kind === 'open') this.stepDepth(1);
+    else this.toggle(candidate ?? this.recent?.target ?? null);
+  }
+
+  /**
+   * Out of the spyglass: back a level, and from the first close it. Shut,
+   * refuse the name just looked at - a shake's own motion has broken the
+   * stare by the time it is seen - until the view leaves it. A shake.
+   */
+  back(): void {
+    const state = this.state;
     switch (state.kind) {
       case 'idle':
       case 'fusing':
-        // The shake has already broken the stare by the time it is seen: it is the name just held still on that it refuses.
         this.dismissed = state.kind === 'fusing' ? state.target : (this.recent?.target ?? null);
         this.state = { kind: 'idle' };
         return;
       case 'open':
         if (state.depth > 0) this.stepDepth(-1);
-        else this.toggle(candidate);
+        else this.toggle(null);
         return;
       case 'closing':
         return;

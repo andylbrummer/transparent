@@ -97,6 +97,20 @@ class AxisSwings {
   }
 }
 
+/**
+ * How far the head has rolled about its own forward axis from `from` to
+ * `to`, radians, positive to the left (the left ear down): the twist part
+ * of the turn between them, so looking about on the way adds next to
+ * nothing, and it means the same at the zenith as at the horizon.
+ */
+export function headRollSinceRad(from: THREE.Quaternion, to: THREE.Quaternion): number {
+  const turn = scratchTurn.copy(from).invert().multiply(to);
+  // The twist about the head's z axis, its forward axis's opposite: z and w of the turn.
+  const roll = 2 * Math.atan2(turn.z, turn.w);
+  return roll > Math.PI ? roll - 2 * Math.PI : roll < -Math.PI ? roll + 2 * Math.PI : roll;
+}
+const scratchTurn = new THREE.Quaternion();
+
 export class HeadGestures {
   private readonly previous = new THREE.Quaternion();
   private hasPrevious = false;

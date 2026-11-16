@@ -586,10 +586,13 @@ export function init(): App | null {
         camera.getWorldDirection(headForward);
         const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
         spyglass.update(headForward, candidate, deltaMs);
-        const gesture = headGestures.update(camera.getWorldQuaternion(headOrientation), deltaMs);
+        camera.getWorldQuaternion(headOrientation);
+        spyglass.tilt(headOrientation, deltaMs);
+        const gesture = headGestures.update(headOrientation, deltaMs);
         if (gesture) {
           lastHeadGesture = gesture;
-          spyglass.onHeadGesture(gesture, candidate);
+          if (gesture === 'nod') spyglass.deeper(candidate);
+          else spyglass.back();
         }
         const view = spyglass.view();
         if (view) {

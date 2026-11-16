@@ -10,11 +10,15 @@ import {
   NOD_ZOOM_FACTOR,
   OPEN_MS,
   RECENT_MS,
+  ROLL_DEAD_ZONE_DEG,
+  ROLL_FULL_DEG,
+  ROLL_MAX_DOUBLINGS_PER_S,
   RELEASE_DEG,
   SPYGLASS_DEG,
   STILL_DEG_PER_S,
   Spyglass,
   framingDeg,
+  rollZoomDoublingsPerS,
   type SpyglassTarget,
 } from './spyglass';
 
@@ -178,7 +182,7 @@ describe('Spyglass', () => {
 
   it('opens at once on a nod at a name', () => {
     const spyglass = new Spyglass();
-    spyglass.onHeadGesture('nod', m31);
+    spyglass.deeper(m31);
     expect(spyglass.getState()).toMatchObject({ kind: 'open', target: { name: 'M31' } });
   });
 
@@ -186,7 +190,7 @@ describe('Spyglass', () => {
     const spyglass = new Spyglass();
     hold(spyglass, 200, m31);
     hold(spyglass, RECENT_MS / 2, null, turned(10));
-    spyglass.onHeadGesture('nod', null);
+    spyglass.deeper(null);
     expect(spyglass.getState()).toMatchObject({ kind: 'open', target: { name: 'M31' } });
   });
 
@@ -194,23 +198,23 @@ describe('Spyglass', () => {
     const spyglass = new Spyglass();
     hold(spyglass, 200, m31);
     hold(spyglass, RECENT_MS + 100, null, turned(10));
-    spyglass.onHeadGesture('nod', null);
+    spyglass.deeper(null);
     expect(spyglass.getState().kind).toBe('idle');
   });
 
   it('goes a level deeper on each nod, and a shake backs out a level, then closes', () => {
     const spyglass = new Spyglass();
-    spyglass.onHeadGesture('nod', m31);
+    spyglass.deeper(m31);
     hold(spyglass, OPEN_MS + FRAME_MS, m31);
-    spyglass.onHeadGesture('nod', m31);
-    spyglass.onHeadGesture('nod', m31);
+    spyglass.deeper(m31);
+    spyglass.deeper(m31);
     expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) / NOD_ZOOM_FACTOR ** 2, 6);
-    spyglass.onHeadGesture('shake', m31);
+    spyglass.back();
     expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) / NOD_ZOOM_FACTOR, 6);
-    spyglass.onHeadGesture('shake', m31);
+    spyglass.back();
     expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31), 6);
     expect(spyglass.getState().kind).toBe('open');
-    spyglass.onHeadGesture('shake', m31);
+    spyglass.back();
     expect(spyglass.getState().kind).toBe('closing');
     // Closed by a shake, it stays shut on that name like one closed by key.
     hold(spyglass, CLOSE_MS + 2 * DWELL_MS, m31);
@@ -219,15 +223,15 @@ describe('Spyglass', () => {
 
   it('counts no level a nod could not go: the deepest zoom, then one shake backs out', () => {
     const spyglass = new Spyglass();
-    spyglass.onHeadGesture('nod', m31);
+    spyglass.deeper(m31);
     hold(spyglass, OPEN_MS + FRAME_MS, m31);
-    for (let nod = 0; nod < 20; nod++) spyglass.onHeadGesture('nod', m31);
+    for (let nod = 0; nod < 20; nod++) spyglass.deeper(m31);
     expect(spyglass.view()!.fovDeg).toBe(MIN_FRAMING_DEG);
     const levels = (spyglass.getState() as { depth: number }).depth;
     expect(levels).toBe(Math.ceil(Math.log2(framingDeg(m31) / MIN_FRAMING_DEG)));
-    for (let shake = 0; shake < levels; shake++) spyglass.onHeadGesture('shake', m31);
+    for (let shake = 0; shake < levels; shake++) spyglass.back();
     expect(spyglass.getState().kind).toBe('open');
-    spyglass.onHeadGesture('shake', m31);
+    spyglass.back();
     expect(spyglass.getState().kind).toBe('closing');
   });
 
@@ -236,12 +240,41 @@ describe('Spyglass', () => {
     hold(spyglass, DWELL_MS / 2, m31);
     // The shake's own motion broke the stare before it was seen.
     spyglass.update(turned(12), null, FRAME_MS);
-    spyglass.onHeadGesture('shake', null);
+    spyglass.back();
     hold(spyglass, 3 * DWELL_MS, m31);
     expect(spyglass.getState().kind).toBe('idle');
     hold(spyglass, 2 * FRAME_MS, null);
     hold(spyglass, DWELL_MS + FRAME_MS, m31);
     expect(spyglass.getState().kind).toBe('open');
+  });
+
+  it('zooms with the head rolled: right to magnify, left to widen, from its roll when it opened', () => {
+    const DEG = Math.PI / 180;
+    const rolled = (deg: number): THREE.Quaternion =>
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, 1.1, 0.2, 'YXZ')).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), deg * DEG));
+    const spyglass = new Spyglass();
+    // Shut, a roll does nothing.
+    spyglass.tilt(rolled(-40), FRAME_MS);
+    spyglass.deeper(m31);
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    // Opened with the head already tipped 10° left: that is level for the zoom.
+    spyglass.tilt(rolled(10), FRAME_MS);
+    for (let t = 0; t < 1000; t += FRAME_MS) spyglass.tilt(rolled(10 + ROLL_DEAD_ZONE_DEG - 1), FRAME_MS);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31), 9);
+    // A full roll right for one second: ROLL_MAX_DOUBLINGS_PER_S of magnification.
+    for (let t = 0; t < 1000; t += 10) spyglass.tilt(rolled(10 - ROLL_FULL_DEG - 5), 10);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) / 2 ** ROLL_MAX_DOUBLINGS_PER_S, 6);
+    // And left as far, back.
+    for (let t = 0; t < 1000; t += 10) spyglass.tilt(rolled(10 + ROLL_FULL_DEG + 5), 10);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31), 6);
+  });
+
+  it('rolls faster the further past the dead zone, to the most at ROLL_FULL_DEG', () => {
+    const rad = THREE.MathUtils.degToRad;
+    expect(rollZoomDoublingsPerS(rad(ROLL_DEAD_ZONE_DEG))).toBeCloseTo(0, 12);
+    expect(rollZoomDoublingsPerS(rad(-(ROLL_DEAD_ZONE_DEG + ROLL_FULL_DEG) / 2))).toBeCloseTo(ROLL_MAX_DOUBLINGS_PER_S / 2, 9);
+    expect(rollZoomDoublingsPerS(rad(-90))).toBe(ROLL_MAX_DOUBLINGS_PER_S);
+    expect(rollZoomDoublingsPerS(rad(90))).toBe(-ROLL_MAX_DOUBLINGS_PER_S);
   });
 
   it('frames an object by its size, a point by the default, within bounds', () => {
