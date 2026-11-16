@@ -16,7 +16,7 @@ import { ICRS_TO_GALACTIC, healpixPixelPoint, type Mat3 } from '@transparent-ear
 import { RENDER_ORDER } from '../../render/order';
 import type { LayerContext, LayerInstance } from '../types';
 import { HIPS_TILE_PX, bestSource, targetOrder, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad, type HipsTile } from './hips';
-import type { Coverage } from './coverage';
+import { tileToFetch, type TileCoverage } from './coverage';
 import type { SurveySpec } from './surveys';
 
 /** Most tiles drawn at once: a screen needs a dozen or two at the order chosen for it. */
@@ -136,8 +136,12 @@ function tileGeometry(tile: HipsTile): THREE.BufferGeometry {
   return geometry;
 }
 
-/** `coverage`: for a survey of scattered patches, where it has anything; no tile elsewhere is asked for. */
-export function createSurveyLayer(context: LayerContext, spec: SurveySpec, coverage: Coverage | null = null): LayerInstance {
+/**
+ * `coverage`: for a survey without every tile at every order, which it has; no tile elsewhere is asked for. Where it
+ * has none, a survey of scattered patches draws nothing, and one written deeper only in places draws the deepest
+ * coarser tile it has.
+ */
+export function createSurveyLayer(context: LayerContext, spec: SurveySpec, coverage: TileCoverage | null = null): LayerInstance {
   const group = new THREE.Group();
   group.name = `sky-survey-${spec.id}`;
   // A survey kept in galactic coordinates is turned onto the ICRS sky as a whole.
@@ -238,9 +242,11 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
     clock++;
     const wanted = tilesForView(order, [direction.x, direction.y, direction.z], radius, MAX_TILES);
     const wantedKeys = new Set(wanted.map(tileKey));
+    const fetched = new Map(wanted.map((tile) => [tileKey(tile), tileToFetch(tile, coverage, spec.minOrder)]));
+    const fetchedKeys = new Set([...fetched.values()].filter((tile) => tile !== null).map(tileKey));
     // Requests for tiles no longer in view give way to those that are.
     for (const [key, controller] of pending) {
-      if (!wantedKeys.has(key)) {
+      if (!fetchedKeys.has(key)) {
         controller.abort();
         retryAt.delete(key);
       }
@@ -256,16 +262,17 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
     let waiting = 0;
     for (const tile of wanted) {
       const key = tileKey(tile);
-      if (coverage && !coverage.touches(tile.order, tile.ipix)) {
+      const fetchTile = fetched.get(key)!;
+      if (!fetchTile) {
         // Nothing of the survey's here: not asked for, not waited on.
         const entry = drawn.get(key);
         if (entry) entry.mesh.visible = false;
         continue;
       }
-      const own = held.get(key);
+      const own = held.get(tileKey(fetchTile));
       if (!own) {
         waiting++;
-        request(tile);
+        request(fetchTile);
       }
       const source = bestSource(tile, spec.minOrder, (candidate) => (held.get(tileKey(candidate))?.texture ?? null) !== null);
       let entry = drawn.get(key);
@@ -299,7 +306,7 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
         const mesh = new THREE.Mesh(tileGeometry(tile), material);
         mesh.frustumCulled = false;
         // Just over the all-sky maps (close-ups over those), under the stars.
-        mesh.renderOrder = RENDER_ORDER.skyMap + (coverage ? 0.02 : 0.01);
+        mesh.renderOrder = RENDER_ORDER.skyMap + (coverage && !coverage.coarserOutside ? 0.02 : 0.01);
         group.add(mesh);
         entry = { tile, mesh, material };
         drawn.set(key, entry);

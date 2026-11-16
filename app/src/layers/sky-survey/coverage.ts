@@ -8,6 +8,7 @@
 
 import { healpixPixelPoint } from '@transparent-earth/core';
 import type { StatusTone } from '../types';
+import type { HipsTile } from './hips';
 
 /** Sorted, unique cells from their differences, the first counted from zero. */
 export function decodeCells(deltas: readonly number[]): number[] {
@@ -21,7 +22,34 @@ export function decodeCells(deltas: readonly number[]): number[] {
   return cells;
 }
 
-export class Coverage {
+/** Which tiles a survey has. */
+export interface TileCoverage {
+  /** Whether the survey has tile `ipix` of `order`: no other tile is asked for. */
+  touches(order: number, ipix: number): boolean;
+  /**
+   * Where it has none: true, the deepest coarser tile it has is drawn there (a survey written whole to one order
+   * and deeper only in places); false, nothing is (a survey of scattered patches).
+   */
+  readonly coarserOutside: boolean;
+}
+
+/**
+ * The tile fetched to draw `tile`: itself where the survey has it; else, for a survey that draws coarser tiles where
+ * it has no deep one, the deepest coarser tile it has; else none.
+ */
+export function tileToFetch(tile: HipsTile, coverage: TileCoverage | null, minOrder: number): HipsTile | null {
+  if (!coverage || coverage.touches(tile.order, tile.ipix)) return tile;
+  if (!coverage.coarserOutside) return null;
+  for (let order = tile.order - 1; order >= minOrder; order--) {
+    // Division, not shifts: deep pixel numbers pass 2^31.
+    const ipix = Math.floor(tile.ipix / 4 ** (tile.order - order));
+    if (coverage.touches(order, ipix)) return { order, ipix };
+  }
+  return null;
+}
+
+export class Coverage implements TileCoverage {
+  readonly coarserOutside = false;
   private readonly cells: ReadonlySet<number>;
   /** Per coarser order, every pixel holding at least one cell. */
   private readonly coarser: readonly ReadonlySet<number>[];
@@ -94,4 +122,37 @@ export function parseCloseups(file: CloseupsFile): Map<string, Coverage> {
     out.set(name, new Coverage(file.order, cells));
   }
   return out;
+}
+
+/** What generate_milkyway_enhanced.py writes beside its tiles. */
+export interface DeepTilesFile {
+  readonly wholeSkyOrder: number;
+  /** Per order beyond wholeSkyOrder, the tiles written. */
+  readonly tiles: Readonly<Record<string, readonly number[]>>;
+}
+
+/** A survey with every tile to `wholeSkyOrder`, and deeper only where listed: close-ups of a few objects. */
+export class DeepTiles implements TileCoverage {
+  readonly coarserOutside = true;
+  private readonly byOrder: ReadonlyMap<number, ReadonlySet<number>>;
+
+  constructor(readonly wholeSkyOrder: number, tiles: Readonly<Record<string, readonly number[]>>) {
+    this.byOrder = new Map(Object.entries(tiles).map(([order, pixels]) => [Number(order), new Set(pixels)]));
+    for (const order of this.byOrder.keys()) {
+      if (!(order > wholeSkyOrder)) throw new Error(`deep tiles listed at order ${order}, not beyond the whole sky's ${wholeSkyOrder}`);
+    }
+  }
+
+  static parse(file: DeepTilesFile): DeepTiles {
+    return new DeepTiles(file.wholeSkyOrder, file.tiles);
+  }
+
+  touches(order: number, ipix: number): boolean {
+    return order <= this.wholeSkyOrder || (this.byOrder.get(order)?.has(ipix) ?? false);
+  }
+
+  /** The deepest order listed anywhere. */
+  get maxOrder(): number {
+    return Math.max(this.wholeSkyOrder, ...this.byOrder.keys());
+  }
 }

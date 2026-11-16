@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { healpixUnitToNested } from '@transparent-earth/core';
-import { Coverage, decodeCells, markerOpacity, mergeStatuses, parseCloseups } from './coverage';
+import { Coverage, DeepTiles, decodeCells, markerOpacity, mergeStatuses, parseCloseups, tileToFetch } from './coverage';
 
 describe('decodeCells', () => {
   it('turns differences from the cell before back into cells', () => {
@@ -112,5 +112,52 @@ describe('mergeStatuses', () => {
   it('reports missing tiles over loading, and over no connection when another field has tiles', () => {
     expect(mergeStatuses([missing, loading])).toEqual(missing);
     expect(mergeStatuses([offline, missing])).toEqual(missing);
+  });
+});
+
+describe('DeepTiles', () => {
+  // Whole to order 2; tile 2709 of order 6 (Andromeda's core) and its order-3 ancestor 42 written deeper.
+  const deep = DeepTiles.parse({ wholeSkyOrder: 2, tiles: { '3': [42], '6': [2709] } });
+
+  it('has every tile to the whole-sky order and only the listed ones beyond it', () => {
+    expect(deep.touches(0, 11)).toBe(true);
+    expect(deep.touches(2, 191)).toBe(true);
+    expect(deep.touches(3, 42)).toBe(true);
+    expect(deep.touches(3, 43)).toBe(false);
+    expect(deep.touches(4, 170)).toBe(false);
+    expect(deep.touches(6, 2709)).toBe(true);
+    expect(deep.maxOrder).toBe(6);
+  });
+
+  it('refuses tiles listed at or under the whole-sky order', () => {
+    expect(() => DeepTiles.parse({ wholeSkyOrder: 2, tiles: { '2': [5] } })).toThrow(/order 2/);
+  });
+});
+
+describe('tileToFetch', () => {
+  const deep = DeepTiles.parse({ wholeSkyOrder: 2, tiles: { '3': [42], '6': [2709] } });
+
+  it('fetches a tile the survey has', () => {
+    expect(tileToFetch({ order: 6, ipix: 2709 }, deep, 0)).toEqual({ order: 6, ipix: 2709 });
+    expect(tileToFetch({ order: 1, ipix: 7 }, null, 0)).toEqual({ order: 1, ipix: 7 });
+  });
+
+  it('falls back to the deepest coarser tile written, for a survey deep only in places', () => {
+    // Order 8 under Andromeda's order-6 tile: that tile, not the order-3 or order-2 one.
+    expect(tileToFetch({ order: 8, ipix: 2709 * 16 + 5 }, deep, 0)).toEqual({ order: 6, ipix: 2709 });
+    // Beside it, where order 4 to 6 are not written, the order-3 ancestor.
+    expect(tileToFetch({ order: 5, ipix: 42 * 16 + 1 }, deep, 0)).toEqual({ order: 3, ipix: 42 });
+    // Empty sky: the whole-sky order.
+    expect(tileToFetch({ order: 8, ipix: 0 }, deep, 0)).toEqual({ order: 2, ipix: 0 });
+  });
+
+  it('works on pixel numbers past 2^31', () => {
+    const ipix = 3 * 2 ** 31 + 17;
+    expect(tileToFetch({ order: 16, ipix }, deep, 0)).toEqual({ order: 2, ipix: Math.floor(ipix / 4 ** 14) });
+  });
+
+  it('fetches nothing outside a patch survey', () => {
+    const patches = new Coverage(6, [2709]);
+    expect(tileToFetch({ order: 6, ipix: 2708 }, patches, 3)).toBeNull();
   });
 });
