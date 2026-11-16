@@ -464,7 +464,17 @@ export function init(): App | null {
   const onPointerMove = (e: PointerEvent): void =>
     look.onPointerMove(e.pointerId, e.clientX, e.clientY, renderer.domElement.clientHeight);
   const onPointerUp = (e: PointerEvent): void => look.onPointerUp(e.pointerId);
-  const onKeyDown = (e: KeyboardEvent): void => look.onKeyDown(e.key);
+  const onKeyDown = (e: KeyboardEvent): void => {
+    // In the viewer the zoom keys are the spyglass's; turning keys stay the look's.
+    if (cardboard.isActive() && !cardboard.isCalibrating()) {
+      const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
+      if (spyglass.onKeyDown(e.key, candidate)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    look.onKeyDown(e.key);
+  };
 
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointermove', onPointerMove);

@@ -5,6 +5,7 @@ import {
   DEFAULT_FRAMING_DEG,
   DWELL_MS,
   FUSE_DELAY_MS,
+  KEY_ZOOM_FACTOR,
   MIN_FRAMING_DEG,
   OPEN_MS,
   RELEASE_DEG,
@@ -99,6 +100,78 @@ describe('Spyglass', () => {
     const progress = (spyglass.getState() as { progress: number }).progress;
     const eased = progress * progress * (3 - 2 * progress);
     expect(spyglass.view()!.fovDeg).toBeCloseTo(SPYGLASS_DEG * Math.pow(framingDeg(m31) / SPYGLASS_DEG, eased), 6);
+  });
+
+  it('opens at once on Enter, on the name under the view, and closes on Enter', () => {
+    const spyglass = new Spyglass();
+    expect(spyglass.onKeyDown('Enter', m31)).toBe(true);
+    expect(spyglass.getState()).toMatchObject({ kind: 'open', target: { name: 'M31' } });
+    expect(spyglass.onKeyDown('Enter', m31)).toBe(true);
+    expect(spyglass.getState().kind).toBe('closing');
+  });
+
+  it('does nothing on Enter at bare sky', () => {
+    const spyglass = new Spyglass();
+    spyglass.onKeyDown('Enter', null);
+    expect(spyglass.getState().kind).toBe('idle');
+  });
+
+  it('opens the name being stared at on Enter, without waiting out the dwell', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS / 2, m31);
+    spyglass.onKeyDown('Enter', null);
+    expect(spyglass.getState()).toMatchObject({ kind: 'open', target: { name: 'M31' } });
+  });
+
+  it('keeps a window closed by key shut on that name until the view leaves it', () => {
+    const spyglass = new Spyglass();
+    spyglass.onKeyDown('Enter', m31);
+    hold(spyglass, OPEN_MS, m31);
+    spyglass.onKeyDown('Enter', m31);
+    hold(spyglass, CLOSE_MS + 3 * DWELL_MS, m31);
+    expect(spyglass.getState().kind).toBe('idle');
+    hold(spyglass, 2 * FRAME_MS, null);
+    hold(spyglass, DWELL_MS + FRAME_MS, m31);
+    expect(spyglass.getState().kind).toBe('open');
+  });
+
+  it('reopens a closing window on Enter from where it had got to', () => {
+    const spyglass = new Spyglass();
+    spyglass.onKeyDown('Enter', m31);
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    spyglass.onKeyDown('Enter', m31);
+    hold(spyglass, CLOSE_MS / 4, m31);
+    const fovClosing = spyglass.view()!.fovDeg;
+    spyglass.onKeyDown('Enter', m31);
+    expect(spyglass.getState().kind).toBe('open');
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(fovClosing, 6);
+    // Reopened by hand, the stare is not held against it.
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31), 6);
+  });
+
+  it('zooms the open window by KEY_ZOOM_FACTOR a press, within bounds', () => {
+    const spyglass = new Spyglass();
+    spyglass.onKeyDown('Enter', m31);
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    spyglass.onKeyDown('+', m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) / KEY_ZOOM_FACTOR, 6);
+    spyglass.onKeyDown('-', m31);
+    spyglass.onKeyDown('_', m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) * KEY_ZOOM_FACTOR, 6);
+    for (let press = 0; press < 100; press++) spyglass.onKeyDown('=', m31);
+    expect(spyglass.view()!.fovDeg).toBe(MIN_FRAMING_DEG);
+    for (let press = 0; press < 100; press++) spyglass.onKeyDown('-', m31);
+    expect(spyglass.view()!.fovDeg).toBe(SPYGLASS_DEG);
+  });
+
+  it('opens on + when shut, takes every zoom key, and leaves the rest to the look', () => {
+    const spyglass = new Spyglass();
+    expect(spyglass.onKeyDown('-', m31)).toBe(true);
+    expect(spyglass.getState().kind).toBe('idle');
+    expect(spyglass.onKeyDown('+', m31)).toBe(true);
+    expect(spyglass.getState().kind).toBe('open');
+    for (const key of ['ArrowLeft', 'ArrowUp', 'r', 'R', 'a']) expect(spyglass.onKeyDown(key, m31)).toBe(false);
   });
 
   it('frames an object by its size, a point by the default, within bounds', () => {

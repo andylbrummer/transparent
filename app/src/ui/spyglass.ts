@@ -17,6 +17,11 @@
  * evenly in log scale, to frame the object; looking RELEASE_DEG away from
  * it closes it the same way.
  *
+ * A keyboard paired with the phone drives it too (onKeyDown): Enter opens
+ * the window on the name under the view at once, or closes it; + and -
+ * zoom it. A window closed by key stays shut on that name until the view
+ * leaves it, or the stare would open it again.
+ *
  * This module is the timing alone; render/spyglass-lens draws it.
  */
 
@@ -40,6 +45,8 @@ export const FRAME_MARGIN = 1.6;
 export const DEFAULT_FRAMING_DEG = 2;
 /** Deepest the window zooms: past this the sky's finest tiles are blur. */
 export const MIN_FRAMING_DEG = 0.05;
+/** One + or - press: SPYGLASS_DEG to MIN_FRAMING_DEG in about 29 presses. */
+export const KEY_ZOOM_FACTOR = 1.25;
 
 /** Something a stare can open the spyglass on. */
 export interface SpyglassTarget {
@@ -55,8 +62,8 @@ export interface SpyglassTarget {
 export type SpyglassState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'fusing'; readonly target: SpyglassTarget; readonly heldMs: number }
-  | { readonly kind: 'open'; readonly target: SpyglassTarget; readonly progress: number }
-  | { readonly kind: 'closing'; readonly target: SpyglassTarget; readonly progress: number };
+  | { readonly kind: 'open'; readonly target: SpyglassTarget; readonly progress: number; readonly framedDeg: number }
+  | { readonly kind: 'closing'; readonly target: SpyglassTarget; readonly progress: number; readonly framedDeg: number };
 
 /** What to draw this frame. */
 export interface SpyglassView {
@@ -73,11 +80,15 @@ export function framingDeg(target: SpyglassTarget): number {
 
 const smoothstep = (t: number): number => t * t * (3 - 2 * t);
 
+const opening = (target: SpyglassTarget): SpyglassState => ({ kind: 'open', target, progress: 0, framedDeg: framingDeg(target) });
+
 export class Spyglass {
   private state: SpyglassState = { kind: 'idle' };
   private readonly lastForward = new THREE.Vector3();
   private hasLastForward = false;
   private readonly targetDirection = new THREE.Vector3();
+  /** The name a key closed the window on, kept shut while it stays under the view. */
+  private dismissed: SpyglassTarget | null = null;
 
   getState(): SpyglassState {
     return this.state;
@@ -95,7 +106,8 @@ export class Spyglass {
     const state = this.state;
     switch (state.kind) {
       case 'idle':
-        if (candidate && still) this.state = { kind: 'fusing', target: candidate, heldMs: 0 };
+        if (this.dismissed && candidate?.key !== this.dismissed.key) this.dismissed = null;
+        if (candidate && still && !this.dismissed) this.state = { kind: 'fusing', target: candidate, heldMs: 0 };
         return;
       case 'fusing': {
         if (!candidate || candidate.key !== state.target.key || !still) {
@@ -103,21 +115,21 @@ export class Spyglass {
           return;
         }
         const heldMs = state.heldMs + deltaMs;
-        this.state = heldMs >= DWELL_MS ? { kind: 'open', target: state.target, progress: 0 } : { kind: 'fusing', target: state.target, heldMs };
+        this.state = heldMs >= DWELL_MS ? opening(state.target) : { kind: 'fusing', target: state.target, heldMs };
         return;
       }
       case 'open': {
         if (this.offTargetDeg(forward, state.target) > RELEASE_DEG) {
           // Close from wherever the opening had got to.
-          this.state = { kind: 'closing', target: state.target, progress: 1 - state.progress };
+          this.state = { ...state, kind: 'closing', progress: 1 - state.progress };
           return;
         }
-        this.state = { kind: 'open', target: state.target, progress: Math.min(1, state.progress + deltaMs / OPEN_MS) };
+        this.state = { ...state, progress: Math.min(1, state.progress + deltaMs / OPEN_MS) };
         return;
       }
       case 'closing': {
         const progress = state.progress + deltaMs / CLOSE_MS;
-        this.state = progress >= 1 ? { kind: 'idle' } : { kind: 'closing', target: state.target, progress };
+        this.state = progress >= 1 ? { kind: 'idle' } : { ...state, progress };
         return;
       }
     }
@@ -127,6 +139,63 @@ export class Spyglass {
   reset(): void {
     this.state = { kind: 'idle' };
     this.hasLastForward = false;
+    this.dismissed = null;
+  }
+
+  /**
+   * A key from a keyboard paired with the phone; `candidate` as for update.
+   * True when the spyglass took it: in the viewer every zoom key is the
+   * spyglass's, since the eyes' own field is fixed.
+   */
+  onKeyDown(key: string, candidate: SpyglassTarget | null): boolean {
+    switch (key) {
+      case 'Enter':
+        this.toggle(candidate);
+        return true;
+      case '+':
+      case '=':
+        if (this.state.kind === 'open') this.zoomBy(KEY_ZOOM_FACTOR);
+        else if (this.state.kind !== 'closing') this.toggle(candidate);
+        return true;
+      case '-':
+      case '_':
+        this.zoomBy(1 / KEY_ZOOM_FACTOR);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Open the window at once - on the name being stared at, else on
+   * `candidate` - or close it; a closing window opens again from where it
+   * had got to.
+   */
+  toggle(candidate: SpyglassTarget | null): void {
+    const state = this.state;
+    switch (state.kind) {
+      case 'idle':
+        if (candidate) this.state = opening(candidate);
+        return;
+      case 'fusing':
+        this.state = opening(state.target);
+        return;
+      case 'open':
+        this.dismissed = state.target;
+        this.state = { ...state, kind: 'closing', progress: 1 - state.progress };
+        return;
+      case 'closing':
+        this.dismissed = null;
+        this.state = { ...state, kind: 'open', progress: 1 - state.progress };
+        return;
+    }
+  }
+
+  /** Magnify the open window by `factor` (below 1 widens it), within MIN_FRAMING_DEG and no magnification. */
+  zoomBy(factor: number): void {
+    const state = this.state;
+    if (state.kind !== 'open') return;
+    this.state = { ...state, framedDeg: THREE.MathUtils.clamp(state.framedDeg / factor, MIN_FRAMING_DEG, SPYGLASS_DEG) };
   }
 
   /** How full the dwell ring is, 0 to 1, while it shows; null when it does not. */
@@ -142,7 +211,7 @@ export class Spyglass {
     if (state.kind !== 'open' && state.kind !== 'closing') return null;
     const opened = smoothstep(state.kind === 'open' ? state.progress : 1 - state.progress);
     // Even in log scale: each moment of the zoom magnifies by the same factor.
-    const fovDeg = SPYGLASS_DEG * Math.pow(framingDeg(state.target) / SPYGLASS_DEG, opened);
+    const fovDeg = SPYGLASS_DEG * Math.pow(state.framedDeg / SPYGLASS_DEG, opened);
     return { target: state.target, fovDeg };
   }
 
