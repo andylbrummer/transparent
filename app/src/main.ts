@@ -42,6 +42,7 @@ import {
 import { CardboardToggle } from './ui/cardboard';
 import { CAPTURE_DEG, SPYGLASS_DEG, Spyglass, type SpyglassState } from './ui/spyglass';
 import { SpyglassLens, lensRadiusPx } from './render/spyglass-lens';
+import { HeadGestures, type HeadGesture } from './input/head-gestures';
 import { CardboardCalibration, headRollRad } from './ui/cardboard-calibration';
 import { LAYER_PRESETS, defaultPreset } from './ui/presets';
 import { ARControls } from './ui/ar-controls';
@@ -86,7 +87,13 @@ export interface App {
   /** The app clock's current instant. */
   getDate(): Date;
   /** The Cardboard spyglass's state and window, for the browser harness. */
-  getSpyglass(): { readonly state: SpyglassState['kind']; readonly target: string | null; readonly fovDeg: number | null };
+  getSpyglass(): {
+    readonly state: SpyglassState['kind'];
+    readonly target: string | null;
+    readonly fovDeg: number | null;
+    /** The last nod or shake seen in the viewer. */
+    readonly lastHeadGesture: HeadGesture | null;
+  };
   dispose(): void;
 }
 
@@ -485,8 +492,11 @@ export function init(): App | null {
   window.addEventListener('keydown', onKeyDown);
 
   const stereoRig = new StereoRig();
-  // Hands-free zoom in the viewer: a stare at a name in the sky opens a magnified window over it.
+  // Hands-free zoom in the viewer: a stare at a name in the sky opens a magnified window over it; nods and shakes steer it.
   const spyglass = new Spyglass();
+  const headGestures = new HeadGestures();
+  const headOrientation = new THREE.Quaternion();
+  let lastHeadGesture: HeadGesture | null = null;
   const spyglassLens = new SpyglassLens(background);
   const headForward = new THREE.Vector3();
   const spyglassDirection = new THREE.Vector3();
@@ -500,6 +510,7 @@ export function init(): App | null {
     layersPanel.setOpen(false);
     labels.setStereo(stereo);
     spyglass.reset();
+    headGestures.reset();
     labels.setSpyglassHole(null);
     // Nothing can be pressed in the viewer: the microphone stays open for the wake word.
     voice.setWakeListening(stereo);
@@ -573,7 +584,13 @@ export function init(): App | null {
       let spyglassFrame: SpyglassFrame | undefined;
       if (stereo && !cardboard.isCalibrating()) {
         camera.getWorldDirection(headForward);
-        spyglass.update(headForward, labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG)), deltaMs);
+        const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
+        spyglass.update(headForward, candidate, deltaMs);
+        const gesture = headGestures.update(camera.getWorldQuaternion(headOrientation), deltaMs);
+        if (gesture) {
+          lastHeadGesture = gesture;
+          spyglass.onHeadGesture(gesture, candidate);
+        }
         const view = spyglass.view();
         if (view) {
           spyglassFrame = {
@@ -665,7 +682,12 @@ export function init(): App | null {
     getDate: () => clock.now(),
     getSpyglass: () => {
       const state = spyglass.getState();
-      return { state: state.kind, target: 'target' in state ? state.target.name : null, fovDeg: spyglass.view()?.fovDeg ?? null };
+      return {
+        state: state.kind,
+        target: 'target' in state ? state.target.name : null,
+        fovDeg: spyglass.view()?.fovDeg ?? null,
+        lastHeadGesture,
+      };
     },
     dispose() {
       renderer.setAnimationLoop(null);

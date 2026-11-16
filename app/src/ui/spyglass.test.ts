@@ -7,7 +7,9 @@ import {
   FUSE_DELAY_MS,
   KEY_ZOOM_FACTOR,
   MIN_FRAMING_DEG,
+  NOD_ZOOM_FACTOR,
   OPEN_MS,
+  RECENT_MS,
   RELEASE_DEG,
   SPYGLASS_DEG,
   STILL_DEG_PER_S,
@@ -172,6 +174,74 @@ describe('Spyglass', () => {
     expect(spyglass.onKeyDown('+', m31)).toBe(true);
     expect(spyglass.getState().kind).toBe('open');
     for (const key of ['ArrowLeft', 'ArrowUp', 'r', 'R', 'a']) expect(spyglass.onKeyDown(key, m31)).toBe(false);
+  });
+
+  it('opens at once on a nod at a name', () => {
+    const spyglass = new Spyglass();
+    spyglass.onHeadGesture('nod', m31);
+    expect(spyglass.getState()).toMatchObject({ kind: 'open', target: { name: 'M31' } });
+  });
+
+  it('opens on a nod the name held still on just before it, the nod having moved the view off', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, 200, m31);
+    hold(spyglass, RECENT_MS / 2, null, turned(10));
+    spyglass.onHeadGesture('nod', null);
+    expect(spyglass.getState()).toMatchObject({ kind: 'open', target: { name: 'M31' } });
+  });
+
+  it('does nothing on a nod at bare sky long after a name', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, 200, m31);
+    hold(spyglass, RECENT_MS + 100, null, turned(10));
+    spyglass.onHeadGesture('nod', null);
+    expect(spyglass.getState().kind).toBe('idle');
+  });
+
+  it('goes a level deeper on each nod, and a shake backs out a level, then closes', () => {
+    const spyglass = new Spyglass();
+    spyglass.onHeadGesture('nod', m31);
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    spyglass.onHeadGesture('nod', m31);
+    spyglass.onHeadGesture('nod', m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) / NOD_ZOOM_FACTOR ** 2, 6);
+    spyglass.onHeadGesture('shake', m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31) / NOD_ZOOM_FACTOR, 6);
+    spyglass.onHeadGesture('shake', m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31), 6);
+    expect(spyglass.getState().kind).toBe('open');
+    spyglass.onHeadGesture('shake', m31);
+    expect(spyglass.getState().kind).toBe('closing');
+    // Closed by a shake, it stays shut on that name like one closed by key.
+    hold(spyglass, CLOSE_MS + 2 * DWELL_MS, m31);
+    expect(spyglass.getState().kind).toBe('idle');
+  });
+
+  it('counts no level a nod could not go: the deepest zoom, then one shake backs out', () => {
+    const spyglass = new Spyglass();
+    spyglass.onHeadGesture('nod', m31);
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    for (let nod = 0; nod < 20; nod++) spyglass.onHeadGesture('nod', m31);
+    expect(spyglass.view()!.fovDeg).toBe(MIN_FRAMING_DEG);
+    const levels = (spyglass.getState() as { depth: number }).depth;
+    expect(levels).toBe(Math.ceil(Math.log2(framingDeg(m31) / MIN_FRAMING_DEG)));
+    for (let shake = 0; shake < levels; shake++) spyglass.onHeadGesture('shake', m31);
+    expect(spyglass.getState().kind).toBe('open');
+    spyglass.onHeadGesture('shake', m31);
+    expect(spyglass.getState().kind).toBe('closing');
+  });
+
+  it('refuses the name just stared at on a shake, until the view leaves it', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS / 2, m31);
+    // The shake's own motion broke the stare before it was seen.
+    spyglass.update(turned(12), null, FRAME_MS);
+    spyglass.onHeadGesture('shake', null);
+    hold(spyglass, 3 * DWELL_MS, m31);
+    expect(spyglass.getState().kind).toBe('idle');
+    hold(spyglass, 2 * FRAME_MS, null);
+    hold(spyglass, DWELL_MS + FRAME_MS, m31);
+    expect(spyglass.getState().kind).toBe('open');
   });
 
   it('frames an object by its size, a point by the default, within bounds', () => {
