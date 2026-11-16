@@ -12,8 +12,9 @@
  * shade, app switch, power button) and may drop it on its own; while in
  * Cardboard it is taken again as soon as the page shows.
  *
- * Leaving: a tap anywhere (the viewer's button taps the screen), or
- * leaving fullscreen with the system back gesture.
+ * Leaving: holding the viewer's button (it taps the screen; a tap goes
+ * into the spyglass - ui/viewer-button, ui/spyglass), or leaving
+ * fullscreen with the system back gesture.
  *
  * The Calibrate button enters the same way, calibrating: the head's tilt
  * sets the image spacing (ui/cardboard-calibration) and the first tap
@@ -84,7 +85,7 @@ export class CardboardToggle {
     this.button.id = 'cardboard-toggle';
     this.button.type = 'button';
     this.button.textContent = 'Cardboard';
-    this.button.title = 'Split the view for a Cardboard viewer; tap to leave';
+    this.button.title = "Split the view for a Cardboard viewer; hold the viewer's button to leave";
     this.button.addEventListener('click', this.onButtonClick);
     this.calibrateButton = document.createElement('button');
     this.calibrateButton.id = 'cardboard-calibrate';

@@ -43,6 +43,7 @@ import { CardboardToggle } from './ui/cardboard';
 import { CAPTURE_DEG, SPYGLASS_DEG, Spyglass, type SpyglassState } from './ui/spyglass';
 import { SpyglassLens, lensRadiusPx } from './render/spyglass-lens';
 import { HeadGestures, type HeadGesture } from './input/head-gestures';
+import { ViewerButton } from './ui/viewer-button';
 import { CardboardCalibration, headRollRad } from './ui/cardboard-calibration';
 import { LAYER_PRESETS, defaultPreset } from './ui/presets';
 import { ARControls } from './ui/ar-controls';
@@ -447,17 +448,20 @@ export function init(): App | null {
   // iOS only grants orientation events from inside a user gesture, so the
   // first touch asks; everywhere else this resolves without a prompt.
   let orientationPermissionAsked = false;
+  const viewerButton = new ViewerButton();
 
   // Pointer events cover mouse and touch alike; the look controller tracks
   // each pointer id, so one finger turns and two pinch.
   const onPointerDown = (e: PointerEvent): void => {
-    // In the viewer the only input is its button, which taps the screen: keep the calibration, or leave.
+    // In the viewer the only input is its button, which taps the screen: it keeps the calibration, or is
+    // read as a tap (into the spyglass) or a hold (leave) - see onPointerUp and the frame loop.
     if (cardboard.isActive()) {
       if (cardboard.isCalibrating()) {
         cardboardCalibration.save();
         cardboard.finishCalibration();
       } else {
-        cardboard.exit();
+        renderer.domElement.setPointerCapture(e.pointerId);
+        viewerButton.down(e.pointerId, performance.now());
       }
       return;
     }
@@ -470,7 +474,19 @@ export function init(): App | null {
   };
   const onPointerMove = (e: PointerEvent): void =>
     look.onPointerMove(e.pointerId, e.clientX, e.clientY, renderer.domElement.clientHeight);
-  const onPointerUp = (e: PointerEvent): void => look.onPointerUp(e.pointerId);
+  const onPointerUp = (e: PointerEvent): void => {
+    // Always let the button go: a hold that left the viewer ends here, outside it.
+    const tapped = viewerButton.up(e.pointerId);
+    if (cardboard.isActive()) {
+      if (tapped && !cardboard.isCalibrating()) spyglass.deeper(labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG)));
+      return;
+    }
+    look.onPointerUp(e.pointerId);
+  };
+  const onPointerCancel = (e: PointerEvent): void => {
+    viewerButton.cancel(e.pointerId);
+    look.onPointerUp(e.pointerId);
+  };
   const onKeyDown = (e: KeyboardEvent): void => {
     // In the viewer the zoom keys are the spyglass's; turning keys stay the look's.
     if (cardboard.isActive() && !cardboard.isCalibrating()) {
@@ -488,7 +504,7 @@ export function init(): App | null {
   renderer.domElement.addEventListener('pointerup', onPointerUp);
   // A cancelled pointer (browser gesture, lost capture) ends the drag too;
   // otherwise the next touch would jump from the stale position.
-  renderer.domElement.addEventListener('pointercancel', onPointerUp);
+  renderer.domElement.addEventListener('pointercancel', onPointerCancel);
   window.addEventListener('keydown', onKeyDown);
 
   const stereoRig = new StereoRig();
@@ -568,6 +584,8 @@ export function init(): App | null {
     const height = window.innerHeight;
     const stereo = !ar && position !== null && cardboard.isActive();
     const nowMs = performance.now();
+    // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
+    if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
     const deltaMs = nowMs - lastFrameMs;
     // In AR the camera is the device's, put in the Earth frame where the window was placed.
     if (ar) arRunner.update(frame, camera);
@@ -704,7 +722,7 @@ export function init(): App | null {
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
-      renderer.domElement.removeEventListener('pointercancel', onPointerUp);
+      renderer.domElement.removeEventListener('pointercancel', onPointerCancel);
       for (const layer of fatLineLayers) layer.dispose();
       quakes?.dispose();
       layersPanel.dispose();
