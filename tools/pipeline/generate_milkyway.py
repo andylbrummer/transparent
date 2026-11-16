@@ -194,6 +194,15 @@ def load_denoised() -> tuple[np.ndarray, float, float]:
     return denoise(linear, black, white), black, white
 
 
+def save_tile(root: Path, order: int, ipix: int, display: np.ndarray) -> int:
+    """Write one tile of display values 0..1 as its HiPS JPEG; its size in bytes."""
+    path = tile_path(root, order, ipix)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.fromarray((np.clip(display, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
+    image.save(path, "JPEG", quality=JPEG_QUALITY, optimize=True)
+    return path.stat().st_size
+
+
 def write_tiles(root: Path, top_tile: Callable[[int], np.ndarray], to_display: Callable[[np.ndarray], np.ndarray]) -> None:
     """
     Every tile of orders 0 to MAX_ORDER under `root`, replacing what is there: `top_tile` makes each tile of
@@ -210,11 +219,7 @@ def write_tiles(root: Path, top_tile: Callable[[int], np.ndarray], to_display: C
         for order in range(MAX_ORDER, -1, -1):
             first = base * 4**order
             for k, tile in enumerate(level):
-                path = tile_path(root, order, first + k)
-                path.parent.mkdir(parents=True, exist_ok=True)
-                image = Image.fromarray((np.clip(to_display(tile), 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
-                image.save(path, "JPEG", quality=JPEG_QUALITY, optimize=True)
-                sizes[order] += path.stat().st_size
+                sizes[order] += save_tile(root, order, first + k, to_display(tile))
             if order > 0:
                 level = [parent_tile(level[4 * k : 4 * k + 4]) for k in range(len(level) // 4)]
         print(f"order-0 tile {base} done")
