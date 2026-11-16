@@ -113,14 +113,14 @@ GALAXY_MAX_ARCMIN = 300.0
 # fields on a plate, not galaxies; the spirals, Centaurus A and Fornax are brighter than this.
 GALAXY_MAX_SURFACE_MAG = 25.5
 # The cut-out, in diameters from the centre: whole to CORE, feathered to nothing over FEATHER beyond.
-GALAXY_CORE = 0.5
-GALAXY_FEATHER = 0.15
+CUTOUT_CORE = 0.5
+CUTOUT_FEATHER = 0.15
 # The plate's sky, measured as the median over this ring (in diameters), plus FLOOR for its grain.
-GALAXY_SKY_RING = (0.8, 1.4)
-GALAXY_FLOOR = 4 / 255
+PLATE_SKY_RING = (0.8, 1.4)
+PLATE_FLOOR = 4 / 255
 # Light above the sky, lifted as (1 - exp(-GAIN * light)) / (1 - exp(-GAIN)): the faint discs show from afar, and
 # close up the bright ones keep their arms and dust lanes rather than burning to white.
-GALAXY_GAIN = 2.0
+PLATE_GAIN = 2.0
 # A saturated star on a plate prints as a dark ring: any pixel darker than the median of this square is lifted to it.
 PLATE_HOLE_PX = 5
 # Close-ups: each galaxy is written deeper than the whole sky, down to the shallowest order at which it is CLOSEUP_PX
@@ -131,11 +131,11 @@ CLOSEUP_MAX_ORDER = 8
 # The side of an order-0 tile, degrees.
 ORDER0_DEG = math.degrees(math.sqrt(math.pi / 3))
 # The galaxies' names and positions, and which tiles exist beyond MAX_ORDER: the app asks only for those.
-GALAXIES_FILE = OUTPUT / "galaxies.json"
+CUTOUTS_FILE = OUTPUT / "galaxies.json"
 DSS_FETCH_THREADS = 8
 # Names for the labels where neither catalogue has the usual one: the UNGC's short forms, and NGC 253, whose
 # common names in OpenNGC are the Sculptor Filament (a different thing) and the Silver Coin.
-GALAXY_LABELS = {
+PLATE_LABELS = {
     "HolmII": "Holmberg II",
     "LeoI": "Leo I",
     "Fornax": "Fornax Dwarf",
@@ -176,7 +176,8 @@ def halpha_at(halpha: tuple[np.ndarray, bool], ipix: int, offsets: np.ndarray) -
 
 
 @dataclass(frozen=True)
-class Galaxy:
+class Cutout:
+    """An object cut from the DSS plates: a galaxy, or a nebula."""
     name: str
     label: str  # as the sky's names give it: 'M31 Andromeda Galaxy', a common name, or 'NGC 253'
     centre: np.ndarray  # ICRS unit vector
@@ -220,7 +221,7 @@ def dss_at(sub_pixels: np.ndarray) -> np.ndarray:
 def plate_sky(centre: np.ndarray, diameter_deg: float) -> np.ndarray:
     """Median DSS colour over the ring around a galaxy: one value for the whole galaxy, so no tile edge shows in it."""
     nside = 2 ** (MAX_ORDER + TILE_BITS)
-    inner, outer = (math.radians(r * diameter_deg) for r in GALAXY_SKY_RING)
+    inner, outer = (math.radians(r * diameter_deg) for r in PLATE_SKY_RING)
     ring = np.setdiff1d(hp.query_disc(nside, centre, outer, nest=True), hp.query_disc(nside, centre, inner, nest=True))
     return np.median(dss_at(ring), axis=0)
 
@@ -241,7 +242,7 @@ def openngc_labels() -> dict[str, str]:
     return labels
 
 
-def discernible_galaxies() -> list[Galaxy]:
+def discernible_galaxies() -> list[Cutout]:
     rows = vizier_rows("J/AJ/145/101/catalog", "karachentsev_ungc.tsv", "-out=Name,RAJ2000,DEJ2000,a26,Bmag,Dist")
     labels = openngc_labels()
     galaxies = []
@@ -253,38 +254,38 @@ def discernible_galaxies() -> list[Galaxy]:
         if surface_mag > GALAXY_MAX_SURFACE_MAG:
             continue
         centre = np.array(hp.ang2vec(sexagesimal_ra(row["RAJ2000"]), sexagesimal_dec(row["DEJ2000"]), lonlat=True))
-        label = GALAXY_LABELS.get(row["Name"]) or labels.get(row["Name"]) or catalogue_name(row["Name"])
-        galaxies.append(Galaxy(row["Name"], label, centre, diameter / 60, plate_sky(centre, diameter / 60)))
+        label = PLATE_LABELS.get(row["Name"]) or labels.get(row["Name"]) or catalogue_name(row["Name"])
+        galaxies.append(Cutout(row["Name"], label, centre, diameter / 60, plate_sky(centre, diameter / 60)))
     print(f"{len(galaxies)} galaxies: {', '.join(g.label for g in galaxies)}")
     return galaxies
 
 
-def touched_tiles(galaxy: Galaxy, order: int) -> np.ndarray:
-    """The tiles of `order` the galaxy's cut-out touches."""
-    radius = math.radians((GALAXY_CORE + GALAXY_FEATHER) * galaxy.diameter_deg)
-    return hp.query_disc(2**order, galaxy.centre, radius, inclusive=True, nest=True)
+def touched_tiles(cutout: Cutout, order: int) -> np.ndarray:
+    """The tiles of `order` a cut-out touches."""
+    radius = math.radians((CUTOUT_CORE + CUTOUT_FEATHER) * cutout.diameter_deg)
+    return hp.query_disc(2**order, cutout.centre, radius, inclusive=True, nest=True)
 
 
-def galaxies_by_tile(galaxies: list[Galaxy], order: int) -> dict[int, list[Galaxy]]:
-    by_tile: dict[int, list[Galaxy]] = defaultdict(list)
-    for galaxy in galaxies:
-        for tile in touched_tiles(galaxy, order):
-            by_tile[int(tile)].append(galaxy)
+def cutouts_by_tile(cutouts: list[Cutout], order: int) -> dict[int, list[Cutout]]:
+    by_tile: dict[int, list[Cutout]] = defaultdict(list)
+    for cutout in cutouts:
+        for tile in touched_tiles(cutout, order):
+            by_tile[int(tile)].append(cutout)
     return by_tile
 
 
-def closeup_order(galaxy: Galaxy) -> int:
-    """The shallowest order at which the galaxy is CLOSEUP_PX across, beyond MAX_ORDER and at most CLOSEUP_MAX_ORDER."""
-    wanted = math.ceil(math.log2(CLOSEUP_PX * ORDER0_DEG / (TILE_PX * galaxy.diameter_deg)))
+def closeup_order(cutout: Cutout) -> int:
+    """The shallowest order at which the object is CLOSEUP_PX across, beyond MAX_ORDER and at most CLOSEUP_MAX_ORDER."""
+    wanted = math.ceil(math.log2(CLOSEUP_PX * ORDER0_DEG / (TILE_PX * cutout.diameter_deg)))
     return min(CLOSEUP_MAX_ORDER, max(MAX_ORDER + 1, wanted))
 
 
-def closeup_tiles(galaxies: list[Galaxy]) -> dict[int, list[int]]:
-    """Per order beyond MAX_ORDER, the tiles written: each galaxy's, down to its close-up order."""
+def closeup_tiles(cutouts: list[Cutout]) -> dict[int, list[int]]:
+    """Per order beyond MAX_ORDER, the tiles written: each cut-out's, down to its close-up order."""
     tiles: dict[int, set[int]] = defaultdict(set)
-    for galaxy in galaxies:
-        for order in range(MAX_ORDER + 1, closeup_order(galaxy) + 1):
-            tiles[order].update(int(tile) for tile in touched_tiles(galaxy, order))
+    for cutout in cutouts:
+        for order in range(MAX_ORDER + 1, closeup_order(cutout) + 1):
+            tiles[order].update(int(tile) for tile in touched_tiles(cutout, order))
     return {order: sorted(tiles[order]) for order in sorted(tiles)}
 
 
@@ -296,27 +297,28 @@ def fill_plate_holes(light: np.ndarray) -> np.ndarray:
     return np.maximum(light, np.median(windows, axis=(-2, -1)))
 
 
-def galaxy_light(order: int, ipix: int, galaxies: list[Galaxy], offsets: np.ndarray) -> np.ndarray:
+def plate_light(order: int, ipix: int, cutouts: list[Cutout], offsets: np.ndarray) -> np.ndarray:
     """
-    The galaxies' own light over tile `ipix` of `order`, display values. Where cut-outs overlap, the darkest of their
-    skies is taken off: M32's ring of sky lies on Andromeda's disc, and taking that off would cut a hole in Andromeda.
+    The plates' own light inside the cut-outs over tile `ipix` of `order`, display values. Where cut-outs overlap, the
+    darkest of their skies is taken off: M32's ring of sky lies on Andromeda's disc, and taking that off would cut a
+    hole in Andromeda.
     """
     vectors = tile_vectors(order, ipix, offsets)
     weight = np.zeros(offsets.shape, dtype=np.float32)
     sky = np.ones((*offsets.shape, 3), dtype=np.float32)
-    for galaxy in galaxies:
-        reach = np.degrees(np.arccos(np.clip(vectors @ galaxy.centre, -1, 1))) / galaxy.diameter_deg
-        edge = np.clip((GALAXY_CORE + GALAXY_FEATHER - reach) / GALAXY_FEATHER, 0, 1)
+    for cutout in cutouts:
+        reach = np.degrees(np.arccos(np.clip(vectors @ cutout.centre, -1, 1))) / cutout.diameter_deg
+        edge = np.clip((CUTOUT_CORE + CUTOUT_FEATHER - reach) / CUTOUT_FEATHER, 0, 1)
         mine = edge * edge * (3 - 2 * edge)
         weight = np.maximum(weight, mine)
         inside = mine > 0
-        sky[inside] = np.minimum(sky[inside], galaxy.sky)
+        sky[inside] = np.minimum(sky[inside], cutout.sky)
     # The light above the plate's sky, back to the full range, then lifted: white stays white.
-    light = np.clip((dss_tile(order, ipix) - sky - GALAXY_FLOOR) / (1 - sky - GALAXY_FLOOR), 0, 1)
+    light = np.clip((dss_tile(order, ipix) - sky - PLATE_FLOOR) / (1 - sky - PLATE_FLOOR), 0, 1)
     # Outside every cut-out there is no sky to take off: nothing there for the hole filling to spread inward.
     light[weight == 0] = 0
     light = fill_plate_holes(light)
-    return (1 - np.exp(-GALAXY_GAIN * light)) / (1 - math.exp(-GALAXY_GAIN)) * weight[..., None]
+    return (1 - np.exp(-PLATE_GAIN * light)) / (1 - math.exp(-PLATE_GAIN)) * weight[..., None]
 
 
 def screen(under: np.ndarray, over: np.ndarray) -> np.ndarray:
@@ -346,23 +348,23 @@ def window_of_ancestor(tile: np.ndarray, order: int, ipix: int) -> np.ndarray:
     return rows[:, c0] * (1 - tc)[None, :, None] + rows[:, c1] * tc[None, :, None]
 
 
-def write_closeups(galaxies: list[Galaxy], backgrounds: dict[int, np.ndarray], offsets: np.ndarray) -> dict[int, list[int]]:
+def write_closeups(cutouts: list[Cutout], backgrounds: dict[int, np.ndarray], offsets: np.ndarray) -> dict[int, list[int]]:
     """
-    The close-up tiles: the finished sky of their order-MAX_ORDER ancestor before its galaxies, as the app would
-    draw it there, with the galaxies screened over it at the DSS tiles' own order. Outside the cut-outs a close-up is
+    The close-up tiles: the finished sky of their order-MAX_ORDER ancestor before the plates' light, as the app would
+    draw it there, with the cut-outs screened over it at the DSS tiles' own order. Outside the cut-outs a close-up is
     then its ancestor, so none shows an edge against the sky drawn from the ancestor beside it.
     """
-    tiles = closeup_tiles(galaxies)
+    tiles = closeup_tiles(cutouts)
     wanted = [(order, ipix) for order, pixels in tiles.items() for ipix in pixels]
     with ThreadPoolExecutor(DSS_FETCH_THREADS) as pool:
         list(pool.map(lambda tile: dss_tile_path(*tile), wanted))
     for order, pixels in tiles.items():
-        here = galaxies_by_tile(galaxies, order)
+        here = cutouts_by_tile(cutouts, order)
         size = 0
         for ipix in pixels:
             ancestor = ipix >> (2 * (order - MAX_ORDER))
             under = window_of_ancestor(backgrounds[ancestor], order, ipix)
-            size += save_tile(OUTPUT, order, ipix, screen(under, galaxy_light(order, ipix, here[ipix], offsets)))
+            size += save_tile(OUTPUT, order, ipix, screen(under, plate_light(order, ipix, here[ipix], offsets)))
         dss_tile.cache_clear()
         print(f"order {order}: {len(pixels)} close-up tiles, {size / 2**20:.1f} MB")
     return tiles
@@ -385,7 +387,7 @@ def main() -> None:
     surround = brightness_map(linear, black, white, LEVELS_WIDTH, SURROUND_SIGMA_PX)
     halpha = halpha_rayleighs()
     galaxies = discernible_galaxies()
-    by_tile = galaxies_by_tile(galaxies, MAX_ORDER)
+    by_tile = cutouts_by_tile(galaxies, MAX_ORDER)
     offsets = tile_pixel_offsets()
     # The finished sky under each galaxy before it is screened on: the close-ups are drawn over it.
     backgrounds: dict[int, np.ndarray] = {}
@@ -397,11 +399,11 @@ def main() -> None:
         if ipix not in by_tile:
             return finished
         backgrounds[ipix] = finished
-        return screen(finished, galaxy_light(MAX_ORDER, ipix, by_tile[ipix], offsets))
+        return screen(finished, plate_light(MAX_ORDER, ipix, by_tile[ipix], offsets))
 
     write_tiles(OUTPUT, top_tile, lambda tile: tile)
     tiles = write_closeups(galaxies, backgrounds, offsets)
-    GALAXIES_FILE.write_text(
+    CUTOUTS_FILE.write_text(
         json.dumps(
             {
                 "wholeSkyOrder": MAX_ORDER,
@@ -419,7 +421,7 @@ def main() -> None:
             separators=(",", ":"),
         )
     )
-    print(f"wrote {GALAXIES_FILE.relative_to(REPO_ROOT)}: {sum(len(p) for p in tiles.values())} close-up tiles")
+    print(f"wrote {CUTOUTS_FILE.relative_to(REPO_ROOT)}: {sum(len(p) for p in tiles.values())} close-up tiles")
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ from PIL import Image
 
 from generate_milkyway import MAX_ORDER, TILE_PX, tile_path
 from generate_milkyway import OUTPUT as PLAIN
-from generate_milkyway_enhanced import GALAXIES_FILE, OUTPUT, window_of_ancestor
+from generate_milkyway_enhanced import CUTOUTS_FILE, OUTPUT, window_of_ancestor
 from geo_test_support import check, finish
 from test_milkyway import LAYOUT_TILES, LAYOUTS, blocks, correlation, grey, patch
 
@@ -65,7 +65,7 @@ def detail(tile: np.ndarray) -> float:
 
 
 def check_closeups() -> None:
-    listed = json.loads(GALAXIES_FILE.read_text())
+    listed = json.loads(CUTOUTS_FILE.read_text())
     tiles = {int(order): set(pixels) for order, pixels in listed["tiles"].items()}
     check(listed["wholeSkyOrder"] == MAX_ORDER and min(tiles) == MAX_ORDER + 1, f"close-ups start at order {min(tiles)}, under the whole sky's {MAX_ORDER}")
     written = {(int(path.parts[-3][len("Norder") :]), int(path.stem[len("Npix") :])) for path in OUTPUT.glob("Norder*/Dir*/Npix*.jpg")}
