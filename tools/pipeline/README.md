@@ -288,7 +288,7 @@ under `tools/pipeline/.cache/venv`). Raw downloads are cached in the ignored
 | `generate_meteor_showers.py` | The year's meteor showers - where each radiant is on the sky, when it is active, when it peaks and how strong it usually is | `app/public/space/meteor-showers.json` | `test_meteor_showers.py` |
 | `generate_meteorites.py` | Meteorites | `app/public/geo/meteorites.json` | `test_meteorites.py` |
 | `generate_milkyway.py` | The Milky Way, as HiPS tiles to order 2 | `app/public/sky/milkyway/Norder*/Dir0/Npix*.jpg` | `test_milkyway.py` |
-| `generate_milkyway_enhanced.py` | The Milky Way finished for looks: local contrast, colour, H-alpha nebulae in red, galaxies from DSS, with close-ups to order 8 around them | `app/public/sky/milkyway-enhanced/Norder*/Dir*/Npix*.jpg`, `galaxies.json` (close-up tiles, galaxy names) | `test_milkyway_enhanced.py` |
+| `generate_milkyway_enhanced.py` | The Milky Way finished for looks: local contrast, colour, H-alpha nebulae in red, galaxies and starless nebulae from DSS, with close-ups to order 8 around them | `app/public/sky/milkyway-enhanced/Norder*/Dir*/Npix*.jpg`, `cutouts.json` (close-up tiles, names) | `test_milkyway_enhanced.py` |
 | `generate_moon.py` | The face of the Moon | `app/public/sky/moon.jpg` | `test_moon.py` |
 | `generate_planet_constants.py` | Shapes, poles and rotations of the planets (IAU 2015) | `packages/core/src/astro/planet-rotation-data.ts` | core `planet-discs.test.ts` |
 | `generate_planet_moons.py` | Orbits of ten moons of Jupiter, Saturn and Neptune, fitted to Horizons | `packages/core/src/astro/planet-moons-data.ts` | `test_planet_moons.py` |

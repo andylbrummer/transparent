@@ -4,9 +4,10 @@ Data checks for generate_milkyway_enhanced.py's output: every tile is
 there, the set fits its budget, the tiles keep the plain tiles' layout,
 and the finish did what it is for - nebulae glow red where the sky has
 them, the bright galaxies Gaia misses are there, the Milky Way's shape is
-unchanged, and empty sky stays dark. The galaxies' close-ups: galaxies.json
-lists exactly the deep tiles written, names the galaxies, and a close-up
-holds detail its order-2 ancestor does not.
+unchanged, and empty sky stays dark. The close-ups: cutouts.json lists
+exactly the deep tiles written and names the galaxies and nebulae, a
+close-up holds detail its order-2 ancestor does not, and a nebula's is
+starless.
 
 Layout: the enhanced tiles are compared with the plain ones
 (test_milkyway.py checks those against DSS) block by block, as written
@@ -24,13 +25,13 @@ from PIL import Image
 
 from generate_milkyway import MAX_ORDER, TILE_PX, tile_path
 from generate_milkyway import OUTPUT as PLAIN
-from generate_milkyway_enhanced import CUTOUTS_FILE, OUTPUT, window_of_ancestor
+from generate_milkyway_enhanced import CUTOUTS_FILE, OUTPUT, dss_tile_path, window_of_ancestor
 from geo_test_support import check, finish
 from test_milkyway import LAYOUT_TILES, LAYOUTS, blocks, correlation, grey, patch
 
 BUDGET_MB = 12
-# The galaxies' close-ups, on top: about 10 MB as written.
-CLOSEUP_BUDGET_MB = 14
+# The close-ups, on top: galaxies 10 MB, nebulae 14 MB as written.
+CLOSEUP_BUDGET_MB = 28
 RED_ABOVE_GREEN = 50
 
 # H-alpha regions (ICRS from SIMBAD): each must read red over its starlight, red standing well above green.
@@ -52,16 +53,37 @@ GALAXIES = {
     "the Pinwheel, M101": (210.802, 54.349),
 }
 GALAXY_LIFT = 60
-# Labels the sky must show, as the deep-sky layer names them.
-GALAXY_LABELS = ("M31 Andromeda Galaxy", "M33 Triangulum Galaxy", "M81 Bode's Galaxy", "M51 Whirlpool Galaxy", "Centaurus A", "Sculptor Galaxy")
+# Labels the sky must show, as the deep-sky layer names them, by kind.
+CUTOUT_LABELS = {
+    "galaxy": ("M31 Andromeda Galaxy", "M33 Triangulum Galaxy", "M81 Bode's Galaxy", "M51 Whirlpool Galaxy", "Centaurus A", "Sculptor Galaxy"),
+    "nebula": ("M42 Orion Nebula", "M8 Lagoon Nebula", "M16 Eagle Nebula", "Carina Nebula", "North America Nebula", "Veil Nebula", "Horsehead Nebula"),
+}
 # Close-ups checked for detail: (name, ICRS centre, order). Fine detail is the mean absolute difference between
 # neighbouring pixels; a close-up must hold several times what its ancestor's window, enlarged, does.
-CLOSEUPS = (("M51", (202.47, 47.195), 8), ("NGC 253", (11.888, -25.288), 8), ("M31", (10.685, 41.269), 6))
+CLOSEUPS = (
+    ("M51", (202.47, 47.195), 8),
+    ("NGC 253", (11.888, -25.288), 8),
+    ("M31", (10.685, 41.269), 6),
+    ("the Orion Nebula", (83.82, -5.39), 7),
+    ("the Veil", (312.0, 31.0), 6),
+)
 DETAIL_GAIN = 3.0
+# Starless: the Veil's close-up (a star field crossed by filaments) keeps under this share of the plate's stars,
+# counted as pixels brighter than the median of the STAR_BOX square around them by STAR_LIFT grey levels.
+STARLESS_TILE = ("the Veil", (312.0, 31.0), 6)
+STARS_KEPT = 0.2
+STAR_BOX = 7
+STAR_LIFT = 40
 
 
 def detail(tile: np.ndarray) -> float:
     return float(np.abs(np.diff(tile, axis=0)).mean() + np.abs(np.diff(tile, axis=1)).mean())
+
+
+def star_pixels(grey: np.ndarray) -> int:
+    half = STAR_BOX // 2
+    windows = np.lib.stride_tricks.sliding_window_view(np.pad(grey, half, mode="edge"), (STAR_BOX, STAR_BOX))
+    return int((grey > np.median(windows, axis=(-2, -1)) + STAR_LIFT).sum())
 
 
 def check_closeups() -> None:
@@ -71,12 +93,15 @@ def check_closeups() -> None:
     written = {(int(path.parts[-3][len("Norder") :]), int(path.stem[len("Npix") :])) for path in OUTPUT.glob("Norder*/Dir*/Npix*.jpg")}
     deep_written = {(order, ipix) for order, ipix in written if order > MAX_ORDER}
     deep_listed = {(order, ipix) for order, pixels in tiles.items() for ipix in pixels}
-    check(deep_written == deep_listed, f"galaxies.json lists the {len(deep_listed)} close-up tiles written ({len(deep_written ^ deep_listed)} differ)")
-    labels = [galaxy["label"] for galaxy in listed["galaxies"]]
-    missing = [label for label in GALAXY_LABELS if label not in labels]
-    check(not missing, f"{len(labels)} galaxies named, the showpieces among them (missing: {missing or 'none'})")
-    unnamed = [label for label in labels if label.startswith(("MESSIER", "Holm", "Leo")) and " " not in label]
+    check(deep_written == deep_listed, f"cutouts.json lists the {len(deep_listed)} close-up tiles written ({len(deep_written ^ deep_listed)} differ)")
+    for kind, showpieces in CUTOUT_LABELS.items():
+        labels = [cutout["label"] for cutout in listed["cutouts"] if cutout["kind"] == kind]
+        missing = [label for label in showpieces if label not in labels]
+        check(not missing, f"{len(labels)} of kind {kind} named, the showpieces among them (missing: {missing or 'none'})")
+    labels = [cutout["label"] for cutout in listed["cutouts"]]
+    unnamed = [label for label in labels if label.startswith(("MESSIER", "Holm", "Leo")) and " " not in label or label.startswith("the ")]
     check(not unnamed, f"no catalogue shorthand in the names ({unnamed or 'none'})")
+    check(len(set(labels)) == len(labels), "no name is on the sky twice")
     for name, (ra, dec), order in CLOSEUPS:
         ipix = int(hp.ang2pix(2**order, ra, dec, lonlat=True, nest=True))
         check(ipix in tiles.get(order, set()), f"{name} has a close-up at order {order}")
@@ -85,6 +110,11 @@ def check_closeups() -> None:
         enlarged = window_of_ancestor(ancestor[..., None], order, ipix)[..., 0]
         sharp, soft = detail(closeup), detail(enlarged)
         check(sharp > DETAIL_GAIN * soft, f"{name}'s close-up holds detail its order-2 tile does not ({sharp:.1f} against {soft:.1f})")
+    name, (ra, dec), order = STARLESS_TILE
+    ipix = int(hp.ang2pix(2**order, ra, dec, lonlat=True, nest=True))
+    ours = star_pixels(np.asarray(Image.open(tile_path(OUTPUT, order, ipix)).convert("L"), dtype=np.float32))
+    plate = star_pixels(np.asarray(Image.open(dss_tile_path(order, ipix)).convert("L"), dtype=np.float32))
+    check(ours < STARS_KEPT * plate, f"{name}'s close-up is starless ({ours} star pixels; {plate} on the plate)")
 
 
 def plain_brightness(ra: float, dec: float, radius_px: int) -> float:
