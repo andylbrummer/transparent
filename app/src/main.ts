@@ -40,6 +40,8 @@ import {
   type LayerSwitch,
 } from './ui/layers-panel';
 import { CardboardToggle } from './ui/cardboard';
+import { CAPTURE_DEG, SPYGLASS_DEG, Spyglass, type SpyglassState } from './ui/spyglass';
+import { SpyglassLens, lensRadiusPx } from './render/spyglass-lens';
 import { CardboardCalibration, headRollRad } from './ui/cardboard-calibration';
 import { LAYER_PRESETS, defaultPreset } from './ui/presets';
 import { ARControls } from './ui/ar-controls';
@@ -54,7 +56,7 @@ import { createTalkButton } from './voice/talk-button';
 import { IDENTIFY_MAX_ANGLE_RAD, respondToSpeech } from './voice/respond';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
-import { SKY_RADIUS_M, type SkyUniforms } from './layers/types';
+import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
 import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
 
 /** geology.json: labels plus the plume conduits under classified hotspots. */
@@ -83,6 +85,8 @@ export interface App {
   getVisibleLabels(): string[];
   /** The app clock's current instant. */
   getDate(): Date;
+  /** The Cardboard spyglass's state and window, for the browser harness. */
+  getSpyglass(): { readonly state: SpyglassState['kind']; readonly target: string | null; readonly fovDeg: number | null };
   dispose(): void;
 }
 
@@ -135,7 +139,8 @@ export function init(): App | null {
   if (!container) return null;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050510);
+  const background = new THREE.Color(0x050510);
+  scene.background = background;
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -470,6 +475,11 @@ export function init(): App | null {
   window.addEventListener('keydown', onKeyDown);
 
   const stereoRig = new StereoRig();
+  // Hands-free zoom in the viewer: a stare at a name in the sky opens a magnified window over it.
+  const spyglass = new Spyglass();
+  const spyglassLens = new SpyglassLens(background);
+  const headForward = new THREE.Vector3();
+  const spyglassDirection = new THREE.Vector3();
   const cardboardCalibration = new CardboardCalibration(container, localStorage);
   const cardboard = new CardboardToggle(container, (stereo) => {
     // Entering is a tap on the button, so iOS can still be asked for the compass here.
@@ -479,6 +489,8 @@ export function init(): App | null {
     }
     layersPanel.setOpen(false);
     labels.setStereo(stereo);
+    spyglass.reset();
+    labels.setSpyglassHole(null);
     // Nothing can be pressed in the viewer: the microphone stays open for the wake word.
     voice.setWakeListening(stereo);
     onResize();
@@ -548,7 +560,20 @@ export function init(): App | null {
       skyRoot.quaternion.copy(inertialRoot.quaternion);
       skyRoot.position.copy(camera.position);
       skyUniforms.uObserverUp.value.copy(camera.position).normalize();
-      lazyLayers.update({ date, camera, position, deltaMs, eyes: stereo ? 2 : 1 });
+      let spyglassFrame: SpyglassFrame | undefined;
+      if (stereo && !cardboard.isCalibrating()) {
+        camera.getWorldDirection(headForward);
+        spyglass.update(headForward, labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG)), deltaMs);
+        const view = spyglass.view();
+        if (view) {
+          spyglassFrame = {
+            direction: view.target.directionInto(spyglassDirection),
+            fovDeg: view.fovDeg,
+            heightCss: 2 * lensRadiusPx(stereoRig.left, height),
+          };
+        }
+      }
+      lazyLayers.update({ date, camera, position, deltaMs, eyes: stereo ? 2 : 1, spyglass: spyglassFrame });
     }
     lastFrameMs = nowMs;
     // A layer swaps the surface map without telling anyone: the HUD's note about it follows.
@@ -564,8 +589,28 @@ export function init(): App | null {
         cardboardCalibration.update(headRollRad(camera, skyUniforms.uObserverUp.value), deltaMs, width, height);
       }
       stereoRig.update(camera, eyeWidth, height, cardboardCalibration.spacingPx());
+      const view = spyglass.view();
+      const fuse = spyglass.fuse();
+      if (view) view.target.directionInto(spyglassDirection);
+      else if (fuse) fuse.target.directionInto(spyglassDirection);
+      labels.setSpyglassHole(view ? spyglassDirection : null, THREE.MathUtils.degToRad(SPYGLASS_DEG / 2));
       labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
-      stereoRig.render(renderer, scene, width, height, (eye) => globe.update(eye, renderer.domElement.height));
+      stereoRig.render(
+        renderer,
+        scene,
+        width,
+        height,
+        (eye) => globe.update(eye, renderer.domElement.height),
+        (eye, viewport) => {
+          if (view) {
+            spyglassLens.drawLens(renderer, scene, eye, viewport, spyglassDirection, view.fovDeg, (lensCamera, heightPx) =>
+              globe.update(lensCamera, heightPx)
+            );
+          } else if (fuse) {
+            spyglassLens.drawFuse(renderer, eye, viewport, spyglassDirection, fuse.fraction);
+          }
+        }
+      );
     } else {
       if (position) {
         globe.update(camera, renderer.domElement.height);
@@ -608,9 +653,14 @@ export function init(): App | null {
     getFrameCount: () => frameCount,
     getVisibleLabels: () => labels.visibleNames(),
     getDate: () => clock.now(),
+    getSpyglass: () => {
+      const state = spyglass.getState();
+      return { state: state.kind, target: 'target' in state ? state.target.name : null, fovDeg: spyglass.view()?.fovDeg ?? null };
+    },
     dispose() {
       renderer.setAnimationLoop(null);
       arRunner.dispose();
+      spyglassLens.dispose();
       arControls.dispose();
       sensors.stop();
       window.removeEventListener('resize', onResize);

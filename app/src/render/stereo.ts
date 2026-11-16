@@ -98,14 +98,16 @@ export class StereoRig {
 
   /**
    * Draw `scene` once per eye into its half of the canvas. `beforeEye` runs
-   * first for each, for state that follows the camera (the globe's rays).
+   * first for each, for state that follows the camera (the globe's rays);
+   * `afterEye`, if given, draws over the eye's half (the spyglass).
    */
   render(
     renderer: THREE.WebGLRenderer,
     scene: THREE.Scene,
     width: number,
     height: number,
-    beforeEye: (eye: THREE.PerspectiveCamera) => void
+    beforeEye: (eye: THREE.PerspectiveCamera) => void,
+    afterEye?: (eye: THREE.PerspectiveCamera, viewport: { x: number; y: number; width: number; height: number }) => void
   ): void {
     const eyeWidth = Math.floor(width / 2);
     renderer.setScissorTest(true);
@@ -117,6 +119,7 @@ export class StereoRig {
       renderer.setScissor(x, 0, eyeWidth, height);
       beforeEye(camera);
       renderer.render(scene, camera);
+      afterEye?.(camera, { x, y: 0, width: eyeWidth, height });
     }
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, width, height);

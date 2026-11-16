@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
+import {
+  CLOSE_MS,
+  DEFAULT_FRAMING_DEG,
+  DWELL_MS,
+  FUSE_DELAY_MS,
+  MIN_FRAMING_DEG,
+  OPEN_MS,
+  RELEASE_DEG,
+  SPYGLASS_DEG,
+  STILL_DEG_PER_S,
+  Spyglass,
+  framingDeg,
+  type SpyglassTarget,
+} from './spyglass';
+
+const FRAME_MS = 16;
+const AHEAD = new THREE.Vector3(0, 0, -1);
+
+function target(name: string, extentDeg: number | null, direction = AHEAD): SpyglassTarget {
+  return { key: name, name, extentDeg, directionInto: (out) => out.copy(direction) };
+}
+
+/** The head turned `deg` from straight ahead, to the right. */
+function turned(deg: number): THREE.Vector3 {
+  const rad = THREE.MathUtils.degToRad(deg);
+  return new THREE.Vector3(Math.sin(rad), 0, -Math.cos(rad));
+}
+
+/** Frames of `ms` with the head at `forward` and `candidate` under it. */
+function hold(spyglass: Spyglass, ms: number, candidate: SpyglassTarget | null, forward = AHEAD): void {
+  for (let t = 0; t < ms; t += FRAME_MS) spyglass.update(forward, candidate, FRAME_MS);
+}
+
+describe('Spyglass', () => {
+  const m31 = target('M31', 3);
+
+  it('opens after a still stare of DWELL_MS at a name', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS - 2 * FRAME_MS, m31);
+    expect(spyglass.getState().kind).toBe('fusing');
+    hold(spyglass, 3 * FRAME_MS, m31);
+    expect(spyglass.getState().kind).toBe('open');
+  });
+
+  it('does nothing at bare sky', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, 3 * DWELL_MS, null);
+    expect(spyglass.getState().kind).toBe('idle');
+    expect(spyglass.view()).toBeNull();
+  });
+
+  it('shows the ring only after FUSE_DELAY_MS, filling to the end of the dwell', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, FUSE_DELAY_MS - 2 * FRAME_MS, m31);
+    expect(spyglass.fuse()).toBeNull();
+    hold(spyglass, (DWELL_MS - FUSE_DELAY_MS) / 2 + 2 * FRAME_MS, m31);
+    expect(spyglass.fuse()?.fraction).toBeCloseTo(0.5, 1);
+  });
+
+  it('starts the dwell over when the head turns faster than holding still', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS - 4 * FRAME_MS, m31);
+    // One frame turned at twice the still speed.
+    spyglass.update(turned(((2 * STILL_DEG_PER_S) / 1000) * FRAME_MS), m31, FRAME_MS);
+    expect(spyglass.getState().kind).toBe('idle');
+  });
+
+  it('starts the dwell over when another name comes under the view', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS - 4 * FRAME_MS, m31);
+    hold(spyglass, 2 * FRAME_MS, target('M32', 0.1));
+    expect(spyglass.getState()).toMatchObject({ kind: 'fusing', target: { name: 'M32' } });
+    expect((spyglass.getState() as { heldMs: number }).heldMs).toBeLessThan(DWELL_MS / 2);
+  });
+
+  it('zooms from no magnification to the framing, and back when looked away from', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS + FRAME_MS, m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(SPYGLASS_DEG, 0);
+    hold(spyglass, OPEN_MS + FRAME_MS, m31);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(framingDeg(m31), 5);
+    // Inside the release angle it stays open, the window fixed on the object.
+    hold(spyglass, 200, null, turned(RELEASE_DEG - 1));
+    expect(spyglass.getState().kind).toBe('open');
+    spyglass.update(turned(RELEASE_DEG + 1), null, FRAME_MS);
+    expect(spyglass.getState().kind).toBe('closing');
+    hold(spyglass, CLOSE_MS + FRAME_MS, null, turned(RELEASE_DEG + 1));
+    expect(spyglass.getState().kind).toBe('idle');
+    expect(spyglass.view()).toBeNull();
+  });
+
+  it('zooms evenly in log scale: half way through, the geometric mean', () => {
+    const spyglass = new Spyglass();
+    hold(spyglass, DWELL_MS + FRAME_MS, m31);
+    // Smoothstep is at one half at the middle of the opening.
+    hold(spyglass, OPEN_MS / 2, m31);
+    const progress = (spyglass.getState() as { progress: number }).progress;
+    const eased = progress * progress * (3 - 2 * progress);
+    expect(spyglass.view()!.fovDeg).toBeCloseTo(SPYGLASS_DEG * Math.pow(framingDeg(m31) / SPYGLASS_DEG, eased), 6);
+  });
+
+  it('frames an object by its size, a point by the default, within bounds', () => {
+    expect(framingDeg(target('point', null))).toBe(DEFAULT_FRAMING_DEG);
+    expect(framingDeg(target('M31', 3))).toBeCloseTo(4.8);
+    expect(framingDeg(target('tiny', 0.001))).toBe(MIN_FRAMING_DEG);
+    expect(framingDeg(target('huge', 90))).toBe(SPYGLASS_DEG);
+  });
+});
