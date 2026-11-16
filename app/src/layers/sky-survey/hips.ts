@@ -48,6 +48,41 @@ export function tilesForView(order: number, direction: readonly [number, number,
 }
 
 /**
+ * `tiles`, each one that reaches into the disc of `radiusRad` about
+ * `direction` split into its four children - and theirs - down to `order`:
+ * still one cover of the view, no two tiles over the same sky (a survey's
+ * light is added, so an overlap would draw twice as bright), drawn at
+ * `order` in the disc and as before around it. For a magnified view inside
+ * the main one: the Cardboard spyglass.
+ */
+export function refineToward(
+  tiles: readonly HipsTile[],
+  direction: readonly [number, number, number],
+  radiusRad: number,
+  order: number
+): HipsTile[] {
+  const inDisc = new Map<number, Set<number>>();
+  const reaches = (tile: HipsTile): boolean => {
+    let pixels = inDisc.get(tile.order);
+    if (!pixels) {
+      pixels = new Set(healpixPixelsInDisc(tile.order, direction, radiusRad));
+      inDisc.set(tile.order, pixels);
+    }
+    return pixels.has(tile.ipix);
+  };
+  const cover: HipsTile[] = [];
+  const visit = (tile: HipsTile): void => {
+    if (tile.order >= order || !reaches(tile)) {
+      cover.push(tile);
+      return;
+    }
+    for (let child = 0; child < 4; child++) visit({ order: tile.order + 1, ipix: tile.ipix * 4 + child });
+  };
+  for (const tile of tiles) visit(tile);
+  return cover;
+}
+
+/**
  * Where an image's pixels are on its tile. HEALPix counts (u, v) from the
  * pixel's south corner, u toward the east corner and v toward the west
  * one; a HiPS image has v running along its rows from the left and u

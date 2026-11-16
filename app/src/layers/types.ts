@@ -55,6 +55,18 @@ export interface FrameState {
    * where whatever a layer costs per draw it pays twice. Absent means 1.
    */
   readonly eyes?: 1 | 2;
+  /** A magnified window inside the view, while one is open: layers that sharpen with zoom sharpen there too. */
+  readonly spyglass?: SpyglassFrame;
+}
+
+/** The Cardboard spyglass's view (ui/spyglass). */
+export interface SpyglassFrame {
+  /** Where it looks: a world unit vector. */
+  readonly direction: THREE.Vector3;
+  /** Its field, degrees across. */
+  readonly fovDeg: number;
+  /** Its size on the screen, CSS px across. */
+  readonly heightCss: number;
 }
 
 /** Uniform objects shared by reference, so one write reaches every sky material. */

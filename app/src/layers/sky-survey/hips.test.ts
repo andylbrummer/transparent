@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { healpixPixelPoint, healpixUnitToNested } from '@transparent-earth/core';
-import { HIPS_TILE_PX, bestSource, targetOrder, tileImageXy, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad } from './hips';
+import { HIPS_TILE_PX, bestSource, refineToward, targetOrder, tileImageXy, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad } from './hips';
 
 describe('tileUrl', () => {
   it('lays tiles out as the HiPS standard does', () => {
@@ -104,5 +104,40 @@ describe('tileSegments', () => {
     expect(tileSegments(0)).toBeGreaterThan(tileSegments(3));
     expect(tileSegments(3)).toBeGreaterThan(tileSegments(8));
     expect(tileSegments(9)).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('refineToward', () => {
+  const direction: [number, number, number] = [0.6, 0.3, Math.sqrt(1 - 0.45)];
+  /** A tile's share of the sphere: 12 × 4^order tiles of equal area. */
+  const area = (tile: { order: number }): number => 1 / (12 * 4 ** tile.order);
+
+  it('keeps one cover of the same sky, with no two tiles over the same place', () => {
+    const view = tilesForView(3, direction, 0.3, 64);
+    const cover = refineToward(view, direction, 0.01, 8);
+    const sum = (tiles: readonly { order: number }[]): number => tiles.reduce((total, tile) => total + area(tile), 0);
+    expect(sum(cover)).toBeCloseTo(sum(view), 12);
+    // No tile is an ancestor of another.
+    const keys = new Set(cover.map(tileKey));
+    for (const tile of cover) {
+      for (let order = tile.order - 1; order >= 3; order--) {
+        expect(keys.has(tileKey({ order, ipix: tile.ipix >> (2 * (tile.order - order)) }))).toBe(false);
+      }
+    }
+  });
+
+  it('draws the disc at the order asked for, and leaves the view far from it as it was', () => {
+    // A disc about a tile of the order asked for across, as the survey pairs them (targetOrder).
+    const radius = 0.01;
+    const order = 6;
+    const view = tilesForView(3, direction, 0.3, 64);
+    const cover = refineToward(view, direction, radius, order);
+    const centre = healpixUnitToNested(order, direction);
+    expect(cover.map(tileKey)).toContain(tileKey({ order, ipix: centre }));
+    const untouched = view.filter((tile) => !tilesForView(3, direction, radius, 64).some((near) => near.ipix === tile.ipix));
+    for (const tile of untouched) expect(cover.map(tileKey)).toContain(tileKey(tile));
+    // Each split adds three tiles; a few splits an order on the way down, not the whole view at order 6.
+    const splitsPerOrder = (cover.length - view.length) / 3 / (order - 3);
+    expect(splitsPerOrder).toBeLessThan(6);
   });
 });

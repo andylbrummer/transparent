@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { ICRS_TO_GALACTIC, healpixPixelPoint, type Mat3 } from '@transparent-earth/core';
 import { RENDER_ORDER } from '../../render/order';
 import type { LayerContext, LayerInstance } from '../types';
-import { HIPS_TILE_PX, bestSource, targetOrder, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad, type HipsTile } from './hips';
+import { HIPS_TILE_PX, bestSource, refineToward, targetOrder, tileKey, tileSegments, tileUrl, tilesForView, viewRadiusRad, type HipsTile } from './hips';
 import { tileToFetch, type TileCoverage } from './coverage';
 import type { SurveySpec } from './surveys';
 
@@ -171,7 +171,10 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
   const lastDirection = new THREE.Vector3(2, 0, 0);
   let lastOrder = -1;
   let lastRadius = 0;
+  /** The spyglass's last selection, as `${order}/${x}/${y}/${z}` rounded; '' with none open. */
+  let lastSpyglass = '';
   const forward = new THREE.Vector3();
+  const spyglassForward = new THREE.Vector3();
   const skyToWorld = new THREE.Quaternion();
   let status: string | null = null;
 
@@ -238,9 +241,22 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
     })();
   };
 
-  const select = (direction: THREE.Vector3, order: number, radius: number): void => {
+  /** The spyglass's view, in the survey's frame: where it looks, its order, its radius. */
+  interface Refinement {
+    readonly direction: THREE.Vector3;
+    readonly order: number;
+    readonly radius: number;
+  }
+
+  const select = (direction: THREE.Vector3, order: number, radius: number, spyglass: Refinement | null): void => {
     clock++;
-    const wanted = tilesForView(order, [direction.x, direction.y, direction.z], radius, MAX_TILES);
+    const view = tilesForView(order, [direction.x, direction.y, direction.z], radius, MAX_TILES);
+    // The spyglass's tiles first: they are what is being looked at, and requests are capped.
+    const wanted = spyglass
+      ? refineToward(view, [spyglass.direction.x, spyglass.direction.y, spyglass.direction.z], spyglass.radius, spyglass.order).sort(
+          (a, b) => b.order - a.order
+        )
+      : view;
     const wantedKeys = new Set(wanted.map(tileKey));
     const fetched = new Map(wanted.map((tile) => [tileKey(tile), tileToFetch(tile, coverage, spec.minOrder)]));
     const fetchedKeys = new Set([...fetched.values()].filter((tile) => tile !== null).map(tileKey));
@@ -364,14 +380,31 @@ export function createSurveyLayer(context: LayerContext, spec: SurveySpec, cover
       const pxPerRad = heightCss / ((frame.camera.fov * Math.PI) / 180);
       const order = targetOrder(pxPerRad, spec.minOrder, spec.maxOrder);
       const radius = viewRadiusRad(frame.camera.fov, frame.camera.aspect) * 1.05;
+      let spyglass: Refinement | null = null;
+      if (frame.spyglass) {
+        spyglassForward.copy(frame.spyglass.direction).applyQuaternion(skyToWorld);
+        const fovRad = (frame.spyglass.fovDeg * Math.PI) / 180;
+        spyglass = {
+          direction: spyglassForward,
+          order: targetOrder(frame.spyglass.heightCss / fovRad, spec.minOrder, spec.maxOrder),
+          radius: viewRadiusRad(frame.spyglass.fovDeg, 1) * 1.05,
+        };
+      }
+      // Fixed on the sky, the spyglass moves only as it zooms: reselect at each new order.
+      const spyglassKey = spyglass ? `${spyglass.order}/${spyglass.direction.toArray().map((c) => c.toFixed(4))}` : '';
       // Reselect when the view has moved a twentieth of its own width, zoomed, or a tile has arrived.
-      const moved = forward.angleTo(lastDirection) > radius * 0.05 || order !== lastOrder || Math.abs(radius - lastRadius) > lastRadius * 0.05;
+      const moved =
+        forward.angleTo(lastDirection) > radius * 0.05 ||
+        order !== lastOrder ||
+        Math.abs(radius - lastRadius) > lastRadius * 0.05 ||
+        spyglassKey !== lastSpyglass;
       if (!moved && !dirty && performance.now() < lookAgainAt) return;
       dirty = false;
       lastDirection.copy(forward);
       lastOrder = order;
       lastRadius = radius;
-      select(forward, order, radius);
+      lastSpyglass = spyglassKey;
+      select(forward, order, radius, spyglass);
     },
     dispose() {
       disposed = true;
