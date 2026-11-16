@@ -55,7 +55,7 @@ import { reloadIfRedeployed, type BuildCheck } from './build-check';
 import { VoiceControl, cancelBrowserSpeech, createBrowserRecognizer, speakWithBrowser } from './voice/voice-control';
 import { VoiceOverlay } from './voice/voice-overlay';
 import { createTalkButton } from './voice/talk-button';
-import { IDENTIFY_MAX_ANGLE_RAD, respondToSpeech } from './voice/respond';
+import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './voice/respond';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -560,6 +560,22 @@ export function init(): App | null {
         },
         exitCardboard: () => cardboard.exit(),
         resetView: () => look.resetOffset(),
+        zoom: (inward) => {
+          if (!cardboard.isActive()) {
+            look.zoomIn(inward ? VOICE_ZOOM_FACTOR : 1 / VOICE_ZOOM_FACTOR);
+            return { done: true, on: null };
+          }
+          // In the viewer, as a nod and a shake: open the spyglass or go a level deeper; back a level, or close it.
+          if (inward) {
+            spyglass.deeper(labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG)));
+            const now = spyglass.getState();
+            return now.kind === 'open' ? { done: true, on: now.target.name } : { done: false };
+          }
+          if (spyglass.getState().kind !== 'open') return { done: false };
+          spyglass.back();
+          const now = spyglass.getState();
+          return { done: true, on: now.kind === 'open' ? now.target.name : null };
+        },
       }),
   });
   const removeTalkButton = voice.isSupported() ? createTalkButton(container, voice) : () => undefined;

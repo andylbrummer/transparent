@@ -20,14 +20,23 @@ export interface VoiceActions {
   keepCalibration(): void;
   exitCardboard(): void;
   resetView(): void;
+  /** Zoom a step (VoiceCommand zoom); what came of it. */
+  zoom(inward: boolean): VoiceZoom;
 }
+
+/**
+ * What a spoken zoom did: `on` names what the spyglass is open on, null
+ * for the plain view; not done when there was nothing to zoom - no name
+ * under the view to open the spyglass on, or no spyglass open to widen.
+ */
+export type VoiceZoom = { readonly done: true; readonly on: string | null } | { readonly done: false };
 
 const wakeName = WAKE_WORD[0].toUpperCase() + WAKE_WORD.slice(1);
 
 export function helpText(inCardboard: boolean): string {
   const lead = inCardboard ? `Start with "${wakeName}". ` : '';
   const viewer = inCardboard ? ' "calibrate", "keep", "exit",' : ' "calibrate",';
-  return `${lead}Say a view, like "tectonics" or "deep space"; a layer on or off, like "show stars" or "hide plates"; or "what's that",${viewer} "reset".`;
+  return `${lead}Say a view, like "tectonics" or "deep space"; a layer on or off, like "show stars" or "hide plates"; or "what's that", "zoom in", "zoom out",${viewer} "reset".`;
 }
 
 /** Act on a phrase, the recognizer's guesses best first; the reply to say. */
@@ -45,6 +54,12 @@ function perform(command: VoiceCommand, actions: VoiceActions): string {
       return `${command.layer.label} ${command.on ? 'on' : 'off'}.`;
     case 'identify':
       return actions.nameInView() ?? 'Nothing named there.';
+    case 'zoom': {
+      const zoom = actions.zoom(command.inward);
+      if (!zoom.done) return command.inward ? 'Nothing named there to zoom in on.' : 'Not zoomed in.';
+      const how = command.inward ? 'Closer' : 'Wider';
+      return zoom.on ? `${how} on ${zoom.on}.` : `${how}.`;
+    }
     case 'calibrate':
       actions.calibrate();
       return 'Calibrating. Tilt your head to move the images together, then say keep.';
@@ -68,3 +83,6 @@ function perform(command: VoiceCommand, actions: VoiceActions): string {
 
 /** "What's that" names the label nearest the middle of the view, if one is within this angle of it. */
 export const IDENTIFY_MAX_ANGLE_RAD = (10 * Math.PI) / 180;
+
+/** A spoken zoom outside the viewer narrows or widens the field of view by this much. */
+export const VOICE_ZOOM_FACTOR = 2;

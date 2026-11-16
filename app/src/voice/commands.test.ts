@@ -17,6 +17,8 @@ function does(heard: string): string {
       return `${command.on ? 'on' : 'off'}:${command.layer.id}`;
     case 'unknown':
       return `unknown:${command.heard}`;
+    case 'zoom':
+      return `zoom:${command.inward ? 'in' : 'out'}`;
     default:
       return command.kind;
   }
@@ -103,6 +105,15 @@ describe('parseCommand', () => {
     expect(does('reset view')).toBe('reset');
     expect(does('please help')).toBe('help');
     expect(does('help please')).toBe('help');
+  });
+
+  it('reads zooming in and out however it is put', () => {
+    for (const heard of ['zoom in', 'zoom', 'closer', 'zoom in on that', 'magnify', 'go deeper', 'zoom in please']) {
+      expect(does(heard), heard).toBe('zoom:in');
+    }
+    for (const heard of ['zoom out', 'wider', 'back out', 'go back', 'farther']) {
+      expect(does(heard), heard).toBe('zoom:out');
+    }
   });
 
   it('says what it heard when nothing matches', () => {

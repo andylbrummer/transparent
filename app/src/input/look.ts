@@ -73,6 +73,8 @@ export interface LookController {
    * and is kept.
    */
   resetOffset(): void;
+  /** Narrow the field of view by `factor` (above 1 zooms in), within MIN_FOV_DEG..MAX_FOV_DEG. */
+  zoomIn(factor: number): void;
   /**
    * Aim the manual view: yaw counter-clockwise from north and elevation,
    * radians, and optionally the field of view in degrees. For scripted
@@ -222,6 +224,9 @@ export function createLookController(): LookController {
     },
 
     resetOffset,
+    zoomIn(factor) {
+      zoom(1 / factor);
+    },
 
     setAim(yawRad, pitchRad, fovDeg) {
       state = {

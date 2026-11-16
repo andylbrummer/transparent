@@ -2,7 +2,8 @@
  * Voice commands: what was heard, turned into something the app does.
  *
  * The grammar is small and fixed - presets, layers on and off, "what's
- * that", calibration, reset, help, exit - so recognition needs no server
+ * that", zoom in and out, calibration, reset, help, exit - so recognition
+ * needs no server
  * of ours. Matching is by words, not exact phrases: "show the stars",
  * "turn stars on" and "stars" all find the Stars switch, and of several
  * switches holding the words heard, the one with the fewest other words
@@ -21,6 +22,8 @@ export type VoiceCommand =
   | { readonly kind: 'preset'; readonly preset: LayerPreset }
   | { readonly kind: 'layer'; readonly layer: LayerSwitch; readonly on: boolean }
   | { readonly kind: 'identify' }
+  /** A step closer (inward) or wider: in the viewer, the spyglass's; elsewhere, the view's. */
+  | { readonly kind: 'zoom'; readonly inward: boolean }
   | { readonly kind: 'calibrate' }
   /** Keep the calibration: the hands-free stand-in for the viewer's button. */
   | { readonly kind: 'keep' }
@@ -145,6 +148,8 @@ function findLayer(phrase: string, switches: readonly LayerSwitch[]): LayerSwitc
   return best;
 }
 
+const ZOOM_IN = /^(?:zoom|zoom in|zoom closer|closer|get closer|go closer|magnify|enhance|deeper|go deeper)(?: on (?:that|this|it))?$/;
+const ZOOM_OUT = /^(?:zoom out|zoom back|wider|go wider|further|farther|back|go back|back out)$/;
 const OFF = [/^(?:turn off|switch off|hide|remove|disable|stop showing) (.+)$/, /^(?:turn|switch) (.+) off$/, /^(.+) off$/];
 const ON = [/^(?:turn on|switch on|show|add|enable|display|show me) (.+)$/, /^(?:turn|switch) (.+) on$/, /^(.+) on$/];
 
@@ -156,6 +161,8 @@ export function parseCommand(heard: string, vocabulary: Vocabulary): VoiceComman
   if (/^(?:keep|keep it|keep that|save|save it|done|thats it|thats good|lock it)$/.test(phrase)) return { kind: 'keep' };
   if (/^(?:reset|recenter|re center|center|reset offset|reset view|center view)$/.test(phrase)) return { kind: 'reset' };
   if (/^(?:help|what can i say|commands|what are the commands)$/.test(phrase)) return { kind: 'help' };
+  if (ZOOM_IN.test(phrase)) return { kind: 'zoom', inward: true };
+  if (ZOOM_OUT.test(phrase)) return { kind: 'zoom', inward: false };
   if (/^(?:whats that|what is that|whats this|what is this|what am i looking at|identify|identify that|name that|whats there|what is there)$/.test(phrase)) {
     return { kind: 'identify' };
   }
