@@ -266,9 +266,11 @@ export class LayersPanel {
   /** Sections as the user has them, kept apart from what a filter forces open. */
   private readonly openSections: Record<string, boolean>;
   private filtering = false;
+  /** The switches as they stood when the panel was borrowed; null when it is not. */
+  private borrowed: LayerVisibility | null = null;
   private readonly onButtonClick = (): void => this.setOpen(this.panel.hidden);
 
-  /** Calls `onChange` for each switch that flips, after saving the new visibility. */
+  /** Calls `onChange` for each switch that flips. */
   constructor(
     parent: HTMLElement,
     private readonly visibility: LayerVisibility,
@@ -373,7 +375,7 @@ export class LayersPanel {
       this.inputs.get(layer.id)!.checked = false;
       this.onChange(layer, false);
     }
-    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
+    this.save();
     this.updateSection(name);
     this.updatePresets();
   }
@@ -397,7 +399,7 @@ export class LayersPanel {
     return block;
   }
 
-  /** Flip one switch, as a tap on it would: its exclusive group follows, and the choice is saved. */
+  /** Flip one switch, as a tap on it would: its exclusive group follows, and the choice is saved unless the panel is borrowed. */
   setLayer(id: string, visible: boolean): void {
     const layer = this.switches.find((s) => s.id === id);
     if (!layer) throw new Error(`no layer switch ${id}`);
@@ -412,7 +414,7 @@ export class LayersPanel {
         this.onChange(other, false);
       }
     }
-    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
+    this.save();
     this.onChange(layer, visible);
     // An exclusive group can reach into another section.
     for (const name of this.sections.keys()) this.updateSection(name);
@@ -421,7 +423,33 @@ export class LayersPanel {
 
   /** Set every switch as `preset` has it: those going off first, so an exclusive group never has two on. */
   applyPreset(preset: LayerPreset): void {
-    const target = presetVisibility(preset, this.switches);
+    this.applyVisibility(presetVisibility(preset, this.switches));
+    this.save();
+  }
+
+  /**
+   * Borrow the switches, for a guide: until `end()` nothing is saved, and
+   * `end()` puts every switch back as it stood. The user's own view is
+   * what was saved before, so it survives whatever the borrower shows.
+   */
+  borrow(): { end(): void } {
+    if (this.borrowed) throw new Error('layers panel is already borrowed');
+    const before = { ...this.visibility };
+    this.borrowed = before;
+    let ended = false;
+    return {
+      end: () => {
+        if (ended) throw new Error('layers panel borrow has already ended');
+        ended = true;
+        // No save: nothing was saved while borrowed, so what is saved is still `before`.
+        this.applyVisibility(before);
+        this.borrowed = null;
+      },
+    };
+  }
+
+  /** Flip every switch that differs from `target`, those going off first, so an exclusive group never has two on. */
+  private applyVisibility(target: LayerVisibility): void {
     const changed = this.switches.filter((layer) => this.visibility[layer.id] !== target[layer.id]);
     changed.sort((a, b) => Number(target[a.id]) - Number(target[b.id]));
     for (const layer of changed) {
@@ -429,9 +457,14 @@ export class LayersPanel {
       this.inputs.get(layer.id)!.checked = target[layer.id];
       this.onChange(layer, target[layer.id]);
     }
-    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
     for (const name of this.sections.keys()) this.updateSection(name);
     this.updatePresets();
+  }
+
+  /** Save the switches, unless the panel is borrowed: then what the user sees is not their own view. */
+  private save(): void {
+    if (this.borrowed) return;
+    this.storage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(this.visibility));
   }
 
   /** Mark the preset the switches stand at, if any. */

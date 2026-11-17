@@ -330,6 +330,99 @@ describe('LayersPanel with lazy layers', () => {
     panel.dispose();
   });
 
+  /** Borrow a panel that starts with cmb on, then change it every way there is, checking nothing is saved. */
+  function borrowAndChange() {
+    const parts = setup(JSON.stringify({ cmb: true }));
+    const { panel, input, switches, stored, sections, changes } = parts;
+    const counts = (): string[] => sections().map((d) => d.querySelector('.layers-section__count')!.textContent!);
+    const before = { checked: switches.map((s) => input(s.id).checked), counts: counts() };
+    const borrow = panel.borrow();
+
+    panel.setLayer('x-ray', true);
+    expect(input('x-ray').checked).toBe(true);
+    expect(input('cmb').checked).toBe(false);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+
+    panel.applyPreset({ id: 'lines', label: 'Lines', description: 'plates and quakes', on: ['boundaries', 'quakes'] });
+    expect(input('x-ray').checked).toBe(false);
+    expect(input('boundaries').checked).toBe(true);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+
+    parts.section('Surface lines').querySelector<HTMLButtonElement>('.layers-section__all-off')!.click();
+    expect(input('boundaries').checked).toBe(false);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+
+    input('clouds').checked = true;
+    input('clouds').dispatchEvent(new Event('change'));
+    expect(changes.at(-1)).toEqual(['clouds', true]);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+
+    return { ...parts, borrow, before, counts };
+  }
+
+  it('flips switches as usual while borrowed, but saves none of them', () => {
+    const { changes } = borrowAndChange();
+    expect(changes.map(String)).toEqual(expect.arrayContaining(['cmb,false', 'x-ray,true', 'x-ray,false', 'boundaries,false', 'clouds,true']));
+  });
+
+  it('puts every switch back when the borrow ends, off before on, without saving', () => {
+    const { borrow, before, counts, changes, switches, input, stored } = borrowAndChange();
+    const changesBefore = changes.length;
+    borrow.end();
+    expect(switches.map((s) => input(s.id).checked)).toEqual(before.checked);
+    const restored = changes.slice(changesBefore);
+    expect(restored.length).toBeGreaterThan(0);
+    const firstOn = restored.findIndex(([, on]) => on);
+    expect(restored.slice(firstOn).every(([, on]) => on)).toBe(true);
+    expect(restored).toContainEqual(['cmb', true]);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+    expect(counts()).toEqual(before.counts);
+  });
+
+  it('flips nothing when a borrow that changed nothing ends', () => {
+    const { panel, changes } = setup();
+    panel.borrow().end();
+    expect(changes).toEqual([]);
+  });
+
+  it('saves as usual once the borrow has ended', () => {
+    const { panel, stored } = setup();
+    panel.borrow().end();
+    panel.setLayer('x-ray', true);
+    expect(JSON.parse(stored.get(LAYERS_STORAGE_KEY)!)).toMatchObject({ 'x-ray': true, cmb: false });
+  });
+
+  it('still saves which sections are open while borrowed: that is the panel, not the view', () => {
+    const { panel, section, stored } = setup();
+    panel.borrow();
+    section('Labels').open = true;
+    section('Labels').dispatchEvent(new Event('toggle'));
+    expect(JSON.parse(stored.get(SECTIONS_STORAGE_KEY)!)).toEqual({ Labels: true });
+  });
+
+  it('refuses a second borrow while one is open, and the first still ends', () => {
+    const { panel, input } = setup();
+    const borrow = panel.borrow();
+    panel.setLayer('x-ray', true);
+    expect(() => panel.borrow()).toThrow('layers panel is already borrowed');
+    borrow.end();
+    expect(input('x-ray').checked).toBe(false);
+  });
+
+  it('refuses to end a borrow twice, even once a new borrow is open', () => {
+    const { panel, input } = setup();
+    const first = panel.borrow();
+    first.end();
+    expect(() => first.end()).toThrow('layers panel borrow has already ended');
+
+    const second = panel.borrow();
+    panel.setLayer('x-ray', true);
+    expect(() => first.end()).toThrow('layers panel borrow has already ended');
+    expect(input('x-ray').checked).toBe(true);
+    second.end();
+    expect(input('x-ray').checked).toBe(false);
+  });
+
   it('lists the data credits with a link to each source', () => {
     const { parent } = setup();
     const link = parent.querySelector<HTMLAnchorElement>('.layers-credits a')!;
