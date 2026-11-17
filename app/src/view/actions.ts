@@ -5,6 +5,26 @@
  * out from the actions alone. Types only; view-control.ts does them.
  */
 
+import type { PlanetName } from '@transparent-earth/core';
+import type { LabelKind } from '../render/labels';
+
+/** Something to look at. Every kind resolves to a direction from where the view stands (targets.ts). */
+export type Target =
+  /** The Sun, the Moon or a planet, at the app clock's time. */
+  | { readonly kind: 'body'; readonly body: 'sun' | 'moon' | PlanetName }
+  /** A fixed place on the sky, ICRS. */
+  | { readonly kind: 'sky'; readonly raDeg: number; readonly decDeg: number; readonly name?: string; readonly extentDeg?: number }
+  /** A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down. */
+  | { readonly kind: 'horizon'; readonly azDeg: number; readonly altDeg: number }
+  /** A place on or in the Earth. */
+  | { readonly kind: 'ground'; readonly lat: number; readonly lon: number; readonly depthKm?: number; readonly name?: string }
+  /**
+   * A name from the baked label files (geo/labels.json, geology.json,
+   * quakes.json). `labelKind` tells apart places that share a name: Georgia
+   * the country from Georgia the state.
+   */
+  | { readonly kind: 'label'; readonly name: string; readonly labelKind?: LabelKind };
+
 export type ViewAction =
   /** Every switch as the preset has it (ui/presets.ts). */
   | { readonly do: 'preset'; readonly id: string }
