@@ -20,7 +20,7 @@
  */
 
 import * as THREE from 'three';
-import { EARTH_RADIUS_M } from '@transparent-earth/core';
+import { earthPoint } from './earth-point';
 
 export type LabelKind =
   | 'country'
@@ -286,14 +286,7 @@ export class LabelLayer {
         twin = element.cloneNode(true) as HTMLElement;
         this.rightEyeContainer.appendChild(twin);
       }
-      const lonRad = (label.lon * Math.PI) / 180;
-      const latRad = (label.lat * Math.PI) / 180;
-      const radius = EARTH_RADIUS_M - (label.depthKm ?? 0) * 1000;
-      const position = new THREE.Vector3(
-        radius * Math.cos(latRad) * Math.cos(lonRad),
-        radius * Math.cos(latRad) * Math.sin(lonRad),
-        radius * Math.sin(latRad)
-      );
+      const position = earthPoint(label.lat, label.lon, label.depthKm);
       const size = estimateLabelSize(label);
       return {
         label,
