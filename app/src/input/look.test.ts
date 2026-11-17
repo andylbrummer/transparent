@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
-import { createLookController, EYE_HEIGHT_M, DEFAULT_FOV_DEG, MAX_FOV_DEG, MIN_FOV_DEG } from './look';
+import { createLookController, DEFAULT_FOV_DEG, MAX_FOV_DEG, MIN_FOV_DEG } from './look';
+import { EYE_HEIGHT_M } from '../view/standing-place';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
 const enu = enuBasis({ ...AUSTIN, alt: 0 });

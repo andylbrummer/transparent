@@ -12,11 +12,9 @@
  */
 
 import * as THREE from 'three';
-import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
+import { enuBasis } from '@transparent-earth/core';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
-
-/** Camera height above the surface shell, in metres. */
-export const EYE_HEIGHT_M = 1.5;
+import { standingPoint } from '../view/standing-place';
 
 export const DEFAULT_FOV_DEG = 60;
 /**
@@ -195,7 +193,7 @@ export function createLookController(): LookController {
       east.set(enu.e.x, enu.e.y, enu.e.z);
       north.set(enu.n.x, enu.n.y, enu.n.z);
       up.set(enu.u.x, enu.u.y, enu.u.z);
-      camera.position.copy(up).multiplyScalar(EARTH_RADIUS_M + EYE_HEIGHT_M);
+      standingPoint(up, camera.position);
       basisQuat.setFromRotationMatrix(basis.makeBasis(east, north, up));
 
       if (attitude) {

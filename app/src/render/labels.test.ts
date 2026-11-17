@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, enuBasis } from '@transparent-earth/core';
 import { createLookController } from '../input/look';
+import { standingPoint } from '../view/standing-place';
 import { StereoRig } from './stereo';
 import {
   LabelLayer,
@@ -21,7 +22,7 @@ const HEIGHT = 800;
 function cameraAimedAt(lon: number, lat: number): THREE.PerspectiveCamera {
   const camera = new THREE.PerspectiveCamera(60, WIDTH / HEIGHT, 0.1, 1e9);
   const austin = enuBasis({ lat: 30.27, lon: -97.74, alt: 0 }).u;
-  camera.position.set(austin.x, austin.y, austin.z).multiplyScalar(EARTH_RADIUS_M + 1.5);
+  standingPoint(new THREE.Vector3(austin.x, austin.y, austin.z), camera.position);
   const target = enuBasis({ lat, lon, alt: 0 }).u;
   camera.up.set(austin.x, austin.y, austin.z);
   camera.lookAt(new THREE.Vector3(target.x, target.y, target.z).multiplyScalar(EARTH_RADIUS_M));

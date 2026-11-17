@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
-import { EYE_HEIGHT_M } from '../input/look';
+import { EYE_HEIGHT_M } from '../view/standing-place';
 import { CARDBOARD_BASELINE_M, CARDBOARD_CONVERGENCE_M, StereoRig, disparityRad } from './stereo';
 
 const DEG = 180 / Math.PI;

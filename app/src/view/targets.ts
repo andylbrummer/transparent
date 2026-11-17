@@ -5,17 +5,15 @@
  * Each kind points where the app draws its thing, not where a textbook
  * puts it: a pointer that lands beside the thing on screen is worse than
  * none. The world is ECEF metres from the Earth's centre. The view stands
- * at eye height above the drawn sphere, along the local up, as look.ts
- * places the camera. The ground is on that sphere (earthPoint, which the
- * labels use too). The sky turns into the world by icrsToEcefMatrix, as
- * main.ts turns it. The Sun and planets are drawn as seen from the Earth's
- * centre, so they have no parallax; the Moon is drawn at its distance, so
- * it does.
+ * where the camera does (standingPoint, in standing-place.ts). The ground
+ * is on the drawn sphere (earthPoint, which the labels use too). The sky
+ * turns into the world by icrsToEcefMatrix, as main.ts turns it. The Sun
+ * and planets are drawn as seen from the Earth's centre, so they have no
+ * parallax; the Moon is drawn at its distance, so it does.
  */
 
 import * as THREE from 'three';
 import {
-  EARTH_RADIUS_M,
   applyMat3,
   enuBasis,
   icrsToEcefMatrix,
@@ -26,11 +24,11 @@ import {
   type PlanetName,
   type Vec3,
 } from '@transparent-earth/core';
-import { EYE_HEIGHT_M } from '../input/look';
 import { earthPoint } from '../render/earth-point';
 import type { LabelData, LabelKind, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target } from './actions';
+import { standingPoint } from './standing-place';
 
 /** The baked labels by name: what a `label` target is looked up in. */
 export type LabelIndex = ReadonlyMap<string, readonly PlaceLabel[]>;
@@ -127,10 +125,10 @@ function labelPlace(name: string, labelKind: LabelKind | undefined, labels: Labe
   return ofKind[0];
 }
 
-/** Where the view stands: eye height above the drawn sphere, along the local up (look.ts updateCamera). */
+/** Where the view stands at `position`, as the camera stands there (standing-place.ts). */
 function standPoint(position: SurfacePosition): THREE.Vector3 {
   const { u } = enuBasis({ lat: position.lat, lon: position.lon, alt: 0 });
-  return vector(u).multiplyScalar(EARTH_RADIUS_M + EYE_HEIGHT_M);
+  return standingPoint(vector(u));
 }
 
 /** An ICRS vector turned into the world as the sky is turned (main.ts). */

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
+import { EYE_HEIGHT_M } from '../view/standing-place';
 import { DEFAULT_SURFACE_GAIN, GlobeRenderer, TWILIGHT_SUN_ELEVATION_DEG } from './globe';
 import { PREM_LAYERS } from './prem';
 
@@ -45,20 +46,20 @@ describe('GlobeRenderer', () => {
   it('precomputes each shell term in double precision for a camera at the surface', () => {
     const globe = new GlobeRenderer();
     const camera = new THREE.PerspectiveCamera();
-    // 1.5 m above the crust: in float32, |p|^2 - r^2 would cancel to noise.
-    camera.position.set(EARTH_RADIUS_M + 1.5, 0, 0);
+    // Eye height above the crust: in float32, |p|^2 - r^2 would cancel to noise.
+    camera.position.set(EARTH_RADIUS_M + EYE_HEIGHT_M, 0, 0);
 
     globe.update(camera, 800);
 
     const uniforms = (globe.getMesh().material as THREE.ShaderMaterial).uniforms;
     const layerC = uniforms.uLayerC.value as Float32Array;
     const crust = layerC[PREM_LAYERS.length - 1];
-    expect(crust).toBeCloseTo(2 * EARTH_RADIUS_M * 1.5 + 1.5 * 1.5, -1);
-    // Horizon dips by sqrt(2h/R) ~ 0.04° at 1.5 m: below float32's 1 - x resolution.
-    expect(uniforms.uHorizonSin.value).toBeCloseTo(-Math.sqrt((2 * 1.5) / EARTH_RADIUS_M), 7);
+    expect(crust).toBeCloseTo(2 * EARTH_RADIUS_M * EYE_HEIGHT_M + EYE_HEIGHT_M * EYE_HEIGHT_M, -1);
+    // Horizon dips by sqrt(2h/R) ~ 0.04° at eye height: below float32's 1 - x resolution.
+    expect(uniforms.uHorizonSin.value).toBeCloseTo(-Math.sqrt((2 * EYE_HEIGHT_M) / EARTH_RADIUS_M), 7);
     expect(uniforms.uHorizonSin.value).toBeLessThan(0);
     const innerCoreRadius = PREM_LAYERS[0].radiusKm * 1000;
-    expect(layerC[0]).toBeCloseTo((EARTH_RADIUS_M + 1.5) ** 2 - innerCoreRadius ** 2, -7);
+    expect(layerC[0]).toBeCloseTo((EARTH_RADIUS_M + EYE_HEIGHT_M) ** 2 - innerCoreRadius ** 2, -7);
   });
 
   it('marks the surface imagery ready once a texture is set', () => {
