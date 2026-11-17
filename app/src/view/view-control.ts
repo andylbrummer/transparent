@@ -6,11 +6,13 @@
  */
 
 import * as THREE from 'three';
+import { MAX_FOV_DEG, MIN_FOV_DEG, type LookController, type LookState } from '../input/look';
 import type { LayerManager } from '../layers/manager';
-import type { SurfacePosition } from '../sensors';
+import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
-import type { ActionOutcome, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
+import type { ActionOutcome, AimMode, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
+import { easeAim, type Aim, type AimEase } from './aim-ease';
 import { horizonOf, targetDirection, type LabelIndex } from './targets';
 
 export interface ViewControlDeps {
@@ -30,13 +32,36 @@ export interface ViewControlDeps {
   now(): Date;
   /** The baked labels by name; null until the label files have loaded. */
   getLabels(): LabelIndex | null;
+  /** The manual aim and field of view. */
+  readonly look: Pick<LookController, 'getState' | 'setAim'>;
+  /** The device's pose, or null when a drag aims the view: this decides the aim mode. */
+  getAttitude(): DeviceAttitude | null;
+  /** The user asked the system for less motion: no eases. */
+  prefersReducedMotion(): boolean;
 }
+
+/** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
+export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
 
 /** What a target other than a label is resolved with before the label files arrive: it needs none. */
 const NO_LABELS: LabelIndex = new Map();
 
-export function createViewControl(deps: ViewControlDeps): ViewControl {
+/** An ease under way, and the action waiting on it. */
+interface Easing {
+  readonly ease: AimEase;
+  readonly action: 'look' | 'fov';
+  readonly resolve: (outcome: ActionOutcome) => void;
+  elapsedMs: number;
+  /** The look state as the ease last left it: any other means the user has moved the view. */
+  seen: LookState;
+}
+
+export function createViewControl(deps: ViewControlDeps): ViewControl & {
+  /** Advance an ease by a frame's time. Call once a frame, before the camera is aimed. */
+  update(deltaMs: number): void;
+} {
   const switchesById = new Map(deps.switches.map((s) => [s.id, s]));
+  let easing: Easing | null = null;
 
   /**
    * Wait for the lazy layers among `switches` to load; the rest are drawn
@@ -56,8 +81,54 @@ export function createViewControl(deps: ViewControlDeps): ViewControl {
     return { ok: true };
   }
 
+  /** Same test as look.ts updateCamera: an attitude, when there is one, aims the camera. */
+  function aimMode(): AimMode {
+    return deps.getAttitude() === null ? 'manual' : 'pose';
+  }
+
+  /** A field of view the camera cannot take, refused rather than clamped. */
+  function fovOutOfRange(fovDeg: number | undefined): ActionOutcome | null {
+    if (fovDeg === undefined || (Number.isFinite(fovDeg) && fovDeg >= MIN_FOV_DEG && fovDeg <= MAX_FOV_DEG)) return null;
+    return { ok: false, code: 'bad-value', message: `fovDeg ${fovDeg} is outside ${MIN_FOV_DEG} to ${MAX_FOV_DEG}` };
+  }
+
+  /**
+   * The manual aim. Azimuth is clockwise and yaw counter-clockwise; the
+   * yaw is not wrapped, so neither is the azimuth, and an ease ends on a
+   * yaw continuous with where it began.
+   */
+  function currentAim(): Aim {
+    const state = deps.look.getState();
+    return { azDeg: -THREE.MathUtils.radToDeg(state.yawRad), altDeg: THREE.MathUtils.radToDeg(state.pitchRad), fovDeg: state.fovDeg };
+  }
+
+  function setAim(aim: Aim): void {
+    deps.look.setAim(-THREE.MathUtils.degToRad(aim.azDeg), THREE.MathUtils.degToRad(aim.altDeg), aim.fovDeg);
+  }
+
+  function endEase(outcome: ActionOutcome): void {
+    const ending = easing;
+    easing = null;
+    ending?.resolve(outcome);
+  }
+
+  /** Turn the manual view to `to`: with an ease, or at once when motion is to be kept down or there is nothing to turn. */
+  function easeTo(to: Aim, action: Easing['action']): Promise<ActionOutcome> {
+    // A new action takes over from an ease still under way, from where it has got to.
+    endEase({ ok: true });
+    const ease = easeAim(currentAim(), to);
+    if (deps.prefersReducedMotion() || ease.durationMs === 0) {
+      setAim(ease.at(ease.durationMs));
+      return Promise.resolve({ ok: true });
+    }
+    return new Promise((resolve) => {
+      easing = { ease, action, resolve, elapsedMs: 0, seen: deps.look.getState() };
+    });
+  }
+
   // The switches flip before the first await, so they have flipped by the
-  // time perform returns; its promise then waits for the layers to load.
+  // time perform returns; its promise then waits for the layers to load
+  // or the ease to finish.
   async function perform(action: ViewAction): Promise<ActionOutcome> {
     switch (action.do) {
       case 'preset': {
@@ -81,7 +152,44 @@ export function createViewControl(deps: ViewControlDeps): ViewControl {
         for (const id of on) deps.layersPanel.setLayer(id, true);
         return lazyLayersLoaded([...new Set(on)].map((id) => switchesById.get(id)!));
       }
+      case 'look': {
+        const badFov = fovOutOfRange(action.fovDeg);
+        if (badFov) return badFov;
+        const located = locate(action.target);
+        if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
+        // The guide cannot turn someone holding the phone: the pointer shows them the way.
+        if (aimMode() === 'pose') return { ok: true, awaitingGaze: true };
+        return easeTo({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: action.fovDeg ?? deps.look.getState().fovDeg }, 'look');
+      }
+      case 'fov': {
+        const badFov = fovOutOfRange(action.fovDeg);
+        if (badFov) return badFov;
+        if (action.fovDeg < FOV_NEEDS_TARGET_BELOW_DEG) {
+          return { ok: false, code: 'bad-value', message: `a field of view under ${FOV_NEEDS_TARGET_BELOW_DEG} needs a target: use look` };
+        }
+        if (aimMode() === 'pose') {
+          const state = deps.look.getState();
+          deps.look.setAim(state.yawRad, state.pitchRad, action.fovDeg);
+          return { ok: true };
+        }
+        return easeTo({ ...currentAim(), fovDeg: action.fovDeg }, 'fov');
+      }
     }
+  }
+
+  function update(deltaMs: number): void {
+    if (!easing) return;
+    // The user wins: a drag, pinch, key or reset since the last frame stops the ease where they left it.
+    // LookState is replaced, never changed in place, so a different object means something moved the view.
+    // A compass that has just come on aims the view from now, so the ease stops for it too.
+    if (deps.look.getState() !== easing.seen || aimMode() === 'pose') {
+      endEase(easing.action === 'look' ? { ok: true, awaitingGaze: true } : { ok: true });
+      return;
+    }
+    easing.elapsedMs += deltaMs;
+    setAim(easing.ease.at(easing.elapsedMs));
+    if (easing.elapsedMs >= easing.ease.durationMs) endEase({ ok: true });
+    else easing.seen = deps.look.getState();
   }
 
   const forward = new THREE.Vector3();
@@ -99,5 +207,5 @@ export function createViewControl(deps: ViewControlDeps): ViewControl {
     return { ok: true, direction: found.direction, ...horizonOf(found.direction, position), offCentreDeg };
   }
 
-  return { perform, locate };
+  return { perform, locate, update };
 }

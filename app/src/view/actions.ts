@@ -30,13 +30,22 @@ export type ViewAction =
   /** Every switch as the preset has it (ui/presets.ts). */
   | { readonly do: 'preset'; readonly id: string }
   /** Named switches on or off; the rest stay. */
-  | { readonly do: 'layers'; readonly on?: readonly string[]; readonly off?: readonly string[] };
+  | { readonly do: 'layers'; readonly on?: readonly string[]; readonly off?: readonly string[] }
+  /** Look at a target, optionally `fovDeg` wide. */
+  | { readonly do: 'look'; readonly target: Target; readonly fovDeg?: number }
+  /** The field of view with no target: 60 is the default. */
+  | { readonly do: 'fov'; readonly fovDeg: number };
 
-export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'layer-unavailable' | 'bad-value';
+/** What aims the view: the device's pose, or the user's drag. */
+export type AimMode = 'pose' | 'manual';
+
+export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'layer-unavailable' | 'target-unresolved' | 'bad-value';
 
 /** What came of an action. A mistake in the action is an outcome, not a throw, so its caller can show it. */
 export type ActionOutcome =
   | { readonly ok: true }
+  /** `look` when the view is not the guide's to turn: the user has to turn to the target. */
+  | { readonly ok: true; readonly awaitingGaze: true }
   | { readonly ok: false; readonly code: ActionErrorCode; readonly message: string };
 
 /** Why a target has no direction: an unknown or shared label name, a value that is not a number, no position yet. */
@@ -56,7 +65,7 @@ export interface Located {
 }
 
 export interface ViewControl {
-  /** Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded. */
+  /** Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded, the ease finished. */
   perform(action: ViewAction): Promise<ActionOutcome>;
   /** Where a target is now and how far the view's centre is from it. */
   locate(target: Target): Located | TargetUnresolved;

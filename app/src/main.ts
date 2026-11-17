@@ -387,6 +387,10 @@ export function init(): App | null {
     getPosition: () => sensorState.position,
     now: () => clock.now(),
     getLabels: () => labelIndex,
+    look,
+    getAttitude: () => sensors.getAttitude(),
+    // Read on every action: the user can change it while the app is open.
+    prefersReducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
   });
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
@@ -617,6 +621,8 @@ export function init(): App | null {
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
     const deltaMs = nowMs - lastFrameMs;
+    // Every frame, whatever is showing: an ease must always be able to finish or stop.
+    viewControl.update(deltaMs);
     // In AR the camera is the device's, put in the Earth frame where the window was placed.
     if (ar) arRunner.update(frame, camera);
     if (position) {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
+import { createLookController } from '../input/look';
 import type { LayerManager } from '../layers/manager';
 import { LAYER_DEFINITIONS } from '../layers/registry';
 import { switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
@@ -40,6 +41,9 @@ function app(
       getPosition: () => null,
       now: () => new Date(0),
       getLabels: () => null,
+      look: createLookController(),
+      getAttitude: () => null,
+      prefersReducedMotion: () => false,
     }),
     nameInView: () => state.inView ?? null,
     isInCardboard: () => state.inCardboard ?? false,

@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { createLookController } from '../input/look';
+import { createLookController, DEFAULT_LOOK_STATE } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
 import type { LayerDefinition, LayerInstance } from '../layers/types';
-import type { SurfacePosition } from '../sensors';
+import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import { LAYERS_STORAGE_KEY, LayersPanel, loadLayerVisibility, switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets';
 import type { Located, Target, ViewControl } from './actions';
+import { EASE_MIN_MS } from './aim-ease';
 import { indexLabels, targetDirection, type LabelIndex } from './targets';
 import { createViewControl } from './view-control';
 
@@ -36,7 +37,9 @@ describe('createViewControl', () => {
    * main.ts wires them, recording what flips and what is saved. `loads`
    * replaces a layer's load, to time it or fail it. The camera is placed
    * by a real look controller at Austin, looking straight down as the app
-   * starts; `view` holds the position and labels the control reads.
+   * starts; `view` holds what the control reads of the app: the position,
+   * the labels, the pose (none, so a drag aims the view) and whether less
+   * motion is asked for.
    */
   function setup(saved: string | null = null, loads: Record<string, LayerDefinition['load']> = {}) {
     const parent = document.createElement('div');
@@ -63,7 +66,12 @@ describe('createViewControl', () => {
     const camera = new THREE.PerspectiveCamera();
     const look = createLookController();
     look.updateCamera(camera, austin, null, 0);
-    const view: { position: SurfacePosition | null; labels: LabelIndex | null } = { position: austin, labels: null };
+    const view: {
+      position: SurfacePosition | null;
+      labels: LabelIndex | null;
+      attitude: DeviceAttitude | null;
+      reducedMotion: boolean;
+    } = { position: austin, labels: null, attitude: null, reducedMotion: false };
     const viewControl = createViewControl({
       presets,
       switches,
@@ -73,6 +81,9 @@ describe('createViewControl', () => {
       getPosition: () => view.position,
       now: () => when,
       getLabels: () => view.labels,
+      look,
+      getAttitude: () => view.attitude,
+      prefersReducedMotion: () => view.reducedMotion,
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
     return { viewControl, switches, changes, stored, input, camera, look, view };
@@ -306,6 +317,226 @@ describe('createViewControl', () => {
         message: 'no label named Atlantis',
       });
       expect(viewControl.locate({ kind: 'label', name: 'Tuzo' }).ok).toBe(true);
+    });
+  });
+
+  describe('look and fov', () => {
+    const east = { kind: 'horizon', azDeg: 90, altDeg: 0 } as const;
+    const north = { kind: 'horizon', azDeg: 0, altDeg: 0 } as const;
+    const pose: DeviceAttitude = { alpha: 0, beta: 90, gamma: 0 };
+
+    /** One frame as main.ts runs it: the ease steps, then the camera is aimed. */
+    function frame({ viewControl, look, camera, view }: ReturnType<typeof setup>, ms: number): void {
+      viewControl.update(ms);
+      look.updateCamera(camera, austin, view.attitude, 0);
+    }
+
+    /** The view's centre, as the camera has it. */
+    const centre = (camera: THREE.Camera): THREE.Vector3 => camera.getWorldDirection(new THREE.Vector3());
+
+    /** Where `target` is drawn. */
+    function direction(target: Target): THREE.Vector3 {
+      const found = targetDirection(target, austin, when, new Map());
+      if (!found.ok) throw new Error(found.message);
+      return found.direction;
+    }
+
+    it('eases the view to a target, and resolves when it gets there', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east });
+      const done = settledFlag(outcome);
+      const before = centre(t.camera).angleTo(direction(east));
+      frame(t, EASE_MIN_MS / 2);
+      await settle();
+      expect(done.settled).toBe(false);
+      const midway = centre(t.camera).angleTo(direction(east));
+      expect(midway).toBeLessThan(before);
+      expect(midway).toBeGreaterThan(0);
+      frame(t, EASE_MIN_MS);
+      expect(centre(t.camera).angleTo(direction(east))).toBeLessThan(1e-6);
+      expect(await outcome).toEqual({ ok: true });
+    });
+
+    it('narrows the field of view on the way, evenly in scale', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east, fovDeg: 15 });
+      frame(t, EASE_MIN_MS / 2);
+      expect(Math.abs(t.look.getState().fovDeg - 30)).toBeLessThan(1e-6);
+      frame(t, EASE_MIN_MS);
+      expect(t.look.getState().fovDeg).toBe(15);
+      expect(await outcome).toEqual({ ok: true });
+    });
+
+    it('keeps the field of view when look names none', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east });
+      frame(t, EASE_MIN_MS / 2);
+      expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+      frame(t, EASE_MIN_MS);
+      expect(await outcome).toEqual({ ok: true });
+      expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+    });
+
+    it('eases the field of view alone, leaving the aim, in the shortest ease', async () => {
+      const t = setup();
+      const before = centre(t.camera);
+      const outcome = t.viewControl.perform({ do: 'fov', fovDeg: 40 });
+      const done = settledFlag(outcome);
+      frame(t, EASE_MIN_MS - 1);
+      await settle();
+      expect(done.settled).toBe(false);
+      expect(t.look.getState().fovDeg).toBeLessThan(DEFAULT_LOOK_STATE.fovDeg);
+      expect(t.look.getState().fovDeg).toBeGreaterThan(40);
+      frame(t, 1);
+      expect(await outcome).toEqual({ ok: true });
+      expect(t.look.getState().fovDeg).toBe(40);
+      // The yaw comes back from degrees as -0, so the aim is compared where it is drawn.
+      expect(centre(t.camera).angleTo(before)).toBeLessThan(1e-9);
+    });
+
+    it('resolves at once when there is nothing to change', async () => {
+      const t = setup();
+      const state = t.look.getState();
+      expect(await t.viewControl.perform({ do: 'fov', fovDeg: DEFAULT_LOOK_STATE.fovDeg })).toEqual({ ok: true });
+      expect(t.look.getState().fovDeg).toBe(state.fovDeg);
+    });
+
+    it('jumps rather than eases when less motion is asked for', async () => {
+      const t = setup();
+      t.view.reducedMotion = true;
+      expect(await t.viewControl.perform({ do: 'look', target: east, fovDeg: 15 })).toEqual({ ok: true });
+      t.look.updateCamera(t.camera, austin, null, 0);
+      expect(centre(t.camera).angleTo(direction(east))).toBeLessThan(1e-6);
+      expect(t.look.getState().fovDeg).toBe(15);
+      expect(await t.viewControl.perform({ do: 'fov', fovDeg: 40 })).toEqual({ ok: true });
+      expect(t.look.getState().fovDeg).toBe(40);
+    });
+
+    it('in a pose, leaves the aim to the user and waits for their gaze, but sets the field of view', async () => {
+      const t = setup();
+      t.view.attitude = pose;
+      const state = t.look.getState();
+      expect(await t.viewControl.perform({ do: 'look', target: east, fovDeg: 15 })).toStrictEqual({ ok: true, awaitingGaze: true });
+      expect(t.look.getState()).toBe(state);
+      expect(await t.viewControl.perform({ do: 'fov', fovDeg: 40 })).toEqual({ ok: true });
+      expect(t.look.getState().fovDeg).toBe(40);
+    });
+
+    it('stops for a drag and leaves the view where the user put it', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east });
+      frame(t, EASE_MIN_MS / 2);
+      t.look.onPointerDown(1, 100, 100);
+      t.look.onPointerMove(1, 150, 120, 800);
+      const dragged = t.look.getState();
+      frame(t, 16);
+      expect(await outcome).toEqual({ ok: true, awaitingGaze: true });
+      frame(t, EASE_MIN_MS);
+      expect(t.look.getState()).toBe(dragged);
+    });
+
+    it('stops a field-of-view ease for a zoom key', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'fov', fovDeg: 40 });
+      frame(t, EASE_MIN_MS / 2);
+      t.look.onKeyDown('+');
+      const zoomed = t.look.getState();
+      frame(t, 16);
+      expect(await outcome).toEqual({ ok: true });
+      frame(t, EASE_MIN_MS);
+      expect(t.look.getState()).toBe(zoomed);
+    });
+
+    it('stops when the compass comes on, and waits for the gaze', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east });
+      frame(t, EASE_MIN_MS / 2);
+      const midway = t.look.getState();
+      t.view.attitude = pose;
+      frame(t, 16);
+      expect(await outcome).toEqual({ ok: true, awaitingGaze: true });
+      expect(t.look.getState()).toBe(midway);
+    });
+
+    it('hands over to a new look from where the first has got to', async () => {
+      const t = setup();
+      const first = t.viewControl.perform({ do: 'look', target: east });
+      frame(t, EASE_MIN_MS / 2);
+      const midway = centre(t.camera);
+      const second = t.viewControl.perform({ do: 'look', target: north });
+      expect(await first).toEqual({ ok: true });
+      frame(t, 0);
+      expect(centre(t.camera).angleTo(midway)).toBeLessThan(1e-9);
+      frame(t, EASE_MIN_MS * 2);
+      expect(centre(t.camera).angleTo(direction(north))).toBeLessThan(1e-6);
+      expect(await second).toEqual({ ok: true });
+    });
+
+    it('refuses a field of view the camera cannot take, or a narrow one with no target, and touches nothing', async () => {
+      const t = setup();
+      const state = t.look.getState();
+      for (const fovDeg of [NaN, 0, 200]) {
+        expect(await t.viewControl.perform({ do: 'look', target: east, fovDeg })).toEqual({
+          ok: false,
+          code: 'bad-value',
+          message: `fovDeg ${fovDeg} is outside 0.003 to 100`,
+        });
+        expect(await t.viewControl.perform({ do: 'fov', fovDeg })).toEqual({
+          ok: false,
+          code: 'bad-value',
+          message: `fovDeg ${fovDeg} is outside 0.003 to 100`,
+        });
+      }
+      expect(await t.viewControl.perform({ do: 'fov', fovDeg: 20 })).toEqual({
+        ok: false,
+        code: 'bad-value',
+        message: 'a field of view under 30 needs a target: use look',
+      });
+      frame(t, EASE_MIN_MS);
+      expect(t.look.getState()).toBe(state);
+    });
+
+    it('says when a target cannot be found, and does not move', async () => {
+      const t = setup();
+      const state = t.look.getState();
+      t.view.labels = indexLabels([]);
+      expect(await t.viewControl.perform({ do: 'look', target: { kind: 'label', name: 'Atlantis' } })).toEqual({
+        ok: false,
+        code: 'target-unresolved',
+        message: 'no label named Atlantis',
+      });
+      t.view.position = null;
+      expect(await t.viewControl.perform({ do: 'look', target: east })).toEqual({
+        ok: false,
+        code: 'target-unresolved',
+        message: 'no position yet',
+      });
+      frame(t, EASE_MIN_MS);
+      expect(t.look.getState()).toBe(state);
+    });
+
+    it('turns the short way across north', async () => {
+      const t = setup();
+      t.look.setAim(THREE.MathUtils.degToRad(-350), 0);
+      const outcome = t.viewControl.perform({ do: 'look', target: { kind: 'horizon', azDeg: 10, altDeg: 0 } });
+      const yaws = [t.look.getState().yawRad];
+      for (let i = 0; i < 20; i++) {
+        frame(t, 100);
+        yaws.push(t.look.getState().yawRad);
+      }
+      expect(await outcome).toEqual({ ok: true });
+      for (let i = 1; i < yaws.length; i++) expect(yaws[i]).toBeLessThanOrEqual(yaws[i - 1]);
+      expect(THREE.MathUtils.radToDeg(yaws[0] - yaws[yaws.length - 1])).toBeCloseTo(20, 9);
+    });
+
+    it('keeps easing while a preset applies', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east });
+      frame(t, EASE_MIN_MS / 2);
+      expect(await t.viewControl.perform({ do: 'preset', id: 'sky' })).toEqual({ ok: true });
+      frame(t, EASE_MIN_MS);
+      expect(await outcome).toEqual({ ok: true });
+      expect(centre(t.camera).angleTo(direction(east))).toBeLessThan(1e-6);
     });
   });
 });
