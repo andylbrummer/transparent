@@ -5,6 +5,7 @@
  * out from the actions alone. Types only; view-control.ts does them.
  */
 
+import type * as THREE from 'three';
 import type { PlanetName } from '@transparent-earth/core';
 import type { LabelKind } from '../render/labels';
 
@@ -38,7 +39,25 @@ export type ActionOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: ActionErrorCode; readonly message: string };
 
+/** Why a target has no direction: an unknown or shared label name, a value that is not a number, no position yet. */
+export type TargetUnresolved = { readonly ok: false; readonly code: 'target-unresolved'; readonly message: string };
+
+/** Where a target is now. */
+export interface Located {
+  readonly ok: true;
+  /** World unit vector from where the view stands. */
+  readonly direction: THREE.Vector3;
+  /** Clockwise from north, 0 to 360. */
+  readonly azDeg: number;
+  /** Above the horizon; -90 is straight down. */
+  readonly altDeg: number;
+  /** Angle from the view's centre, degrees. */
+  readonly offCentreDeg: number;
+}
+
 export interface ViewControl {
   /** Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded. */
   perform(action: ViewAction): Promise<ActionOutcome>;
+  /** Where a target is now and how far the view's centre is from it. */
+  locate(target: Target): Located | TargetUnresolved;
 }

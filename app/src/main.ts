@@ -59,6 +59,7 @@ import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './vo
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import { createViewControl } from './view/view-control';
+import { indexLabels, type LabelIndex } from './view/targets';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
 import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
 
@@ -229,6 +230,8 @@ export function init(): App | null {
   const interiorObjects: Partial<Record<InteriorLayerName, THREE.Object3D>> = {};
   let quakes: QuakeLayer | null = null;
   const labels = new LabelLayer(container, []);
+  // The baked labels by name, for a guide's label targets; null until the map data has loaded.
+  let labelIndex: LabelIndex | null = null;
   let geoStatus: 'loading' | 'ready' | 'failed' = 'loading';
   const layerSwitches = switchesWithLazyLayers(LAYER_DEFINITIONS);
   const layerVisibility = loadLayerVisibility(localStorage.getItem(LAYERS_STORAGE_KEY), layerSwitches);
@@ -282,6 +285,7 @@ export function init(): App | null {
       interiorObjects.quakes = quakes.getObject();
       geoRoot.add(quakes.getObject());
       labels.addLabels([placeLabels, geology, quakeData]);
+      labelIndex = indexLabels([placeLabels, geology, quakeData]);
       for (const layer of LAYER_SWITCHES) applyLayer(layer, layerVisibility[layer.id]);
       geoStatus = 'ready';
       renderHud();
@@ -374,7 +378,16 @@ export function init(): App | null {
     (id, text, tone) => layersPanel.setStatus(id, text, tone),
     checkBuildAfterLoadFailure
   );
-  const viewControl = createViewControl({ presets, switches: layerSwitches, layersPanel, lazyLayers });
+  const viewControl = createViewControl({
+    presets,
+    switches: layerSwitches,
+    layersPanel,
+    lazyLayers,
+    camera,
+    getPosition: () => sensorState.position,
+    now: () => clock.now(),
+    getLabels: () => labelIndex,
+  });
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
     // The globe is there from the start, without waiting on the map data.

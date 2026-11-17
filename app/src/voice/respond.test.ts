@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as THREE from 'three';
 import type { LayerManager } from '../layers/manager';
 import { LAYER_DEFINITIONS } from '../layers/registry';
 import { switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
@@ -35,6 +36,10 @@ function app(
         setLayer: (id, visible) => done.push(`${visible ? 'on' : 'off'}:${id}`),
       },
       lazyLayers: state.lazyLayers ?? { preload: () => Promise.resolve() },
+      camera: new THREE.PerspectiveCamera(),
+      getPosition: () => null,
+      now: () => new Date(0),
+      getLabels: () => null,
     }),
     nameInView: () => state.inView ?? null,
     isInCardboard: () => state.inCardboard ?? false,

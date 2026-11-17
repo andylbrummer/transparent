@@ -5,10 +5,13 @@
  * tested without the renderer.
  */
 
+import * as THREE from 'three';
 import type { LayerManager } from '../layers/manager';
+import type { SurfacePosition } from '../sensors';
 import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
-import type { ActionOutcome, ViewAction, ViewControl } from './actions';
+import type { ActionOutcome, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
+import { horizonOf, targetDirection, type LabelIndex } from './targets';
 
 export interface ViewControlDeps {
   /** Every preset an action may name. */
@@ -19,7 +22,18 @@ export interface ViewControlDeps {
   readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer'>;
   /** The lazy layers: a switch-on is not done until its layer has loaded. */
   readonly lazyLayers: Pick<LayerManager, 'preload'>;
+  /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
+  readonly camera: THREE.Camera;
+  /** Where the view stands; null until there is a position. */
+  getPosition(): SurfacePosition | null;
+  /** The app clock. */
+  now(): Date;
+  /** The baked labels by name; null until the label files have loaded. */
+  getLabels(): LabelIndex | null;
 }
+
+/** What a target other than a label is resolved with before the label files arrive: it needs none. */
+const NO_LABELS: LabelIndex = new Map();
 
 export function createViewControl(deps: ViewControlDeps): ViewControl {
   const switchesById = new Map(deps.switches.map((s) => [s.id, s]));
@@ -70,5 +84,20 @@ export function createViewControl(deps: ViewControlDeps): ViewControl {
     }
   }
 
-  return { perform };
+  const forward = new THREE.Vector3();
+
+  function locate(target: Target): Located | TargetUnresolved {
+    const position = deps.getPosition();
+    if (!position) return { ok: false, code: 'target-unresolved', message: 'no position yet' };
+    const labels = deps.getLabels();
+    // Not yet loaded is not unknown: say which, rather than "no label named".
+    if (target.kind === 'label' && !labels) return { ok: false, code: 'target-unresolved', message: 'the label files have not loaded' };
+    const found = targetDirection(target, position, deps.now(), labels ?? NO_LABELS);
+    if (!found.ok) return found;
+    // The camera as it is now, so the answer holds in a pose as well as in a drag.
+    const offCentreDeg = THREE.MathUtils.radToDeg(found.direction.angleTo(deps.camera.getWorldDirection(forward)));
+    return { ok: true, direction: found.direction, ...horizonOf(found.direction, position), offCentreDeg };
+  }
+
+  return { perform, locate };
 }

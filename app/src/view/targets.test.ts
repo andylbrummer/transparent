@@ -8,7 +8,7 @@ import { earthPoint } from '../render/earth-point';
 import type { LabelData, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target } from './actions';
-import { indexLabels, targetDirection, type LabelIndex } from './targets';
+import { horizonOf, indexLabels, targetDirection, type LabelIndex } from './targets';
 
 const austin: SurfacePosition = HORIZONS.site;
 const instants = HORIZONS.instants.map((iso, index) => ({ iso, index, date: new Date(iso) }));
@@ -39,6 +39,38 @@ describe('targetDirection: horizon', () => {
     expect(direction({ kind: 'horizon', azDeg: 90, altDeg: 0 }, position).distanceTo(e)).toBeLessThan(1e-9);
     expect(direction({ kind: 'horizon', azDeg: 0, altDeg: 90 }, position).distanceTo(u)).toBeLessThan(1e-9);
     expect(direction({ kind: 'horizon', azDeg: 0, altDeg: -90 }, position).distanceTo(u.clone().negate())).toBeLessThan(1e-9);
+  });
+});
+
+describe('horizonOf', () => {
+  /** How far apart two azimuths are round the circle, degrees. */
+  const azGap = (a: number, b: number): number => Math.abs(((((a - b + 180) % 360) + 360) % 360) - 180);
+
+  it.each([0, 90, 270, 359.5].flatMap((azDeg) => [-60, 0, 45].map((altDeg) => ({ azDeg, altDeg }))))(
+    'gives back the azimuth $azDeg and altitude $altDeg a horizon target was made from',
+    ({ azDeg, altDeg }) => {
+      const back = horizonOf(direction({ kind: 'horizon', azDeg, altDeg }), austin);
+      expect(azGap(back.azDeg, azDeg)).toBeLessThan(1e-9);
+      expect(Math.abs(back.altDeg - altDeg)).toBeLessThan(1e-9);
+    }
+  );
+
+  it.each([
+    { way: 'up', altDeg: 90 },
+    { way: 'down', altDeg: -90 },
+  ])('gives straight $way an azimuth of 0, not -0', ({ altDeg }) => {
+    const back = horizonOf(direction({ kind: 'horizon', azDeg: 123, altDeg }), austin);
+    expect(Object.is(back.azDeg, 0)).toBe(true);
+    expect(back.altDeg).toBeCloseTo(altDeg, 9);
+  });
+
+  it('keeps an azimuth a hair west of north in [0, 360)', () => {
+    for (const azDeg of [359.999999, 360 - 1e-12]) {
+      const back = horizonOf(direction({ kind: 'horizon', azDeg, altDeg: 0 }), austin);
+      expect(back.azDeg).toBeGreaterThanOrEqual(0);
+      expect(back.azDeg).toBeLessThan(360);
+      expect(azGap(back.azDeg, azDeg)).toBeLessThan(1e-9);
+    }
   });
 });
 

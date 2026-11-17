@@ -1,8 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as THREE from 'three';
+import { createLookController } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
 import type { LayerDefinition, LayerInstance } from '../layers/types';
+import type { SurfacePosition } from '../sensors';
 import { LAYERS_STORAGE_KEY, LayersPanel, loadLayerVisibility, switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets';
+import type { Located, Target, ViewControl } from './actions';
+import { indexLabels, targetDirection, type LabelIndex } from './targets';
 import { createViewControl } from './view-control';
 
 describe('createViewControl', () => {
@@ -23,10 +28,15 @@ describe('createViewControl', () => {
   const sky: LayerPreset = { id: 'sky', label: 'Sky', description: 'x-ray sky', on: ['x-ray'] };
   const night: LayerPreset = { id: 'night', label: 'Night', description: 'x-ray and aurora', on: ['x-ray', 'aurora'] };
 
+  const austin: SurfacePosition = { lat: 30.27, lon: -97.74 };
+  const when = new Date('2026-11-09T06:00:00Z');
+
   /**
    * A view control over a real layers panel and layer manager, wired as
    * main.ts wires them, recording what flips and what is saved. `loads`
-   * replaces a layer's load, to time it or fail it.
+   * replaces a layer's load, to time it or fail it. The camera is placed
+   * by a real look controller at Austin, looking straight down as the app
+   * starts; `view` holds the position and labels the control reads.
    */
   function setup(saved: string | null = null, loads: Record<string, LayerDefinition['load']> = {}) {
     const parent = document.createElement('div');
@@ -50,9 +60,22 @@ describe('createViewControl', () => {
       { setItem: (key, value) => stored.set(key, value) },
       { switches, presets }
     );
-    const viewControl = createViewControl({ presets, switches, layersPanel, lazyLayers });
+    const camera = new THREE.PerspectiveCamera();
+    const look = createLookController();
+    look.updateCamera(camera, austin, null, 0);
+    const view: { position: SurfacePosition | null; labels: LabelIndex | null } = { position: austin, labels: null };
+    const viewControl = createViewControl({
+      presets,
+      switches,
+      layersPanel,
+      lazyLayers,
+      camera,
+      getPosition: () => view.position,
+      now: () => when,
+      getLabels: () => view.labels,
+    });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { viewControl, switches, changes, stored, input };
+    return { viewControl, switches, changes, stored, input, camera, look, view };
   }
 
   const instance = (): LayerInstance => ({ setVisible() {}, dispose() {} });
@@ -219,5 +242,70 @@ describe('createViewControl', () => {
     expect(await viewControl.perform({ do: 'layers', on: ['x-ray'] })).toEqual({ ok: true });
     expect(load).toHaveBeenCalledTimes(2);
     error.mockRestore();
+  });
+
+  describe('locate', () => {
+    const down = { kind: 'horizon', azDeg: 0, altDeg: -90 } as const;
+    const northOnHorizon = { kind: 'horizon', azDeg: 0, altDeg: 0 } as const;
+
+    /** Where `target` is, failing the test if it does not resolve. */
+    function located(viewControl: ViewControl, target: Target): Located {
+      const result = viewControl.locate(target);
+      if (!result.ok) throw new Error(result.message);
+      return result;
+    }
+
+    it('finds what is straight down at the view centre, as the app starts', () => {
+      const { viewControl } = setup();
+      const below = located(viewControl, down);
+      expect(below.offCentreDeg).toBeLessThan(1e-6);
+      expect(below.altDeg).toBeCloseTo(-90, 9);
+      expect(below.azDeg).toBe(0);
+      const expected = targetDirection(down, austin, when, new Map());
+      if (!expected.ok) throw new Error(expected.message);
+      expect(below.direction.toArray()).toEqual(expected.direction.toArray());
+    });
+
+    it('finds north on the horizon a quarter turn from the view centre', () => {
+      const { viewControl } = setup();
+      const north = located(viewControl, northOnHorizon);
+      expect(north.offCentreDeg).toBeCloseTo(90, 6);
+      expect(north.azDeg).toBeCloseTo(0, 9);
+      expect(north.altDeg).toBeCloseTo(0, 9);
+    });
+
+    it('measures from the camera as it is now', () => {
+      const { viewControl, camera, look } = setup();
+      look.setAim(0, 0);
+      look.updateCamera(camera, austin, null, 0);
+      expect(located(viewControl, northOnHorizon).offCentreDeg).toBeLessThan(1e-6);
+    });
+
+    it('does not resolve anything before there is a position', () => {
+      const { viewControl, view } = setup();
+      view.position = null;
+      expect(viewControl.locate(down)).toEqual({ ok: false, code: 'target-unresolved', message: 'no position yet' });
+    });
+
+    it('says the label files have not loaded rather than that a name is unknown, and still finds the Sun', () => {
+      const { viewControl } = setup();
+      expect(viewControl.locate({ kind: 'label', name: 'Tuzo' })).toEqual({
+        ok: false,
+        code: 'target-unresolved',
+        message: 'the label files have not loaded',
+      });
+      expect(viewControl.locate({ kind: 'body', body: 'sun' }).ok).toBe(true);
+    });
+
+    it('looks a label up once the label files have loaded', () => {
+      const { viewControl, view } = setup();
+      view.labels = indexLabels([{ labels: [{ kind: 'deep', name: 'Tuzo', lat: -15, lon: 15, depthKm: 2600, priority: 1 }] }]);
+      expect(viewControl.locate({ kind: 'label', name: 'Atlantis' })).toEqual({
+        ok: false,
+        code: 'target-unresolved',
+        message: 'no label named Atlantis',
+      });
+      expect(viewControl.locate({ kind: 'label', name: 'Tuzo' }).ok).toBe(true);
+    });
   });
 });

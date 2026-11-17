@@ -27,7 +27,7 @@ import {
 import { earthPoint } from '../render/earth-point';
 import type { LabelData, LabelKind, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
-import type { Target } from './actions';
+import type { Target, TargetUnresolved } from './actions';
 import { standingPoint } from './standing-place';
 
 /** The baked labels by name: what a `label` target is looked up in. */
@@ -49,11 +49,9 @@ export function indexLabels(sources: readonly LabelData[]): LabelIndex {
 export type TargetDirection =
   /** World unit vector from where the view stands. */
   | { readonly ok: true; readonly direction: THREE.Vector3 }
-  | { readonly ok: false; readonly code: 'target-unresolved'; readonly message: string };
+  | TargetUnresolved;
 
-type Unresolved = Extract<TargetDirection, { ok: false }>;
-
-const unresolved = (message: string): Unresolved => ({ ok: false, code: 'target-unresolved', message });
+const unresolved = (message: string): TargetUnresolved => ({ ok: false, code: 'target-unresolved', message });
 
 /** Where `target` is, seen from `position` at `date`: the direction to where the app draws it. */
 export function targetDirection(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): TargetDirection {
@@ -65,8 +63,20 @@ export function targetDirection(target: Target, position: SurfacePosition, date:
   return { ok: true, direction: toward.divideScalar(length) };
 }
 
+/** A world direction in the local frame at `position`: azimuth clockwise from north in [0, 360), altitude above the horizon. */
+export function horizonOf(direction: THREE.Vector3, position: SurfacePosition): { readonly azDeg: number; readonly altDeg: number } {
+  const { e, n, u } = enuBasis({ lat: position.lat, lon: position.lon, alt: 0 });
+  const east = direction.dot(vector(e));
+  const north = direction.dot(vector(n));
+  const altDeg = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(direction.dot(vector(u)), -1, 1)));
+  // Straight up or down has no azimuth, and rounding would make one up: it is 0 there.
+  const azRad = Math.hypot(east, north) < 1e-12 ? 0 : Math.atan2(east, north);
+  // Into [0, 360): -0, and a hair west of north that rounds to 360, both come out 0.
+  return { azDeg: (THREE.MathUtils.radToDeg(azRad) + 360) % 360, altDeg };
+}
+
 /** A vector toward the target, any length. */
-function towardTarget(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): THREE.Vector3 | Unresolved {
+function towardTarget(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): THREE.Vector3 | TargetUnresolved {
   switch (target.kind) {
     case 'horizon': {
       const { e, n, u } = enuBasis({ lat: position.lat, lon: position.lon, alt: 0 });
@@ -107,7 +117,7 @@ function towardBody(body: 'sun' | 'moon' | PlanetName, position: SurfacePosition
  * The one place a label name stands for, or why there is not one. A shared
  * name is never guessed at: the message lists the kinds to choose from.
  */
-function labelPlace(name: string, labelKind: LabelKind | undefined, labels: LabelIndex): PlaceLabel | Unresolved {
+function labelPlace(name: string, labelKind: LabelKind | undefined, labels: LabelIndex): PlaceLabel | TargetUnresolved {
   const named = labels.get(name);
   if (!named) return unresolved(`no label named ${name}`);
   const kinds = named.map((label) => label.kind).join(', ');
