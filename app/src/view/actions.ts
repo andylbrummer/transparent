@@ -11,7 +11,7 @@ export type ViewAction =
   /** Named switches on or off; the rest stay. */
   | { readonly do: 'layers'; readonly on?: readonly string[]; readonly off?: readonly string[] };
 
-export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'bad-value';
+export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'layer-unavailable' | 'bad-value';
 
 /** What came of an action. A mistake in the action is an outcome, not a throw, so its caller can show it. */
 export type ActionOutcome =
@@ -19,6 +19,6 @@ export type ActionOutcome =
   | { readonly ok: false; readonly code: ActionErrorCode; readonly message: string };
 
 export interface ViewControl {
-  /** Do one action. Resolves when it has taken effect. */
+  /** Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded. */
   perform(action: ViewAction): Promise<ActionOutcome>;
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { LayerManager } from '../layers/manager';
 import { LAYER_DEFINITIONS } from '../layers/registry';
 import { switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { LAYER_PRESETS } from '../ui/presets';
@@ -8,7 +9,9 @@ import { helpText, respondToSpeech, type VoiceActions, type VoiceZoom } from './
 /**
  * The app's side, recording what was asked of it. Presets and layers go
  * through a real view control onto a recording panel; `viewSwitches`
- * builds that control from a different list than the vocabulary.
+ * builds that control from a different list than the vocabulary, and
+ * `lazyLayers` stands in for the layer manager, whose layers load at once
+ * unless it says otherwise.
  */
 function app(
   state: {
@@ -17,6 +20,7 @@ function app(
     inView?: string | null;
     zoom?: (inward: boolean) => VoiceZoom;
     viewSwitches?: readonly LayerSwitch[];
+    lazyLayers?: Pick<LayerManager, 'preload'>;
   } = {}
 ) {
   const done: string[] = [];
@@ -30,6 +34,7 @@ function app(
         applyPreset: (preset) => done.push(`preset:${preset.id}`),
         setLayer: (id, visible) => done.push(`${visible ? 'on' : 'off'}:${id}`),
       },
+      lazyLayers: state.lazyLayers ?? { preload: () => Promise.resolve() },
     }),
     nameInView: () => state.inView ?? null,
     isInCardboard: () => state.inCardboard ?? false,
@@ -61,6 +66,16 @@ describe('respondToSpeech', () => {
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('voice command failed: unknown-layer', 'no layer switch stars'));
     expect(error).toHaveBeenCalledTimes(1);
     expect(done).toEqual([]);
+    error.mockRestore();
+  });
+
+  it('does not report a layer that will not load: the layer manager has already said so', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { actions, done } = app({ lazyLayers: { preload: () => Promise.reject(new Error('offline')) } });
+    expect(respondToSpeech(['show stars'], actions)).toBe('Stars on.');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(error).not.toHaveBeenCalled();
+    expect(done).toEqual(['on:stars']);
     error.mockRestore();
   });
 

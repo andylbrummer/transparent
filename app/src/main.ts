@@ -316,7 +316,6 @@ export function init(): App | null {
     openSections: loadOpenSections(localStorage.getItem(SECTIONS_STORAGE_KEY)),
     presets,
   });
-  const viewControl = createViewControl({ presets, switches: layerSwitches, layersPanel });
 
   const appState: AppState = DEFAULT_STATE;
   let availableModes: readonly RenderMode[] = [];
@@ -375,6 +374,7 @@ export function init(): App | null {
     (id, text, tone) => layersPanel.setStatus(id, text, tone),
     checkBuildAfterLoadFailure
   );
+  const viewControl = createViewControl({ presets, switches: layerSwitches, layersPanel, lazyLayers });
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
     // The globe is there from the start, without waiting on the map data.

@@ -84,13 +84,14 @@ function perform(command: VoiceCommand, actions: VoiceActions): string {
 /**
  * Do an action built from a parsed command. The reply does not wait for
  * it: a layer may take seconds to load, and the reply is the only sign
- * the command was heard. The ids come from the vocabulary, so a failed
- * outcome means the vocabulary and the view control were built from
- * different lists.
+ * the command was heard. A layer that will not load has been reported
+ * already, by its chip and on the console, so it is not reported again.
+ * The ids come from the vocabulary, so any other failed outcome means the
+ * vocabulary and the view control were built from different lists.
  */
 function performFromVocabulary(viewControl: ViewControl, action: ViewAction): void {
   void viewControl.perform(action).then((outcome) => {
-    if (!outcome.ok) console.error(`voice command failed: ${outcome.code}`, outcome.message);
+    if (!outcome.ok && outcome.code !== 'layer-unavailable') console.error(`voice command failed: ${outcome.code}`, outcome.message);
   });
 }
 
