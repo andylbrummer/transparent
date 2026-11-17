@@ -137,6 +137,150 @@ describe('LayerManager', () => {
     error.mockRestore();
   });
 
+  /** A layer whose load finishes only when the test says so. */
+  function heldLoad() {
+    let finish!: (value: LayerInstance) => void;
+    let fail!: (error: Error) => void;
+    const load = vi.fn<LayerDefinition['load']>(
+      () =>
+        new Promise<LayerInstance>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        })
+    );
+    return { load, finish: (value: LayerInstance) => finish(value), fail: (error: Error) => fail(error) };
+  }
+
+  /** Whether a promise has settled yet, read after the test lets pending callbacks run. */
+  function settledFlag(promise: Promise<void>): { settled: boolean } {
+    const flag = { settled: false };
+    promise.then(
+      () => (flag.settled = true),
+      () => (flag.settled = true)
+    );
+    return flag;
+  }
+
+  it('resolves a switch-on once the layer has loaded and shows it', async () => {
+    const instance = fakeInstance();
+    const held = heldLoad();
+    const manager = new LayerManager([definition('clouds', held.load)], shared, () => {}, () => {});
+    const shown = manager.setVisible('clouds', true);
+    const flag = settledFlag(shown);
+    await settle();
+    expect(flag.settled).toBe(false);
+    held.finish(instance);
+    await shown;
+    expect(instance.visible).toBe(true);
+  });
+
+  it('shares one load among everyone waiting on it', async () => {
+    const instance = fakeInstance();
+    const held = heldLoad();
+    const manager = new LayerManager([definition('clouds', held.load)], shared, () => {}, () => {});
+    const waits = [manager.setVisible('clouds', true), manager.setVisible('clouds', true), manager.preload('clouds')];
+    held.finish(instance);
+    await Promise.all(waits);
+    expect(held.load).toHaveBeenCalledOnce();
+  });
+
+  it('does not wait on the load to switch off, and hides the layer when it lands', async () => {
+    const instance = fakeInstance();
+    const held = heldLoad();
+    const manager = new LayerManager([definition('clouds', held.load)], shared, () => {}, () => {});
+    void manager.setVisible('clouds', true);
+    const flag = settledFlag(manager.setVisible('clouds', false));
+    await settle();
+    expect(flag.settled).toBe(true);
+    held.finish(instance);
+    await settle();
+    expect(instance.visible).toBe(false);
+  });
+
+  it('resolves at once for a layer already loaded', async () => {
+    const load = vi.fn(async () => fakeInstance());
+    const manager = new LayerManager([definition('stars', load)], shared, () => {}, () => {});
+    await manager.setVisible('stars', true);
+    await manager.setVisible('stars', true);
+    await manager.preload('stars');
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a switch-on whose load fails, naming the layer, and retries on the next', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const statuses: (string | null)[] = [];
+    const offline = new Error('offline');
+    const load = vi.fn<LayerDefinition['load']>().mockRejectedValueOnce(offline).mockResolvedValueOnce(fakeInstance());
+    const failed: string[] = [];
+    const manager = new LayerManager(
+      [definition('wind', load)],
+      shared,
+      (_id, text) => statuses.push(text),
+      (id) => failed.push(id)
+    );
+    const shown = manager.setVisible('wind', true);
+    await expect(shown).rejects.toThrow('layer "wind" failed to load');
+    await expect(shown).rejects.toHaveProperty('cause', offline);
+    expect(statuses.at(-1)).toBe('unavailable');
+    expect(failed).toEqual(['wind']);
+    await manager.setVisible('wind', true);
+    expect(load).toHaveBeenCalledTimes(2);
+    error.mockRestore();
+  });
+
+  it('preloads a layer without showing it, and shows it on the next switch-on', async () => {
+    const instance = fakeInstance();
+    const load = vi.fn(async () => instance);
+    const manager = new LayerManager([definition('stars', load)], shared, () => {}, () => {});
+    await manager.preload('stars');
+    expect(instance.visible).toBe(false);
+    manager.update(frame);
+    expect(instance.updates).toBe(0);
+    await manager.setVisible('stars', true);
+    expect(instance.visible).toBe(true);
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it('does not hide a layer switched on while a preload joins its load', async () => {
+    const instance = fakeInstance();
+    const held = heldLoad();
+    const manager = new LayerManager([definition('clouds', held.load)], shared, () => {}, () => {});
+    const shown = manager.setVisible('clouds', true);
+    const preloaded = manager.preload('clouds');
+    held.finish(instance);
+    await Promise.all([shown, preloaded]);
+    expect(instance.visible).toBe(true);
+  });
+
+  it('rejects everyone waiting on a failed load, and reports the failure once', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const statuses: (string | null)[] = [];
+    const offline = new Error('offline');
+    const held = heldLoad();
+    const failed: string[] = [];
+    const manager = new LayerManager(
+      [definition('wind', held.load)],
+      shared,
+      (_id, text) => statuses.push(text),
+      (id) => failed.push(id)
+    );
+    const preloaded = manager.preload('wind');
+    const shown = manager.setVisible('wind', true);
+    held.fail(offline);
+    await expect(preloaded).rejects.toThrow('layer "wind" failed to load');
+    await expect(preloaded).rejects.toHaveProperty('cause', offline);
+    await expect(shown).rejects.toThrow('layer "wind" failed to load');
+    expect(statuses.filter((text) => text === 'unavailable')).toHaveLength(1);
+    expect(failed).toEqual(['wind']);
+    expect(error).toHaveBeenCalledOnce();
+    error.mockRestore();
+  });
+
+  it('throws at once when asked to preload a layer it was not built with', () => {
+    const manager = new LayerManager([definition('stars', async () => fakeInstance())], shared, () => {}, () => {});
+    expect(() => manager.preload('no-such-layer')).toThrow('no lazy layer no-such-layer');
+  });
+
   it('disposes what it loaded, including a load that finishes after disposal', async () => {
     const early = fakeInstance();
     const late = fakeInstance();

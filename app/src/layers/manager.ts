@@ -1,7 +1,8 @@
 /**
  * Runs the lazy layers: loads one the first time it is switched on, keeps
  * its visibility in step with the switch through the load, and forwards
- * frames and resizes to whatever is loaded and showing.
+ * frames and resizes to whatever is loaded and showing. A layer can also be
+ * loaded ahead of need, and a load can be waited on.
  */
 
 import type { FrameState, LayerContext, LayerDefinition, LayerInstance, StatusTone } from './types';
@@ -14,7 +15,8 @@ interface Slot {
   readonly definition: LayerDefinition;
   wanted: boolean;
   instance: LayerInstance | null;
-  loading: boolean;
+  /** The load in flight, shared by everyone waiting on it; null when none is. */
+  loading: Promise<void> | null;
 }
 
 export class LayerManager {
@@ -31,7 +33,7 @@ export class LayerManager {
     private readonly onLoadFailed: (id: string) => void
   ) {
     for (const definition of definitions) {
-      this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: false });
+      this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: null });
     }
   }
 
@@ -39,21 +41,49 @@ export class LayerManager {
     return this.slots.has(id);
   }
 
-  /** An id the manager was not built with is a wiring fault, so it throws: a switch that showed on with nothing drawn would say nothing. */
-  setVisible(id: string, visible: boolean): void {
-    const slot = this.slots.get(id);
-    if (!slot) throw new Error(`no lazy layer ${id}`);
+  /**
+   * Show or hide a layer. Resolves once it stands as asked: at once, unless
+   * a switch-on has to load the layer first. Rejects if that load fails. An
+   * id the manager was not built with is a wiring fault, so it throws: a
+   * switch that showed on with nothing drawn would say nothing.
+   */
+  setVisible(id: string, visible: boolean): Promise<void> {
+    const slot = this.slot(id);
     slot.wanted = visible;
     if (slot.instance) {
       slot.instance.setVisible(visible);
-    } else if (visible && !slot.loading) {
-      void this.load(slot);
+      return Promise.resolve();
     }
+    return visible ? this.loaded(slot) : Promise.resolve();
+  }
+
+  /** Load a layer ahead of need, without showing it. Rejects if the load fails. */
+  preload(id: string): Promise<void> {
+    const slot = this.slot(id);
+    return slot.instance ? Promise.resolve() : this.loaded(slot);
+  }
+
+  /** Not async on purpose: a wiring fault throws at once, where a failed load is a rejection. */
+  private slot(id: string): Slot {
+    const slot = this.slots.get(id);
+    if (!slot) throw new Error(`no lazy layer ${id}`);
+    return slot;
+  }
+
+  /** The layer's load: the one in flight, or a new one. */
+  private loaded(slot: Slot): Promise<void> {
+    if (slot.loading) return slot.loading;
+    const loading = this.load(slot).finally(() => {
+      slot.loading = null;
+    });
+    // The manager has already reported a failed load (the chip, the console, onLoadFailed), so a caller that does not wait need not catch.
+    loading.catch(() => {});
+    slot.loading = loading;
+    return loading;
   }
 
   private async load(slot: Slot): Promise<void> {
     const id = slot.definition.id;
-    slot.loading = true;
     this.status(id, LOADING, 'info');
     const context: LayerContext = {
       ...this.shared,
@@ -75,8 +105,7 @@ export class LayerManager {
       // Fail visibly: the switch keeps a chip saying so. Switching it on again retries.
       this.status(id, 'unavailable', 'error');
       this.onLoadFailed(id);
-    } finally {
-      slot.loading = false;
+      throw new Error(`layer "${id}" failed to load`, { cause: error });
     }
   }
 
