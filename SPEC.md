@@ -48,6 +48,8 @@ is that way and that far down; the antipode really is straight down.
 | [spec/seismic.md](spec/seismic.md) | Earthquake catalog, playback engine, P/S/surface wave rendering, travel-time data |
 | [spec/weather.md](spec/weather.md) | Cloud/precip/wind layers, data sources, degradation |
 | [spec/architecture.md](spec/architecture.md) | Engine choice, module breakdown, data sources, persistence, licensing |
+| [spec/guides.md](spec/guides.md) | Narrated guides: the view control's action vocabulary, the guide JSON format and validator, timing, gaze guidance, hotspots and clips, R2 video, phases |
+| [spec/voice-guide.md](spec/voice-guide.md) | Design only: the voice AI over the same action vocabulary, grounding, exposure and caps, model and cost estimates, business model |
 
 ## 3. Goals and Non-Goals
 
