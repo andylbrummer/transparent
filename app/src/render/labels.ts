@@ -115,6 +115,8 @@ export interface LabelStyle {
   readonly wide?: boolean;
   /** Shift the text down from its point, CSS px, so it sits under a marker instead of on it. */
   readonly offsetYPx?: number;
+  /** Draw a ring on the point and hang the text under it: a guide's mark. */
+  readonly ring?: boolean;
 }
 
 export interface GroupLabel {
@@ -369,7 +371,7 @@ export class LabelLayer {
     const em = style.wide ? COUNTRY_GLYPH_WIDTH_EM : GLYPH_WIDTH_EM;
     const added: PlacedLabel[] = spec.labels.map((label) => {
       const element = document.createElement('div');
-      element.className = 'place-label';
+      element.className = style.ring ? 'place-label place-label--ring' : 'place-label';
       element.textContent = label.text;
       element.style.display = 'none';
       element.style.fontSize = `${style.fontPx}px`;
@@ -395,7 +397,9 @@ export class LabelLayer {
         element,
         position: label.position,
         halfWidth: (label.text.length * style.fontPx * em + LABEL_PADDING_PX) / 2,
-        halfHeight: (style.fontPx * 1.3 + LABEL_PADDING_PX) / 2,
+        // A ring and the text under it lie within 2.6em of the point, above and
+        // below: no other name may sit on the ring or on its text.
+        halfHeight: style.ring ? style.fontPx * 2.6 + LABEL_PADDING_PX / 2 : (style.fontPx * 1.3 + LABEL_PADDING_PX) / 2,
         offsetY: style.offsetYPx ?? 0,
         extentDeg: label.extentDeg ?? null,
         target: null,

@@ -399,6 +399,58 @@ describe('LabelLayer groups', () => {
     layer.dispose();
   });
 
+  describe('with a ring', () => {
+    const ringed = { ...style, ring: true };
+
+    /** A camera at Austin looking straight up, where a sky label is drawn along its direction. */
+    function zenithCamera(): THREE.PerspectiveCamera {
+      const camera = cameraAimedAt(-119.5, 37.0);
+      camera.lookAt(camera.position.clone().multiplyScalar(2));
+      camera.updateMatrixWorld();
+      return camera;
+    }
+
+    /** The sky direction drawn `px` CSS pixels under the middle of the view. */
+    function under(camera: THREE.PerspectiveCamera, px: number): THREE.Vector3 {
+      const perPx = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / (HEIGHT / 2);
+      return new THREE.Vector3(0, -px * perPx, -1).normalize().applyQuaternion(camera.quaternion);
+    }
+
+    it('marks its labels for the ring, in both eyes, and takes them away with its handle', () => {
+      const parent = document.createElement('div');
+      const layer = new LabelLayer(parent, []);
+      layer.setStereo(true);
+      const group = layer.addGroup({ rank: 1, style: ringed, frame: 'earth', labels: [{ text: 'Mark', priority: 0, position: surface(0, 0) }] });
+      layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Plain', priority: 0, position: surface(1, 0) }] });
+      const classes = (text: string): string[] =>
+        [...parent.querySelectorAll<HTMLElement>('.place-label')].filter((e) => e.textContent === text).map((e) => e.className);
+      expect(classes('Mark')).toEqual(['place-label place-label--ring', 'place-label place-label--ring']);
+      expect(parent.querySelector('.place-labels--right-eye .place-label--ring')?.textContent).toBe('Mark');
+      expect(classes('Plain')).toEqual(['place-label', 'place-label']);
+      group.remove();
+      expect(classes('Mark')).toEqual([]);
+      layer.dispose();
+    });
+
+    it('keeps other names off the text hung under the ring', () => {
+      const camera = zenithCamera();
+      const shown = (markStyle: typeof style, px: number): string[] => {
+        const layer = new LabelLayer(document.createElement('div'), []);
+        layer.addGroup({ rank: 6.3, style: markStyle, frame: 'sky', labels: [{ text: 'Mark', priority: 0, position: under(camera, 0) }] });
+        layer.addGroup({ rank: 6.4, style, frame: 'sky', labels: [{ text: 'Other', priority: 0, position: under(camera, px) }] });
+        layer.update(camera, WIDTH, HEIGHT, undefined, new THREE.Matrix4());
+        const names = layer.visibleNames();
+        layer.dispose();
+        return names;
+      };
+      // Two em under the point is where the ring's text is; a plain name there leaves room.
+      expect(shown(ringed, 20)).toEqual(['Mark']);
+      expect(shown(style, 20)).toEqual(['Mark', 'Other']);
+      // Clear of the ring's box (2.6em) and its own half height.
+      expect(shown(ringed, 40)).toEqual(['Mark', 'Other']);
+    });
+  });
+
   describe('below the horizon', () => {
     /** Unit directions fanned round `axis`, far enough apart on a big viewport not to collide. */
     function fan(axis: THREE.Vector3, count: number): THREE.Vector3[] {
