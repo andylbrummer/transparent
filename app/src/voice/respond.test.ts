@@ -44,6 +44,7 @@ function app(
       look: createLookController(),
       getAttitude: () => null,
       prefersReducedMotion: () => false,
+      addLabels: () => ({ setVisible() {}, remove() {} }),
     }),
     nameInView: () => state.inView ?? null,
     isInCardboard: () => state.inCardboard ?? false,

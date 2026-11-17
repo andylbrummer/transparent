@@ -58,6 +58,7 @@ import { createTalkButton } from './voice/talk-button';
 import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './voice/respond';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
+import type { ViewControl } from './view/actions';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -81,6 +82,8 @@ export interface App {
   readonly renderer: THREE.WebGLRenderer;
   readonly globe: GlobeRenderer;
   readonly look: LookController;
+  /** The view's actions, for the browser harness: perform a look or a mark by hand. */
+  readonly viewControl: ViewControl;
   getSensorState(): SensorState;
   getAppState(): AppState;
   getAvailableModes(): readonly RenderMode[];
@@ -391,6 +394,7 @@ export function init(): App | null {
     getAttitude: () => sensors.getAttitude(),
     // Read on every action: the user can change it while the app is open.
     prefersReducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
+    addLabels: (spec) => labels.addGroup(spec),
   });
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
@@ -731,6 +735,7 @@ export function init(): App | null {
     renderer,
     globe,
     look,
+    viewControl,
     getSensorState: () => sensorState,
     getAppState: () => appState,
     getAvailableModes: () => availableModes,

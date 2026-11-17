@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { createLookController, DEFAULT_LOOK_STATE } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
-import type { LayerDefinition, LayerInstance } from '../layers/types';
+import { SKY_RADIUS_M, type LayerDefinition, type LayerInstance } from '../layers/types';
+import { LabelLayer, type LabelGroupSpec } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import { LAYERS_STORAGE_KEY, LayersPanel, loadLayerVisibility, switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets';
@@ -38,8 +39,9 @@ describe('createViewControl', () => {
    * replaces a layer's load, to time it or fail it. The camera is placed
    * by a real look controller at Austin, looking straight down as the app
    * starts; `view` holds what the control reads of the app: the position,
-   * the labels, the pose (none, so a drag aims the view) and whether less
-   * motion is asked for.
+   * the clock, the labels, the pose (none, so a drag aims the view) and
+   * whether less motion is asked for. Marks go onto a real label layer,
+   * and `markSpecs` records each group it was given.
    */
   function setup(saved: string | null = null, loads: Record<string, LayerDefinition['load']> = {}) {
     const parent = document.createElement('div');
@@ -68,10 +70,14 @@ describe('createViewControl', () => {
     look.updateCamera(camera, austin, null, 0);
     const view: {
       position: SurfacePosition | null;
+      date: Date;
       labels: LabelIndex | null;
       attitude: DeviceAttitude | null;
       reducedMotion: boolean;
-    } = { position: austin, labels: null, attitude: null, reducedMotion: false };
+    } = { position: austin, date: when, labels: null, attitude: null, reducedMotion: false };
+    const labelParent = document.createElement('div');
+    const labelLayer = new LabelLayer(labelParent, []);
+    const markSpecs: LabelGroupSpec[] = [];
     const viewControl = createViewControl({
       presets,
       switches,
@@ -79,14 +85,18 @@ describe('createViewControl', () => {
       lazyLayers,
       camera,
       getPosition: () => view.position,
-      now: () => when,
+      now: () => view.date,
       getLabels: () => view.labels,
       look,
       getAttitude: () => view.attitude,
       prefersReducedMotion: () => view.reducedMotion,
+      addLabels: (spec) => {
+        markSpecs.push(spec);
+        return labelLayer.addGroup(spec);
+      },
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { viewControl, switches, changes, stored, input, camera, look, view };
+    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs };
   }
 
   const instance = (): LayerInstance => ({ setVisible() {}, dispose() {} });
@@ -537,6 +547,150 @@ describe('createViewControl', () => {
       frame(t, EASE_MIN_MS);
       expect(await outcome).toEqual({ ok: true });
       expect(centre(t.camera).angleTo(direction(east))).toBeLessThan(1e-6);
+    });
+  });
+
+  describe('mark', () => {
+    const down = { kind: 'horizon', azDeg: 0, altDeg: -90 } as const;
+    const north = { kind: 'horizon', azDeg: 0, altDeg: 0 } as const;
+    const orion = { kind: 'sky', raDeg: 83.8, decDeg: -5.4 } as const;
+    const HOUR_MS = 3_600_000;
+
+    /** The names the label layer shows in a frame from the camera as it is. */
+    function shownNames({ labelLayer, camera }: ReturnType<typeof setup>): string[] {
+      labelLayer.update(camera, 800, 600);
+      return labelLayer.visibleNames();
+    }
+
+    /** The texts of the marks in the view, shown or not. */
+    const markTexts = ({ labelParent }: ReturnType<typeof setup>): (string | null)[] =>
+      [...labelParent.querySelectorAll('.place-label--ring')].map((e) => e.textContent);
+
+    /** Where the label layer draws the mark it was given `n`th, as a direction from the camera. */
+    function markDirection({ markSpecs, camera }: ReturnType<typeof setup>, n = 0): THREE.Vector3 {
+      return markSpecs[n].labels[0].position.clone().sub(camera.position).normalize();
+    }
+
+    /**
+     * The angle between two directions, as their chord: angleTo's acos cannot
+     * tell apart directions closer than about 1.5e-8 rad.
+     */
+    const apart = (a: THREE.Vector3, b: THREE.Vector3): number => a.clone().normalize().distanceTo(b.clone().normalize());
+
+    function locatedDirection(viewControl: ViewControl, target: Target): THREE.Vector3 {
+      const result = viewControl.locate(target);
+      if (!result.ok) throw new Error(result.message);
+      return result.direction;
+    }
+
+    it('puts a ring and its text on a target, before every other name', async () => {
+      const t = setup();
+      expect(await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho · 24 km' })).toEqual({ ok: true });
+      expect(shownNames(t)).toEqual(['Moho · 24 km']);
+      expect(markTexts(t)).toEqual(['Moho · 24 km']);
+      expect(t.markSpecs).toMatchObject([{ rank: -1, frame: 'earth' }]);
+    });
+
+    it('draws a mark along its target’s direction, as far off as the sky', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: orion, text: 'Orion Nebula' });
+      const offset = t.markSpecs[0].labels[0].position.clone().sub(t.camera.position);
+      expect(offset.length() / SKY_RADIUS_M).toBeCloseTo(1, 9);
+      expect(apart(offset, locatedDirection(t.viewControl, orion))).toBeLessThan(1e-9);
+    });
+
+    it('replaces the text of a mark on the same target', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho' });
+      await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho · 24 km' });
+      expect(shownNames(t)).toEqual(['Moho · 24 km']);
+      expect(markTexts(t)).toEqual(['Moho · 24 km']);
+    });
+
+    it('removes a mark however its target is written, and is fine with one that is not there', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho' });
+      expect(await t.viewControl.perform({ do: 'mark', target: { altDeg: -90, azDeg: 0, kind: 'horizon' }, text: null })).toEqual({ ok: true });
+      expect(shownNames(t)).toEqual([]);
+      expect(markTexts(t)).toEqual([]);
+      expect(await t.viewControl.perform({ do: 'mark', target: down, text: null })).toEqual({ ok: true });
+      expect(t.markSpecs).toHaveLength(1);
+    });
+
+    it('keeps one mark when another is removed', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: down, text: 'Below' });
+      await t.viewControl.perform({ do: 'mark', target: north, text: 'North' });
+      await t.viewControl.perform({ do: 'mark', target: down, text: null });
+      expect(markTexts(t)).toEqual(['North']);
+    });
+
+    // There is no ease under way here: the marks move every frame regardless.
+    it('follows the sky as it turns, moving the same point the label layer reads', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: orion, text: 'Orion Nebula' });
+      const position = t.markSpecs[0].labels[0].position;
+      const before = markDirection(t);
+      t.view.date = new Date(when.getTime() + HOUR_MS);
+      t.viewControl.update(16);
+      expect(t.markSpecs[0].labels[0].position).toBe(position);
+      // An hour of the Earth's turn, 15°, a little less on a circle off the equator.
+      expect(THREE.MathUtils.radToDeg(markDirection(t).angleTo(before))).toBeCloseTo(15, 0);
+      expect(apart(markDirection(t), locatedDirection(t.viewControl, orion))).toBeLessThan(1e-9);
+    });
+
+    it('places nothing for a target it cannot find', async () => {
+      const t = setup();
+      t.view.labels = indexLabels([]);
+      expect(await t.viewControl.perform({ do: 'mark', target: { kind: 'label', name: 'Atlantis' }, text: 'Atlantis' })).toEqual({
+        ok: false,
+        code: 'target-unresolved',
+        message: 'no label named Atlantis',
+      });
+      t.view.position = null;
+      expect(await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho' })).toEqual({
+        ok: false,
+        code: 'target-unresolved',
+        message: 'no position yet',
+      });
+      expect(markTexts(t)).toEqual([]);
+      expect(t.markSpecs).toEqual([]);
+    });
+
+    it('leaves a mark where it was while its target is lost, and puts it back once found', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: orion, text: 'Orion Nebula' });
+      const held = t.markSpecs[0].labels[0].position.clone();
+      t.view.position = null;
+      t.view.date = new Date(when.getTime() + HOUR_MS);
+      t.viewControl.update(16);
+      expect(t.markSpecs[0].labels[0].position.toArray()).toEqual(held.toArray());
+      t.view.position = austin;
+      t.viewControl.update(16);
+      expect(apart(markDirection(t), locatedDirection(t.viewControl, orion))).toBeLessThan(1e-9);
+    });
+
+    it('refuses empty text', async () => {
+      const t = setup();
+      expect(await t.viewControl.perform({ do: 'mark', target: down, text: '' })).toEqual({
+        ok: false,
+        code: 'bad-value',
+        message: 'mark text is empty',
+      });
+      expect(t.markSpecs).toEqual([]);
+    });
+
+    it('neither stops an ease nor is moved off by a look', async () => {
+      const t = setup();
+      const looking = t.viewControl.perform({ do: 'look', target: north });
+      t.viewControl.update(EASE_MIN_MS / 2);
+      expect(await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho' })).toEqual({ ok: true });
+      t.viewControl.update(EASE_MIN_MS);
+      expect(await looking).toEqual({ ok: true });
+      const lookingAgain = t.viewControl.perform({ do: 'look', target: orion });
+      t.viewControl.update(EASE_MIN_MS * 10);
+      expect(await lookingAgain).toEqual({ ok: true });
+      expect(markTexts(t)).toEqual(['Moho']);
     });
   });
 });

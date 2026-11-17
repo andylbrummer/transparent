@@ -8,12 +8,14 @@
 import * as THREE from 'three';
 import { MAX_FOV_DEG, MIN_FOV_DEG, type LookController, type LookState } from '../input/look';
 import type { LayerManager } from '../layers/manager';
+import { SKY_RADIUS_M } from '../layers/types';
+import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import type { ActionOutcome, AimMode, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
-import { horizonOf, targetDirection, type LabelIndex } from './targets';
+import { horizonOf, targetDirection, targetKey, type LabelIndex } from './targets';
 
 export interface ViewControlDeps {
   /** Every preset an action may name. */
@@ -38,6 +40,8 @@ export interface ViewControlDeps {
   getAttitude(): DeviceAttitude | null;
   /** The user asked the system for less motion: no eases. */
   prefersReducedMotion(): boolean;
+  /** Add a group of names to the view: a mark is one. */
+  addLabels(spec: LabelGroupSpec): LabelGroup;
 }
 
 /** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
@@ -45,6 +49,18 @@ export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
 
 /** What a target other than a label is resolved with before the label files arrive: it needs none. */
 const NO_LABELS: LabelIndex = new Map();
+
+/** Before every name, countries (rank 0) included: a guide's mark wins any overlap. */
+const MARK_RANK = -1;
+const MARK_STYLE: LabelStyle = { fontPx: 13, color: '#ffffff', bold: true, ring: true };
+
+/** A mark on the view, and the target it is found on again each frame. */
+interface Mark {
+  readonly target: Target;
+  /** Read by the label layer every frame, so it is moved in place. */
+  readonly position: THREE.Vector3;
+  readonly group: LabelGroup;
+}
 
 /** An ease under way, and the action waiting on it. */
 interface Easing {
@@ -57,11 +73,12 @@ interface Easing {
 }
 
 export function createViewControl(deps: ViewControlDeps): ViewControl & {
-  /** Advance an ease by a frame's time. Call once a frame, before the camera is aimed. */
+  /** Advance an ease by a frame's time and keep the marks on their targets. Call once a frame, before the camera is aimed. */
   update(deltaMs: number): void;
 } {
   const switchesById = new Map(deps.switches.map((s) => [s.id, s]));
   let easing: Easing | null = null;
+  const marks = new Map<string, Mark>();
 
   /**
    * Wait for the lazy layers among `switches` to load; the rest are drawn
@@ -174,10 +191,56 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         }
         return easeTo({ ...currentAim(), fovDeg: action.fovDeg }, 'fov');
       }
+      case 'mark': {
+        const key = targetKey(action.target);
+        if (action.text === null) {
+          // Not there is not a mistake: a guide that has jumped has cleared its marks already.
+          // Nor is a target that does not resolve now, so it is not looked for.
+          marks.get(key)?.group.remove();
+          marks.delete(key);
+          return { ok: true };
+        }
+        if (action.text === '') return { ok: false, code: 'bad-value', message: 'mark text is empty' };
+        const located = locate(action.target);
+        if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
+        marks.get(key)?.group.remove();
+        const position = markPosition(located.direction, new THREE.Vector3());
+        const group = deps.addLabels({ rank: MARK_RANK, style: MARK_STYLE, frame: 'earth', labels: [{ text: action.text, priority: 0, position }] });
+        marks.set(key, { target: action.target, position, group });
+        return { ok: true };
+      }
     }
   }
 
+  /**
+   * Where a mark is drawn: along its target's direction from the camera, as
+   * far off as the sky, so both eyes in Cardboard see it the same way. The
+   * 'earth' frame, because the label layer dims and rations names below the
+   * horizon in the others, and a mark on something underground is usual.
+   */
+  function markPosition(direction: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    return out.copy(deps.camera.position).addScaledVector(direction, SKY_RADIUS_M);
+  }
+
   function update(deltaMs: number): void {
+    followMarks();
+    stepEase(deltaMs);
+  }
+
+  /**
+   * Find each mark's target again: the sky turns, the Sun, Moon and planets
+   * move, and a horizon follows where the view stands. A target that does
+   * not resolve for now leaves its mark where it was; it goes back on its
+   * target once that resolves again.
+   */
+  function followMarks(): void {
+    for (const mark of marks.values()) {
+      const located = locate(mark.target);
+      if (located.ok) markPosition(located.direction, mark.position);
+    }
+  }
+
+  function stepEase(deltaMs: number): void {
     if (!easing) return;
     // The user wins: a drag, pinch, key or reset since the last frame stops the ease where they left it.
     // LookState is replaced, never changed in place, so a different object means something moved the view.

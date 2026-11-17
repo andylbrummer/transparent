@@ -34,7 +34,9 @@ export type ViewAction =
   /** Look at a target, optionally `fovDeg` wide. */
   | { readonly do: 'look'; readonly target: Target; readonly fovDeg?: number }
   /** The field of view with no target: 60 is the default. */
-  | { readonly do: 'fov'; readonly fovDeg: number };
+  | { readonly do: 'fov'; readonly fovDeg: number }
+  /** A ring and a line of text on a target; `text: null` removes it. */
+  | { readonly do: 'mark'; readonly target: Target; readonly text: string | null };
 
 /** What aims the view: the device's pose, or the user's drag. */
 export type AimMode = 'pose' | 'manual';

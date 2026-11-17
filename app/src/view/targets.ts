@@ -75,6 +75,29 @@ export function horizonOf(direction: THREE.Vector3, position: SurfacePosition): 
   return { azDeg: (THREE.MathUtils.radToDeg(azRad) + 360) % 360, altDeg };
 }
 
+/**
+ * A target's identity: two targets with the same key are the same thing to
+ * look at, however their fields were ordered in a guide's JSON. A mark is
+ * kept, replaced and removed by it.
+ */
+export function targetKey(target: Target): string {
+  // Field by field rather than JSON.stringify, whose key follows field order.
+  // A name or an extent describes a target; it does not move it.
+  switch (target.kind) {
+    case 'body':
+      return `body:${target.body}`;
+    case 'sky':
+      return `sky:${target.raDeg}:${target.decDeg}`;
+    case 'horizon':
+      return `horizon:${target.azDeg}:${target.altDeg}`;
+    case 'ground':
+      return `ground:${target.lat}:${target.lon}:${target.depthKm ?? 0}`;
+    case 'label':
+      // The kind first: it has no colon in it, and a name may.
+      return `label:${target.labelKind ?? ''}:${target.name}`;
+  }
+}
+
 /** A vector toward the target, any length. */
 function towardTarget(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): THREE.Vector3 | TargetUnresolved {
   switch (target.kind) {

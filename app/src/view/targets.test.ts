@@ -8,7 +8,7 @@ import { earthPoint } from '../render/earth-point';
 import type { LabelData, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target } from './actions';
-import { horizonOf, indexLabels, targetDirection, type LabelIndex } from './targets';
+import { horizonOf, indexLabels, targetDirection, targetKey, type LabelIndex } from './targets';
 
 const austin: SurfacePosition = HORIZONS.site;
 const instants = HORIZONS.instants.map((iso, index) => ({ iso, index, date: new Date(iso) }));
@@ -178,5 +178,34 @@ describe('targetDirection: bad values', () => {
     { kind: 'ground', lat: NaN, lon: 0 },
   ])('has no direction for $kind with a value that is not a finite number', (target) => {
     expect(targetDirection(target, austin, when, noLabels)).toEqual({ ok: false, code: 'target-unresolved', message: 'target has no direction' });
+  });
+});
+
+describe('targetKey', () => {
+  it('gives one target one key, whatever order a guide wrote its fields in', () => {
+    expect(targetKey({ kind: 'sky', raDeg: 83.8, decDeg: -5.4 })).toBe(targetKey({ decDeg: -5.4, raDeg: 83.8, kind: 'sky' }));
+    expect(targetKey({ kind: 'ground', lat: 19.4, lon: -155.3, depthKm: 30 })).toBe(
+      targetKey({ depthKm: 30, lon: -155.3, lat: 19.4, kind: 'ground' })
+    );
+  });
+
+  it('leaves names and extents out, and takes a missing depth as the surface', () => {
+    const orion: Target = { kind: 'sky', raDeg: 83.8, decDeg: -5.4 };
+    expect(targetKey({ ...orion, name: 'Orion Nebula', extentDeg: 1 })).toBe(targetKey(orion));
+    const kilauea: Target = { kind: 'ground', lat: 19.4, lon: -155.3 };
+    expect(targetKey({ ...kilauea, name: 'Kilauea' })).toBe(targetKey(kilauea));
+    expect(targetKey({ ...kilauea, depthKm: 0 })).toBe(targetKey(kilauea));
+  });
+
+  it('tells apart a shared name by its kind, and every kind from every other', () => {
+    expect(targetKey({ kind: 'label', name: 'Flores', labelKind: 'volcano' })).not.toBe(targetKey({ kind: 'label', name: 'Flores' }));
+    const keys = [
+      targetKey({ kind: 'body', body: 'sun' }),
+      targetKey({ kind: 'sky', raDeg: 0, decDeg: 0 }),
+      targetKey({ kind: 'horizon', azDeg: 0, altDeg: 0 }),
+      targetKey({ kind: 'ground', lat: 0, lon: 0 }),
+      targetKey({ kind: 'label', name: '0' }),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
