@@ -43,6 +43,16 @@ describe('LayerManager', () => {
     expect(instance.visible).toBe(true);
   });
 
+  it('throws for a layer it was not built with, on or off', () => {
+    const load = vi.fn(async () => fakeInstance());
+    const statuses: (string | null)[] = [];
+    const manager = new LayerManager([definition('stars', load)], shared, (_id, text) => statuses.push(text), () => {});
+    expect(() => manager.setVisible('no-such-layer', true)).toThrow('no lazy layer no-such-layer');
+    expect(() => manager.setVisible('no-such-layer', false)).toThrow('no lazy layer no-such-layer');
+    expect(load).not.toHaveBeenCalled();
+    expect(statuses).toEqual([]);
+  });
+
   it('honours a switch-off that arrives while the layer is still loading', async () => {
     const instance = fakeInstance();
     let finish!: (value: LayerInstance) => void;

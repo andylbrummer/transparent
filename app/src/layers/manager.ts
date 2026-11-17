@@ -39,9 +39,10 @@ export class LayerManager {
     return this.slots.has(id);
   }
 
+  /** An id the manager was not built with is a wiring fault, so it throws: a switch that showed on with nothing drawn would say nothing. */
   setVisible(id: string, visible: boolean): void {
     const slot = this.slots.get(id);
-    if (!slot) return;
+    if (!slot) throw new Error(`no lazy layer ${id}`);
     slot.wanted = visible;
     if (slot.instance) {
       slot.instance.setVisible(visible);
