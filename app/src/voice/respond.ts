@@ -5,12 +5,12 @@
  */
 
 import { WAKE_WORD, bestCommand, type VoiceCommand, type Vocabulary } from './commands';
-import type { LayerPreset } from '../ui/presets';
+import type { ViewAction, ViewControl } from '../view/actions';
 
 export interface VoiceActions {
   readonly vocabulary: Vocabulary;
-  applyPreset(preset: LayerPreset): void;
-  setLayer(id: string, visible: boolean): void;
+  /** Presets and layers go through the view control, as a guide's cues do. */
+  readonly viewControl: ViewControl;
   /** The name of what the view is centred on, or null. */
   nameInView(): string | null;
   isInCardboard(): boolean;
@@ -47,10 +47,10 @@ export function respondToSpeech(alternatives: readonly string[], actions: VoiceA
 function perform(command: VoiceCommand, actions: VoiceActions): string {
   switch (command.kind) {
     case 'preset':
-      actions.applyPreset(command.preset);
+      performFromVocabulary(actions.viewControl, { do: 'preset', id: command.preset.id });
       return `${command.preset.label}.`;
     case 'layer':
-      actions.setLayer(command.layer.id, command.on);
+      performFromVocabulary(actions.viewControl, command.on ? { do: 'layers', on: [command.layer.id] } : { do: 'layers', off: [command.layer.id] });
       return `${command.layer.label} ${command.on ? 'on' : 'off'}.`;
     case 'identify':
       return actions.nameInView() ?? 'Nothing named there.';
@@ -79,6 +79,19 @@ function perform(command: VoiceCommand, actions: VoiceActions): string {
     case 'unknown':
       return command.heard ? `I heard "${command.heard}". Say help for commands.` : 'I did not catch that.';
   }
+}
+
+/**
+ * Do an action built from a parsed command. The reply does not wait for
+ * it: a layer may take seconds to load, and the reply is the only sign
+ * the command was heard. The ids come from the vocabulary, so a failed
+ * outcome means the vocabulary and the view control were built from
+ * different lists.
+ */
+function performFromVocabulary(viewControl: ViewControl, action: ViewAction): void {
+  void viewControl.perform(action).then((outcome) => {
+    if (!outcome.ok) console.error(`voice command failed: ${outcome.code}`, outcome.message);
+  });
 }
 
 /** "What's that" names the label nearest the middle of the view, if one is within this angle of it. */

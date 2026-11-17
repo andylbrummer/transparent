@@ -1,18 +1,36 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { LAYER_DEFINITIONS } from '../layers/registry';
-import { switchesWithLazyLayers } from '../ui/layers-panel';
+import { switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { LAYER_PRESETS } from '../ui/presets';
+import { createViewControl } from '../view/view-control';
 import { helpText, respondToSpeech, type VoiceActions, type VoiceZoom } from './respond';
 
-/** The app's side, recording what was asked of it. */
+/**
+ * The app's side, recording what was asked of it. Presets and layers go
+ * through a real view control onto a recording panel; `viewSwitches`
+ * builds that control from a different list than the vocabulary.
+ */
 function app(
-  state: { inCardboard?: boolean; calibrating?: boolean; inView?: string | null; zoom?: (inward: boolean) => VoiceZoom } = {}
+  state: {
+    inCardboard?: boolean;
+    calibrating?: boolean;
+    inView?: string | null;
+    zoom?: (inward: boolean) => VoiceZoom;
+    viewSwitches?: readonly LayerSwitch[];
+  } = {}
 ) {
   const done: string[] = [];
+  const switches = switchesWithLazyLayers(LAYER_DEFINITIONS);
   const actions: VoiceActions = {
-    vocabulary: { presets: LAYER_PRESETS, switches: switchesWithLazyLayers(LAYER_DEFINITIONS) },
-    applyPreset: (preset) => done.push(`preset:${preset.id}`),
-    setLayer: (id, visible) => done.push(`${visible ? 'on' : 'off'}:${id}`),
+    vocabulary: { presets: LAYER_PRESETS, switches },
+    viewControl: createViewControl({
+      presets: LAYER_PRESETS,
+      switches: state.viewSwitches ?? switches,
+      layersPanel: {
+        applyPreset: (preset) => done.push(`preset:${preset.id}`),
+        setLayer: (id, visible) => done.push(`${visible ? 'on' : 'off'}:${id}`),
+      },
+    }),
     nameInView: () => state.inView ?? null,
     isInCardboard: () => state.inCardboard ?? false,
     isCalibrating: () => state.calibrating ?? false,
@@ -34,6 +52,16 @@ describe('respondToSpeech', () => {
     expect(respondToSpeech(['tectonics'], actions)).toBe('Tectonics.');
     expect(respondToSpeech(['hide stars'], actions)).toBe('Stars off.');
     expect(done).toEqual(['preset:tectonics', 'off:stars']);
+  });
+
+  it('reports a command the view control refuses, when it and the vocabulary were built from different lists', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { actions, done } = app({ viewSwitches: [] });
+    expect(respondToSpeech(['hide stars'], actions)).toBe('Stars off.');
+    await vi.waitFor(() => expect(error).toHaveBeenCalledWith('voice command failed: unknown-layer', 'no layer switch stars'));
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(done).toEqual([]);
+    error.mockRestore();
   });
 
   it('names what is in view, or says nothing is', () => {

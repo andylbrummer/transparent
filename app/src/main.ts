@@ -58,6 +58,7 @@ import { createTalkButton } from './voice/talk-button';
 import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './voice/respond';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
+import { createViewControl } from './view/view-control';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
 import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
 
@@ -308,12 +309,14 @@ export function init(): App | null {
   const onResetClick = (): void => look.resetOffset();
   resetButton.addEventListener('click', onResetClick);
 
+  const presets = [defaultPreset(layerSwitches), ...LAYER_PRESETS];
   const layersPanel = new LayersPanel(container, layerVisibility, applyLayer, localStorage, {
     switches: layerSwitches,
     credits: allCredits(LAYER_DEFINITIONS),
     openSections: loadOpenSections(localStorage.getItem(SECTIONS_STORAGE_KEY)),
-    presets: [defaultPreset(layerSwitches), ...LAYER_PRESETS],
+    presets,
   });
+  const viewControl = createViewControl({ presets, switches: layerSwitches, layersPanel });
 
   const appState: AppState = DEFAULT_STATE;
   let availableModes: readonly RenderMode[] = [];
@@ -534,7 +537,6 @@ export function init(): App | null {
   });
 
   const voiceOverlay = new VoiceOverlay(container);
-  const voicePresets = [defaultPreset(layerSwitches), ...LAYER_PRESETS];
   const voice = new VoiceControl({
     createRecognizer: createBrowserRecognizer,
     speak: (text) => speakWithBrowser(text, navigator.language),
@@ -543,9 +545,8 @@ export function init(): App | null {
     onStatus: (status) => voiceOverlay.show(status),
     respond: (alternatives) =>
       respondToSpeech(alternatives, {
-        vocabulary: { presets: voicePresets, switches: layerSwitches },
-        applyPreset: (preset) => layersPanel.applyPreset(preset),
-        setLayer: (id, visible) => layersPanel.setLayer(id, visible),
+        vocabulary: { presets, switches: layerSwitches },
+        viewControl,
         nameInView: () => labels.nameNearestViewCenter(camera, IDENTIFY_MAX_ANGLE_RAD),
         isInCardboard: () => cardboard.isActive(),
         isCalibrating: () => cardboard.isCalibrating(),
