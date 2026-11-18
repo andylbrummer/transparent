@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { createLookController, DEFAULT_LOOK_STATE } from '../input/look';
+import { createLookController, DEFAULT_LOOK_STATE, MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
 import { SKY_RADIUS_M, type LayerDefinition, type LayerInstance } from '../layers/types';
 import { LabelLayer, type LabelGroupSpec } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import { LAYERS_STORAGE_KEY, LayersPanel, loadLayerVisibility, switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets';
-import type { Located, Target, ViewControl } from './actions';
+import type { FoldedView, Located, Target, ViewAction, ViewControl } from './actions';
+import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
 import { indexLabels, targetDirection, targetName, type LabelIndex } from './targets';
 import { ARRIVE_DEG, ARRIVE_MS, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
@@ -864,6 +865,198 @@ describe('createViewControl', () => {
       expect(await t.viewControl.perform({ do: 'fov', fovDeg: 40 })).toEqual({ ok: true });
       expect(await t.viewControl.perform({ do: 'mark', target: east, text: 'East' })).toEqual({ ok: true });
       expect(t.viewControl.awaitedGaze()).toMatchObject({ target: east, arriving: 0.5 });
+    });
+  });
+
+  describe('restore', () => {
+    const down = { kind: 'horizon', azDeg: 0, altDeg: -90 } as const;
+    const east = { kind: 'horizon', azDeg: 90, altDeg: 0 } as const;
+    const north = { kind: 'horizon', azDeg: 0, altDeg: 0 } as const;
+    const pose: DeviceAttitude = { alpha: 0, beta: 0, gamma: 0 };
+
+    /** A whole view with these switches, looking straight down as the app starts, with no marks. */
+    const scene = (layers: FoldedView['layers'], rest: Partial<Omit<FoldedView, 'layers'>> = {}): FoldedView => ({
+      layers,
+      look: { target: down, fovDeg: DEFAULT_LOOK_STATE.fovDeg },
+      marks: [],
+      ...rest,
+    });
+
+    /** The switches on, by id, in no particular order. */
+    const onIds = ({ switches, input }: ReturnType<typeof setup>): string[] =>
+      switches
+        .filter((s) => input(s.id).checked)
+        .map((s) => s.id)
+        .sort();
+
+    /** The texts of the marks in the view, in the order they went up. */
+    const markTexts = ({ labelParent }: ReturnType<typeof setup>): (string | null)[] =>
+      [...labelParent.querySelectorAll('.place-label--ring')].map((e) => e.textContent);
+
+    const centre = (camera: THREE.Camera): THREE.Vector3 => camera.getWorldDirection(new THREE.Vector3());
+
+    function located(viewControl: ViewControl, target: Target): Located {
+      const result = viewControl.locate(target);
+      if (!result.ok) throw new Error(result.message);
+      return result;
+    }
+
+    it('starts from the preset, takes off what went off and puts on what went on', async () => {
+      const t = setup();
+      expect(await t.viewControl.restore(scene({ preset: 'night', on: ['clouds'], off: ['aurora'] }))).toEqual({ ok: true });
+      expect(onIds(t)).toEqual(['clouds', 'x-ray']);
+    });
+
+    it('shows exactly the switches a listed scene names', async () => {
+      const t = setup();
+      await t.viewControl.restore(scene({ only: ['aurora', 'clouds'] }));
+      expect(onIds(t)).toEqual(['aurora', 'clouds']);
+    });
+
+    it('lets the last of an exclusive group turned on win, as playing through does', async () => {
+      const t = setup();
+      await t.viewControl.restore(scene({ only: ['x-ray', 'cmb'] }));
+      expect(onIds(t)).toEqual(['cmb']);
+      await t.viewControl.restore(scene({ only: ['cmb', 'x-ray'] }));
+      expect(onIds(t)).toEqual(['x-ray']);
+      await t.viewControl.restore(scene({ preset: 'sky', on: ['cmb'], off: [] }));
+      expect(onIds(t)).toEqual(['cmb']);
+    });
+
+    it('ends on the switches and marks that playing the same actions through ends on', async () => {
+      const actions: ViewAction[] = [
+        { do: 'preset', id: 'default' },
+        { do: 'layers', on: ['x-ray'] },
+        { do: 'layers', on: ['cmb'] },
+        { do: 'layers', on: ['x-ray'] },
+        { do: 'layers', off: ['clouds'] },
+        { do: 'look', target: east, fovDeg: 40 },
+        { do: 'mark', target: down, text: 'Moho' },
+        { do: 'mark', target: north, text: 'North' },
+        { do: 'mark', target: down, text: null },
+      ];
+      const played = setup();
+      played.view.reducedMotion = true;
+      for (const action of actions) await played.viewControl.perform(action);
+      const restored = setup();
+      expect(await restored.viewControl.restore(actions.reduce(foldAction, scene({ only: [] })))).toEqual({ ok: true });
+      expect(onIds(restored)).toEqual(onIds(played));
+      expect(onIds(restored)).toContain('x-ray');
+      expect(markTexts(restored)).toEqual(markTexts(played));
+      expect(markTexts(restored)).toEqual(['North']);
+    });
+
+    it('flips only the switches that differ, those going off first', async () => {
+      const t = setup(JSON.stringify({ cmb: true }));
+      await t.viewControl.restore(scene({ only: ['cmb', 'clouds', 'aurora'] }));
+      expect(t.changes.map(([id]) => id)).not.toContain('cmb');
+      expect(t.changes.map(([id]) => id)).not.toContain('clouds');
+      expect(t.changes.at(-1)).toEqual(['aurora', true]);
+      expect(t.changes.filter(([, visible]) => visible)).toEqual([['aurora', true]]);
+    });
+
+    it('is done only once the lazy layers it turns on have loaded', async () => {
+      const cmb = heldLoad();
+      const t = setup(null, { cmb: cmb.load });
+      const outcome = t.viewControl.restore(scene({ only: ['cmb'] }));
+      const flag = settledFlag(outcome);
+      await settle();
+      expect(flag.settled).toBe(false);
+      expect(t.input('cmb').checked).toBe(true);
+      cmb.finish();
+      expect(await outcome).toEqual({ ok: true });
+    });
+
+    it('says which layer failed to load, and leaves its switch on', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const load = vi.fn<LayerDefinition['load']>().mockRejectedValueOnce(new Error('offline'));
+      const t = setup(null, { cmb: load });
+      expect(await t.viewControl.restore(scene({ only: ['cmb'] }))).toEqual({ ok: false, code: 'layer-unavailable', message: 'layer failed to load: cmb' });
+      expect(t.input('cmb').checked).toBe(true);
+      error.mockRestore();
+    });
+
+    it.each<[string, FoldedView, object]>([
+      ['an unknown preset', scene({ preset: 'no-such', on: [], off: [] }), { code: 'unknown-preset', message: 'no preset no-such' }],
+      ['unknown switches', scene({ preset: 'sky', on: ['nope'], off: ['gone', 'nope'] }), { code: 'unknown-layer', message: 'no layer switch gone, nope' }],
+      ['an unknown switch in a list', scene({ only: ['cmb', 'nope'] }), { code: 'unknown-layer', message: 'no layer switch nope' }],
+      [
+        'a field of view the camera cannot take',
+        scene({ only: ['cmb'] }, { look: { target: down, fovDeg: 500 } }),
+        { code: 'bad-value', message: `fovDeg 500 is outside ${MIN_FOV_DEG} to ${MAX_FOV_DEG}` },
+      ],
+      [
+        'a look at a label before the labels load',
+        scene({ only: ['cmb'] }, { look: { target: { kind: 'label', name: 'Madagascar' }, fovDeg: 60 } }),
+        { code: 'target-unresolved', message: 'the label files have not loaded' },
+      ],
+      ['a mark with no text', scene({ only: ['cmb'] }, { marks: [{ target: east, text: '' }] }), { code: 'bad-value', message: 'mark text is empty' }],
+      [
+        'a mark on a label before the labels load',
+        scene({ only: ['cmb'] }, { marks: [{ target: east, text: 'East' }, { target: { kind: 'label', name: 'Madagascar' }, text: 'Here' }] }),
+        { code: 'target-unresolved', message: 'the label files have not loaded' },
+      ],
+    ])('refuses %s, and changes nothing', async (_, view, refusal) => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: north, text: 'North' });
+      const state = t.look.getState();
+      expect(await t.viewControl.restore(view)).toEqual({ ok: false, ...refusal });
+      expect(t.changes).toEqual([]);
+      expect(t.stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+      expect(markTexts(t)).toEqual(['North']);
+      expect(t.look.getState()).toBe(state);
+    });
+
+    it('cuts to the look where a drag aims the view, ending an ease under way', async () => {
+      const t = setup();
+      const easing = t.viewControl.perform({ do: 'look', target: north });
+      t.viewControl.update(EASE_MIN_MS / 2);
+      const outcome = t.viewControl.restore(scene({ only: [] }, { look: { target: east, fovDeg: 20 } }));
+      // In place before restore's promise, or the ease's, is awaited.
+      t.look.updateCamera(t.camera, austin, null, 0);
+      expect(centre(t.camera).angleTo(located(t.viewControl, east).direction)).toBeLessThan(1e-6);
+      expect(t.look.getState().fovDeg).toBe(20);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+      expect(await easing).toEqual({ ok: true });
+      expect(await outcome).toEqual({ ok: true });
+      // Nothing left to ease: a later frame leaves the view where the cut put it.
+      t.viewControl.update(EASE_MIN_MS);
+      t.look.updateCamera(t.camera, austin, null, 0);
+      expect(centre(t.camera).angleTo(located(t.viewControl, east).direction)).toBeLessThan(1e-6);
+    });
+
+    it('turns nothing where the pose aims the view: the look waits on the user, and its width comes on arrival', async () => {
+      const t = setup();
+      t.view.attitude = pose;
+      const state = t.look.getState();
+      expect(await t.viewControl.restore(scene({ only: [] }, { look: { target: east, fovDeg: 2 } }))).toEqual({ ok: true, awaitingGaze: true });
+      expect(t.viewControl.awaitedGaze()).toMatchObject({ target: east, arriving: 0 });
+      expect(t.look.getState()).toBe(state);
+      t.camera.lookAt(t.camera.position.clone().add(located(t.viewControl, east).direction));
+      t.camera.updateMatrixWorld();
+      t.viewControl.update(ARRIVE_MS);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+      expect(t.look.getState().fovDeg).toBe(POSE_MIN_FOV_DEG);
+    });
+
+    it('takes every mark down and puts the view’s up in order, one to a target', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: down, text: 'Moho' });
+      await t.viewControl.perform({ do: 'mark', target: east, text: 'East' });
+      const sameNorth = { altDeg: 0, azDeg: 0, kind: 'horizon' } as const;
+      await t.viewControl.restore(
+        scene(
+          { only: [] },
+          {
+            marks: [
+              { target: north, text: 'North' },
+              { target: east, text: 'East again' },
+              { target: sameNorth, text: 'North again' },
+            ],
+          },
+        ),
+      );
+      expect(markTexts(t)).toEqual(['East again', 'North again']);
     });
   });
 });

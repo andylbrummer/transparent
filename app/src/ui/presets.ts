@@ -209,7 +209,7 @@ export function defaultPreset(switches: readonly LayerSwitch[]): LayerPreset {
 }
 
 /** Every switch on or off as `preset` has it. */
-export function presetVisibility(preset: LayerPreset, switches: readonly LayerSwitch[]): LayerVisibility {
+export function presetVisibility(preset: Pick<LayerPreset, 'on'>, switches: readonly LayerSwitch[]): LayerVisibility {
   const on = new Set(preset.on);
   return Object.fromEntries(switches.map((s) => [s.id, on.has(s.id)]));
 }

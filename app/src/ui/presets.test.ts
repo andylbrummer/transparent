@@ -48,7 +48,7 @@ describe('presets', () => {
   });
 
   it('turns everything it does not name off', () => {
-    const visibility = presetVisibility({ id: 'x', label: 'x', description: '', on: ['stars'] }, switches);
+    const visibility = presetVisibility({ on: ['stars'] }, switches);
     expect(Object.entries(visibility).filter(([, on]) => on)).toEqual([['stars', true]]);
   });
 });

@@ -280,6 +280,32 @@ describe('LayersPanel with lazy layers', () => {
     expect(() => panel.setLayer('no-such-layer', true)).toThrow('no layer switch no-such-layer');
   });
 
+  it('shows only the switches it is given, flipping just the ones that differ, off first, and saves', () => {
+    const { panel, changes, input, switches, stored } = setup(JSON.stringify({ cmb: true }));
+    const before = switches.filter((s) => input(s.id).checked).map((s) => s.id);
+    panel.showOnly(['x-ray', 'clouds']);
+    // clouds is on by default and stays on: it is not flipped.
+    const off = before.filter((id) => id !== 'clouds').map((id): [string, boolean] => [id, false]);
+    expect(changes).toEqual([...off, ['x-ray', true]]);
+    for (const s of switches) expect(input(s.id).checked).toBe(s.id === 'x-ray' || s.id === 'clouds');
+    expect(JSON.parse(stored.get(LAYERS_STORAGE_KEY)!)).toEqual(Object.fromEntries(switches.map((s) => [s.id, s.id === 'x-ray' || s.id === 'clouds'])));
+  });
+
+  it('saves nothing it shows while borrowed', () => {
+    const { panel, stored, input } = setup();
+    panel.borrow();
+    panel.showOnly(['cmb']);
+    expect(input('cmb').checked).toBe(true);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+  });
+
+  it('refuses an unknown switch before flipping anything', () => {
+    const { panel, changes, stored } = setup();
+    expect(() => panel.showOnly(['cmb', 'no-such-layer'])).toThrow(new Error('no layer switch no-such-layer'));
+    expect(changes).toEqual([]);
+    expect(stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+  });
+
   it('shows and clears a status chip beside a lazy switch', () => {
     const { parent, panel } = setup();
     const chip = parent.querySelector<HTMLElement>('input[data-layer="clouds"] + span .layer-switch__status')!;

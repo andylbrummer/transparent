@@ -35,6 +35,7 @@ function app(
       layersPanel: {
         applyPreset: (preset) => done.push(`preset:${preset.id}`),
         setLayer: (id, visible) => done.push(`${visible ? 'on' : 'off'}:${id}`),
+        showOnly: (on) => done.push(`only:${on.join(',')}`),
       },
       lazyLayers: state.lazyLayers ?? { preload: () => Promise.resolve() },
       camera: new THREE.PerspectiveCamera(),

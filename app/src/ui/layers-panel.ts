@@ -427,6 +427,16 @@ export class LayersPanel {
     this.save();
   }
 
+  /** Set every switch at once: those in `on` on and every other off, flipping only the ones that differ, those going off first. Saved unless the panel is borrowed. */
+  showOnly(on: readonly string[]): void {
+    // A wiring mistake, not the user's: the view control checks ids first. Thrown before anything flips.
+    const unknown = on.find((id) => !this.switches.some((s) => s.id === id));
+    if (unknown !== undefined) throw new Error(`no layer switch ${unknown}`);
+    // No exclusive group is resolved here: `on` is the caller's, whole.
+    this.applyVisibility(presetVisibility({ on }, this.switches));
+    this.save();
+  }
+
   /**
    * Borrow the switches, for a guide: until `end()` nothing is saved, and
    * `end()` puts every switch back as it stood. The user's own view is

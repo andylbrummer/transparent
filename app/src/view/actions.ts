@@ -80,6 +80,12 @@ export interface ViewControl {
    * finished. A look that waits on the user resolves at once (`awaitingGaze`).
    */
   perform(action: ViewAction): Promise<ActionOutcome>;
+  /**
+   * Put the whole view as `view` has it, at once and with no ease: for a chapter's start and for a seek. Everything
+   * is checked before anything is changed. Resolves when the layers it turns on have loaded. Where the view is not
+   * the guide's to turn, its look waits on the user (`awaitingGaze`), as a performed look does.
+   */
+  restore(view: FoldedView): Promise<ActionOutcome>;
   /** Where a target is now and how far the view's centre is from it. */
   locate(target: Target): Located | TargetUnresolved;
   /** The look still waiting on the user to turn; null once they have arrived, or when no look waits. */

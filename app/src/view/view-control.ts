@@ -13,7 +13,7 @@ import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
-import type { ActionOutcome, AimMode, AwaitedGaze, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
+import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
 import { horizonOf, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
 
@@ -23,7 +23,7 @@ export interface ViewControlDeps {
   /** Every switch an action may name. */
   readonly switches: readonly LayerSwitch[];
   /** Switches are flipped through the panel, so its rows, the save and the scene stay in step. */
-  readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer'>;
+  readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer' | 'showOnly'>;
   /** The lazy layers: a switch-on is not done until its layer has loaded. */
   readonly lazyLayers: Pick<LayerManager, 'preload'>;
   /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
@@ -205,13 +205,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (badFov) return badFov;
         const located = locate(action.target);
         if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
-        const gaze: Gaze = {
-          target: action.target,
-          name: targetName(action.target),
-          direction: located.direction.clone(),
-          fovDeg: action.fovDeg,
-          withinMs: 0,
-        };
+        const gaze = gazeOn(action.target, located, action.fovDeg);
         // The guide cannot turn someone holding the phone: the pointer shows them the way.
         if (aimMode() === 'pose') {
           awaiting = gaze;
@@ -240,13 +234,83 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (action.text === '') return { ok: false, code: 'bad-value', message: 'mark text is empty' };
         const located = locate(action.target);
         if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
-        marks.get(key)?.group.remove();
-        const position = markPosition(located.direction, new THREE.Vector3());
-        const group = deps.addLabels({ rank: MARK_RANK, style: MARK_STYLE, frame: 'earth', labels: [{ text: action.text, priority: 0, position }] });
-        marks.set(key, { target: action.target, position, group });
+        putMark(action.target, action.text, located.direction);
         return { ok: true };
       }
     }
+  }
+
+  // Like perform, every change is made before the first await, so it is all in place by the time restore returns.
+  async function restore(view: FoldedView): Promise<ActionOutcome> {
+    const { layers, look } = view;
+    // Check everything before changing anything, so a mistake leaves the user where they were.
+    // What the preset turns on, before what was flipped since: none for a listed scene.
+    let presetOn: readonly string[] = [];
+    if ('preset' in layers) {
+      const preset = deps.presets.find((p) => p.id === layers.preset);
+      if (!preset) return { ok: false, code: 'unknown-preset', message: `no preset ${layers.preset}` };
+      presetOn = preset.on;
+    }
+    const named = 'only' in layers ? layers.only : [...layers.off, ...layers.on];
+    const unknown = [...new Set(named.filter((id) => !switchesById.has(id)))];
+    if (unknown.length > 0) return { ok: false, code: 'unknown-layer', message: `no layer switch ${unknown.join(', ')}` };
+    const badFov = fovOutOfRange(look.fovDeg);
+    if (badFov) return badFov;
+    const located = locate(look.target);
+    if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
+    const placed: { readonly target: Target; readonly text: string; readonly direction: THREE.Vector3 }[] = [];
+    for (const mark of view.marks) {
+      if (mark.text === '') return { ok: false, code: 'bad-value', message: 'mark text is empty' };
+      const found = locate(mark.target);
+      if (!found.ok) return { ok: false, code: 'target-unresolved', message: found.message };
+      placed.push({ target: mark.target, text: mark.text, direction: found.direction });
+    }
+
+    const on = 'only' in layers ? turnOnInOrder([], layers.only) : turnOnInOrder(presetOn.filter((id) => !layers.off.includes(id)), layers.on);
+    deps.layersPanel.showOnly(on);
+    endEase({ ok: true });
+    const posed = aimMode() === 'pose';
+    // The guide cannot turn someone holding the phone, at a cut any more than in an ease: the pointer shows the way.
+    if (posed) awaiting = gazeOn(look.target, located, look.fovDeg);
+    else {
+      awaiting = null;
+      setAim({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: look.fovDeg });
+    }
+    for (const mark of marks.values()) mark.group.remove();
+    marks.clear();
+    for (const mark of placed) putMark(mark.target, mark.text, mark.direction);
+
+    const loaded = await lazyLayersLoaded(on.map((id) => switchesById.get(id)!));
+    if (!loaded.ok) return loaded;
+    return posed ? { ok: true, awaitingGaze: true } : { ok: true };
+  }
+
+  /**
+   * The switches on after turning on each of `ids` in order, from `start`, as taps would: one of an exclusive group
+   * turns the rest of the group off, so the last one turned on wins, as it does playing through.
+   */
+  function turnOnInOrder(start: readonly string[], ids: readonly string[]): string[] {
+    let on = [...start];
+    for (const id of ids) {
+      const group = switchesById.get(id)!.exclusiveGroup;
+      on = on.filter((other) => other !== id && (group === undefined || switchesById.get(other)!.exclusiveGroup !== group));
+      on.push(id);
+    }
+    return on;
+  }
+
+  /** A look's wait on the user, its target found at `located`; `fovDeg` is applied on arrival. */
+  function gazeOn(target: Target, located: Located, fovDeg: number | undefined): Gaze {
+    return { target, name: targetName(target), direction: located.direction.clone(), fovDeg, withinMs: 0 };
+  }
+
+  /** Put a mark with `text` on `target`, found along `direction`, in place of any mark already on it. */
+  function putMark(target: Target, text: string, direction: THREE.Vector3): void {
+    const key = targetKey(target);
+    marks.get(key)?.group.remove();
+    const position = markPosition(direction, new THREE.Vector3());
+    const group = deps.addLabels({ rank: MARK_RANK, style: MARK_STYLE, frame: 'earth', labels: [{ text, priority: 0, position }] });
+    marks.set(key, { target, position, group });
   }
 
   /**
@@ -341,5 +405,5 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return { ok: true, direction: found.direction, ...horizonOf(found.direction, position), offCentreDeg };
   }
 
-  return { perform, locate, awaitedGaze, stopAwaitingGaze, update };
+  return { perform, restore, locate, awaitedGaze, stopAwaitingGaze, update };
 }
