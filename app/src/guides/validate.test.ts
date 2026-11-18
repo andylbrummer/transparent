@@ -1,30 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020';
-import { LAYER_DEFINITIONS } from '../layers/registry';
-import type { LabelData } from '../render/labels';
-import { switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
-import { defaultPreset, LAYER_PRESETS } from '../ui/presets';
-import { indexLabels } from '../view/targets';
+import type { LayerSwitch } from '../ui/layers-panel';
+import { LAYER_PRESETS } from '../ui/presets';
+import { APP_WORLD as world } from './app-world.testdata';
 import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
 import type { Guide } from './format';
 import { GUIDE_SCHEMA } from './guide-schema';
-import { guideProblems, type GuideWorld } from './validate';
+import { guideProblems } from './validate';
 
 const isGuide = new Ajv2020().compile(GUIDE_SCHEMA);
 
-const switches = switchesWithLazyLayers(LAYER_DEFINITIONS);
-const readLabels = (name: string): LabelData => JSON.parse(new TextDecoder().decode(readFileSync(`public/geo/${name}`))) as LabelData;
-/** The app as it ships: its switches, its presets and its baked labels. */
-const world: GuideWorld = {
-  switches,
-  presets: [defaultPreset(switches), ...LAYER_PRESETS],
-  labels: indexLabels([readLabels('labels.json'), readLabels('geology.json'), readLabels('quakes.json')]),
-};
-
 // Found in the app, not written here, so the tests follow the registry and the label files.
 const groups = new Map<string, LayerSwitch[]>();
-for (const layer of switches) if (layer.exclusiveGroup !== undefined) groups.set(layer.exclusiveGroup, [...(groups.get(layer.exclusiveGroup) ?? []), layer]);
+for (const layer of world.switches) if (layer.exclusiveGroup !== undefined) groups.set(layer.exclusiveGroup, [...(groups.get(layer.exclusiveGroup) ?? []), layer]);
 const exclusive = [...groups.entries()].find(([, members]) => members.length >= 2);
 const shared = [...world.labels.entries()].find(
   ([, places]) => places.length >= 2 && new Set(places.map((place) => place.kind)).size === places.length,
