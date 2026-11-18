@@ -38,6 +38,11 @@ export interface NarrationDeps {
 }
 
 export interface NarrationPlayer {
+  /**
+   * Inside the tap that starts a guide: take the element through one play, of a moment's silence, so the plays that
+   * follow the loading are allowed. Rejects if the browser refuses even that.
+   */
+  unlock(): Promise<void>;
   /** PlayerDeps.loadNarration: the step's audio in the element and its captions read. Never throws: it rejects. */
   loadNarration(guide: Guide, narration: Narration): Promise<StepMedia>;
   /** Stop, let go of the element's listeners and every object URL. */
@@ -46,6 +51,10 @@ export interface NarrationPlayer {
 
 /** HTMLMediaElement.HAVE_METADATA: from here the element takes a currentTime. */
 const HAVE_METADATA = 1;
+
+/** The unlock's silence: as short and as small as a WAV a browser plays everywhere comes. */
+const SILENCE_SAMPLE_RATE = 8000;
+const SILENCE_S = 0.05;
 
 /** A step's clock and what the element's events tell it while its narration is in the element. */
 interface AudioClock extends StepClock {
@@ -63,6 +72,9 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
   /** The clock whose narration is in the element. */
   let current: AudioClock | null = null;
   let objectUrl: string | null = null;
+  /** The element has played once inside a tap: the browser lets it play from now on. */
+  let unlocked = false;
+  let unlocking: Promise<void> | null = null;
 
   const onError = (): void => current?.mediaFailed();
   const onLoadedMetadata = (): void => current?.metadataLoaded();
@@ -138,7 +150,11 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
           // A pause() or a new src cut the play short: asked for, so not a failure.
           if (name === 'AbortError') return;
           // Not swallowed: the player halts on it, and its Retry is a tap, which lets the element play.
-          if (name === 'NotAllowedError') return fail('the browser blocked the narration from playing');
+          if (name === 'NotAllowedError') {
+            // Whatever an earlier tap unlocked no longer holds: the next unlock() has to play inside its tap again.
+            unlocked = false;
+            return fail('the browser blocked the narration from playing');
+          }
           fail(`the narration could not play: ${message(error)}`);
         });
       },
@@ -175,6 +191,39 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
     };
   }
 
+  function unlock(): Promise<void> {
+    // Once is enough, and another play now would cut off the narration that is playing.
+    if (unlocked) return Promise.resolve();
+    if (unlocking) return unlocking;
+    // The narration in the element, if any, gives way: its clock must not take the silence's pause for the browser's.
+    // A retry after a blocked play comes here with that step's clock still current.
+    current?.retire();
+    current = null;
+    const silenceUrl = deps.objectUrl.create(new Blob([silentWav()], { type: 'audio/wav' }));
+    // Both before anything is awaited: the browser allows the play only inside the tap itself.
+    audio.src = silenceUrl;
+    unlocking = audio
+      .play()
+      .then(
+        () => {
+          unlocked = true;
+          // A narration that has taken the element since is left to play.
+          if (audio.src === silenceUrl) audio.pause();
+        },
+        (error: unknown) => {
+          // A narration's src set while the silence was starting cuts its play short. Nothing was refused, so this is
+          // not a failure. Whether the tap unlocked the element is not known, so it is not marked: the narration's own
+          // play will tell, and the next unlock() plays again.
+          if (errorName(error) !== 'AbortError') throw new Error(`the browser did not allow sound: ${message(error)}`);
+        }
+      )
+      .finally(() => {
+        deps.objectUrl.revoke(silenceUrl);
+        unlocking = null;
+      });
+    return unlocking;
+  }
+
   function dispose(): void {
     audio.removeEventListener('error', onError);
     audio.removeEventListener('loadedmetadata', onLoadedMetadata);
@@ -188,7 +237,34 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
     objectUrl = null;
   }
 
-  return { loadNarration, dispose };
+  return { unlock, loadNarration, dispose };
+}
+
+/** SILENCE_S of silence as a WAV file: a 44-byte header, then 8-bit mono samples. */
+function silentWav(): Uint8Array<ArrayBuffer> {
+  const samples = SILENCE_SAMPLE_RATE * SILENCE_S;
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const tag = (offset: number, text: string): void => {
+    for (let i = 0; i < text.length; i++) bytes[offset + i] = text.charCodeAt(i);
+  };
+  // Every number little-endian.
+  tag(0, 'RIFF');
+  view.setUint32(4, bytes.length - 8, true); // the size of everything after this field
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  view.setUint32(16, 16, true); // the size of the fmt chunk's body
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // one channel
+  view.setUint32(24, SILENCE_SAMPLE_RATE, true); // samples a second
+  view.setUint32(28, SILENCE_SAMPLE_RATE, true); // bytes a second: one byte a sample
+  view.setUint16(32, 1, true); // bytes a sample across the channels
+  view.setUint16(34, 8, true); // bits a sample
+  tag(36, 'data');
+  view.setUint32(40, samples, true); // the size of the samples
+  // 8-bit PCM is unsigned: silence is the middle, 0x80, not 0.
+  bytes.fill(0x80, 44);
+  return bytes;
 }
 
 /** The clock of a narration a later one beat to the element: it never had it, so it stands at its start and moves nothing. */

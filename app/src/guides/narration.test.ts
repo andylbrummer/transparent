@@ -336,4 +336,111 @@ describe('createNarration', () => {
     expect(t.audio.srcs).toEqual(['blob:1']);
     expect(t.created.length).toBe(1);
   });
+
+  describe('unlock', () => {
+    it('sets the silence and plays it before returning, inside the tap', () => {
+      const t = setup();
+      const unlocking = t.narration.unlock();
+      expect(t.audio.srcs).toEqual(['blob:1']);
+      expect(t.audio.plays.length).toBe(1);
+      // A second tap while it starts waits on the same play.
+      expect(t.narration.unlock()).toBe(unlocking);
+      expect(t.audio.plays.length).toBe(1);
+    });
+
+    it('pauses the silence and lets go of it once played, and then never plays it again', async () => {
+      const t = setup();
+      const unlocking = t.narration.unlock();
+      t.audio.plays[0].resolve();
+      await unlocking;
+      expect(t.audio.pauses).toBe(1);
+      expect(t.revoked).toEqual(['blob:1']);
+      await t.narration.unlock();
+      expect(t.audio.plays.length).toBe(1);
+      expect(t.audio.srcs).toEqual(['blob:1']);
+    });
+
+    it('rejects when the browser refuses even the silence, lets go of it, and tries again on the next tap', async () => {
+      const t = setup();
+      const unlocking = t.narration.unlock();
+      t.audio.plays[0].reject(new DOMException('play() failed because the user did not interact', 'NotAllowedError'));
+      await expect(unlocking).rejects.toThrow(new Error('the browser did not allow sound: play() failed because the user did not interact'));
+      expect(t.revoked).toEqual(['blob:1']);
+      void t.narration.unlock();
+      expect(t.audio.plays.length).toBe(2);
+    });
+
+    it('leaves a narration that took the element while the silence started: no pause, its src kept', async () => {
+      const t = setup();
+      const unlocking = t.narration.unlock();
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(t.audio.srcs).toEqual(['blob:1', 'blob:2']);
+      t.audio.plays[0].resolve();
+      await unlocking;
+      expect(t.audio.pauses).toBe(0);
+      expect(t.audio.srcs).toEqual(['blob:1', 'blob:2']);
+    });
+
+    it('takes a silence cut short by a narration’s src as neither refused nor unlocked: the next tap plays again', async () => {
+      const t = setup();
+      const unlocking = t.narration.unlock();
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      t.audio.plays[0].reject(new DOMException('The play() request was interrupted by a new load request.', 'AbortError'));
+      await unlocking;
+      void t.narration.unlock();
+      expect(t.audio.plays.length).toBe(2);
+    });
+
+    it('plays the silence again on the tap after the browser blocks a narration, though an earlier tap had unlocked', async () => {
+      const t = setup();
+      const unlocking = t.narration.unlock();
+      t.audio.plays[0].resolve();
+      await unlocking;
+      const { clock } = await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      clock.play();
+      t.audio.plays[1].reject(new DOMException('blocked', 'NotAllowedError'));
+      await settle();
+      expect(clock.failure()).toBe('the browser blocked the narration from playing');
+      void t.narration.unlock();
+      expect(t.audio.plays.length).toBe(3);
+    });
+
+    it('never takes the silence’s pause for the browser’s, even with a blocked step’s clock in the element', async () => {
+      const t = setup();
+      const { clock } = await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      clock.play();
+      t.audio.plays[0].reject(new DOMException('blocked', 'NotAllowedError'));
+      await settle();
+      expect(clock.failure()).toBe('the browser blocked the narration from playing');
+      // Retry's tap.
+      const unlocking = t.narration.unlock();
+      t.audio.plays[1].resolve();
+      await unlocking;
+      t.audio.dispatchEvent(new Event('pause'));
+      expect(t.counts.interrupted).toBe(0);
+      // The clock it took the element from touches it no more.
+      clock.play();
+      expect(t.audio.plays.length).toBe(2);
+    });
+
+    it('plays a WAV of silence whose every size field matches what follows it', async () => {
+      const t = setup();
+      void t.narration.unlock();
+      const wav = t.created[0];
+      expect(wav.type).toBe('audio/wav');
+      const bytes = new Uint8Array(await wav.arrayBuffer());
+      const view = new DataView(bytes.buffer);
+      const tag = (offset: number): string => String.fromCharCode(...bytes.subarray(offset, offset + 4));
+      expect([tag(0), tag(8), tag(12), tag(36)]).toEqual(['RIFF', 'WAVE', 'fmt ', 'data']);
+      expect(view.getUint32(4, true)).toBe(bytes.length - 8);
+      expect(view.getUint32(16, true)).toBe(16);
+      // PCM, one channel, 8000 samples and so 8000 bytes a second, one byte a frame, 8 bits a sample.
+      expect([view.getUint16(20, true), view.getUint16(22, true)]).toEqual([1, 1]);
+      expect([view.getUint32(24, true), view.getUint32(28, true)]).toEqual([8000, 8000]);
+      expect([view.getUint16(32, true), view.getUint16(34, true)]).toEqual([1, 8]);
+      expect(view.getUint32(40, true)).toBe(bytes.length - 44);
+      expect(bytes.length - 44).toBe(400);
+      expect(bytes.subarray(44).every((sample) => sample === 0x80)).toBe(true);
+    });
+  });
 });
