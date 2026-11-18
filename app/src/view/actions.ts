@@ -15,6 +15,25 @@ export type Target = SchemaType<typeof TARGET_SCHEMA>;
 /** One thing asked of the view. Written once, as a schema (action-schema.ts). */
 export type ViewAction = SchemaType<typeof VIEW_ACTION_SCHEMA>;
 
+/**
+ * A view worked out from actions alone, with nothing done: where a guide
+ * stands after its scene and the cues so far. Enough to put the view there
+ * in one go.
+ */
+export interface FoldedView {
+  /**
+   * The switches. Every one as a preset has it, then the ones turned on
+   * and off since; or only the ones listed on.
+   */
+  readonly layers:
+    | { readonly preset: string; readonly on: readonly string[]; readonly off: readonly string[] }
+    | { readonly only: readonly string[] };
+  /** What the view looks at and how wide. */
+  readonly look: { readonly target: Target; readonly fovDeg: number };
+  /** The marks up, in the order they went up. */
+  readonly marks: readonly { readonly target: Target; readonly text: string }[];
+}
+
 /** What aims the view: the device's pose, or the user's drag. */
 export type AimMode = 'pose' | 'manual';
 
