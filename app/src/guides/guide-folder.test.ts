@@ -17,13 +17,23 @@ const MIB = 1024 * 1024;
 const NARRATION_S = 60;
 const narration = (bytes: Uint8Array = readFixture('tone-mono'), seconds = NARRATION_S): Uint8Array => withDuration(bytes, seconds);
 
+/** A WebVTT file of these cues: [start, end, ...lines], times as written in the file. */
+const vtt = (...cues: [start: string, end: string, ...lines: string[]][]): string =>
+  ['WEBVTT', ...cues.map(([start, end, ...lines]) => `\n${start} --> ${end}\n${lines.join('\n')}`)].join('\n') + '\n';
+/** Each step's captions: well within the minute, two cues adjoining and a 2 s gap before the third. */
+const CAPTIONS = vtt(
+  ['00:00.000', '00:02.500', 'Look down, through your feet,', 'to the far side of the Earth.'],
+  ['00:02.500', '00:05.000', 'It is 12,742 km away.'],
+  ['00:07.000', '00:09.000', 'Nothing in between is empty.'],
+);
+
 let root: string;
 const at = (...parts: string[]): string => join(root, ...parts);
 const writeGuide = (guide: unknown): void => writeFileSync(at(ID, 'guide.json'), JSON.stringify(guide));
-/** A file of `bytes`, sparse: its size is all the checks read. */
-const writeSized = (path: string, bytes: number): void => {
-  writeFileSync(path, '');
-  truncateSync(path, bytes);
+/** Good captions of `bytes` in all, a note to fill them. Not sparse: the checks read captions. */
+const writeCaptionsSized = (path: string, bytes: number): void => {
+  const head = `${CAPTIONS}\nNOTE `;
+  writeFileSync(path, head + 'x'.repeat(bytes - head.length));
 };
 /** A narration of `bytes` in all: the file and then a free box to fill it, left sparse. */
 const writeNarrationSized = (path: string, seconds: number, bytes: number): void => {
@@ -38,7 +48,7 @@ const problems = (): GuidesProblem[] => guidesProblems(root, APP_WORLD);
 /** The example guide as plain JSON, to change one thing in. */
 const guideJson = (): Record<string, unknown> => JSON.parse(JSON.stringify(EXAMPLE_GUIDE)) as Record<string, unknown>;
 
-/** A guides folder holding the example guide, its narration a real .m4a and a few bytes in place of each captions file. */
+/** A guides folder holding the example guide, each narration a real .m4a with good captions. */
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'guides-'));
   writeFileSync(at('index.json'), JSON.stringify([ID]));
@@ -48,7 +58,7 @@ beforeEach(() => {
     for (const step of chapter.steps) {
       if (!('narration' in step)) continue;
       writeFileSync(at(ID, step.narration.audio), narration());
-      writeFileSync(at(ID, step.narration.captions), 'stand-in');
+      writeFileSync(at(ID, step.narration.captions), CAPTIONS);
     }
   }
 });
@@ -127,7 +137,7 @@ describe('guidesProblems', () => {
         // Each narration file at its cap and each captions file large: no one file is over, the folder is.
         for (const n of ['01-look-down', '02-shells', '03-deep-mantle']) {
           writeNarrationSized(at(ID, `audio/${n}.m4a`), 600, 5 * MIB);
-          writeSized(at(ID, `audio/${n}.vtt`), 2 * MIB);
+          writeCaptionsSized(at(ID, `audio/${n}.vtt`), 2 * MIB);
         }
       },
       { file: ID, path: '', reason: 'the folder is 21.0 MiB, over the 20 MiB a guide may be' },
@@ -189,6 +199,64 @@ describe('guidesProblems', () => {
   ])('reports %s', (_, change, expected) => {
     change();
     expect(problems()).toEqual([expected]);
+  });
+});
+
+describe('guidesProblems on captions', () => {
+  const CAPTIONS_PATH = 'audio/01-look-down.vtt';
+  const CAPTIONS_FILE = `${ID}/${CAPTIONS_PATH}`;
+  const captionsProblem = (reason: string): GuidesProblem => ({ file: CAPTIONS_FILE, path: '', reason });
+  const ASTRAL = String.fromCodePoint(0x1f30d);
+
+  it.each<[string, string, string[]]>([
+    ['captions the reader refuses', 'stand-in', [`${CAPTIONS_PATH} is not captions the app can show: not a WebVTT file: the first line is not WEBVTT`]],
+    ['captions with no cues', 'WEBVTT\n', [`${CAPTIONS_PATH} has no captions`]],
+    ['a caption over the one before', vtt(['00:00.000', '00:02.000', 'a'], ['00:01.500', '00:03.000', 'b']), ['caption 2 starts at 1.5 s, before caption 1 ends at 2 s']],
+    ['a caption before the one before', vtt(['00:05.000', '00:06.000', 'a'], ['00:00.000', '00:01.000', 'b']), ['caption 2 starts at 0 s, before caption 1 ends at 6 s']],
+    [
+      'two of three captions over the one before',
+      vtt(['00:00.000', '00:02.000', 'a'], ['00:01.000', '00:03.000', 'b'], ['00:02.500', '00:04.000', 'c']),
+      ['caption 2 starts at 1 s, before caption 1 ends at 2 s', 'caption 3 starts at 2.5 s, before caption 2 ends at 3 s'],
+    ],
+    [
+      'a caption past the end of the narration',
+      vtt(['00:57.000', '00:58.000', 'a'], ['00:58.000', '01:00.500', 'b']),
+      [`caption 2 ends at 60.5 s, past the end of the narration, ${NARRATION_S} s`],
+    ],
+    ['a caption ending at the end of the narration', vtt(['00:57.000', '00:58.000', 'a'], ['00:58.000', '01:00.000', 'b']), []],
+    ['a caption of three lines', vtt(['00:00.000', '00:01.000', 'a', 'b', 'c']), ['caption 1 has 3 lines; a caption has at most 2']],
+    ['a line of 43 characters', vtt(['00:00.000', '00:01.000', 'x'.repeat(42), 'x'.repeat(43)]), ['caption 1, line 2 is 43 characters; a line has at most 42']],
+    // Two characters outside the BMP: 44 UTF-16 units, 42 characters.
+    ['a line of 42 characters, two of them astral', vtt(['00:00.000', '00:01.000', ASTRAL.repeat(2) + 'x'.repeat(40)]), []],
+    ['a gap of 3.1 s', vtt(['00:00.000', '00:01.000', 'a'], ['00:04.100', '00:05.000', 'b']), ['3.1 s with no caption before caption 2; a narration goes at most 3 s without one']],
+    ['a gap of 3 s', vtt(['00:00.000', '00:01.000', 'a'], ['00:04.000', '00:05.000', 'b']), []],
+    // 4.001 - 1.001 is 3.0000000000000004 in floating point.
+    ['a gap of 3 s that floating point makes longer', vtt(['00:00.000', '00:01.001', 'a'], ['00:04.001', '00:05.000', 'b']), []],
+    ['a first caption 10 s in', vtt(['00:10.000', '00:11.000', 'a']), []],
+  ])('reports %s', (_, captions, reasons) => {
+    writeFileSync(at(ID, CAPTIONS_PATH), captions);
+    expect(problems()).toEqual(reasons.map(captionsProblem));
+  });
+
+  it('checks captions against nothing when the narration has no length', () => {
+    // Captions running past the minute the narration's header would give, so a length taken from anywhere would show.
+    writeFileSync(at(ID, CAPTIONS_PATH), vtt(['01:58.000', '02:00.000', 'a']));
+    writeFileSync(at(ID, 'audio/01-look-down.m4a'), 'This is not a narration.');
+    expect(problems()).toEqual([
+      { file: `${ID}/audio/01-look-down.m4a`, path: '', reason: 'audio/01-look-down.m4a is not an .m4a the app can play: not an MP4 file: no ftyp box' },
+    ]);
+    rmSync(at(ID, 'audio/01-look-down.m4a'));
+    expect(problems()).toEqual([{ file: GUIDE_FILE, path: '/chapters/0/steps/0/narration/audio', reason: 'no file audio/01-look-down.m4a' }]);
+  });
+
+  it('checks captions two steps share once', () => {
+    const guide = guideJson();
+    const steps = (guide.chapters as { steps: { narration: { captions: string } }[] }[])[0].steps;
+    steps[1].narration.captions = CAPTIONS_PATH;
+    writeGuide(guide);
+    rmSync(at(ID, 'audio/02-shells.vtt'));
+    writeFileSync(at(ID, CAPTIONS_PATH), vtt(['00:00.000', '00:01.000', 'a', 'b', 'c']));
+    expect(problems()).toEqual([captionsProblem('caption 1 has 3 lines; a caption has at most 2')]);
   });
 });
 

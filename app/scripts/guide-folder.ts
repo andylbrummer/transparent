@@ -3,7 +3,9 @@
  * index.json matches the folders, each guide passes the schema and the
  * rules of src/guides/validate.ts, each folder holds the files its guide
  * uses, with none left over and none over budget, and each narration is mono
- * AAC-LC and long enough for its cues.
+ * AAC-LC and long enough for its cues. Each captions file is read with the
+ * app's own reader and held to its narration: in order, within its length,
+ * short lines, and no long gaps.
  *
  * Node code (node:fs, node:path), used only by the validator's tests and
  * never bundled into the app. It lives in scripts/, the Node project, because
@@ -18,6 +20,7 @@ import type { Guide } from '../src/guides/format';
 import { GUIDE_SCHEMA } from '../src/guides/guide-schema';
 import { readM4aInfo, type M4aInfo } from '../src/guides/m4a-info';
 import { guideProblems, type GuideWorld } from '../src/guides/validate';
+import { parseVtt, type CaptionCue } from '../src/guides/vtt';
 
 /** Something wrong under the guides folder: which file, where in it, and why. */
 export interface GuidesProblem {
@@ -38,6 +41,12 @@ export const GUIDE_FOLDER_MAX_BYTES = 20 * 1024 * 1024;
 export const NARRATION_MAX_KBPS = 96;
 /** MPEG-4 audio object type 2, AAC-LC: the one every target browser plays. */
 const AAC_LC = 2;
+/** The most lines one caption may have (spec/guides.md §9). */
+export const CAPTION_MAX_LINES = 2;
+/** The most characters in one line of a caption. */
+export const CAPTION_MAX_LINE_CHARS = 42;
+/** The longest a narration may run between two captions: longer, and speech is likely going uncaptioned. */
+export const CAPTION_MAX_GAP_S = 3;
 
 /** The files in the guides folder that are not guides. */
 const ROOT_FILES = ['index.json', 'guide.schema.json'];
@@ -112,6 +121,8 @@ function checkGuide(root: string, folder: string, world: GuideWorld, problem: Re
     const used = new Set<string>();
     // Each narration file's length, read once however many steps use it; undefined when it cannot be read.
     const lengths = new Map<string, number | undefined>();
+    // A captions file several steps share is checked once, against the narration of the first step that uses it.
+    const captioned = new Set<string>();
     guide.chapters.forEach((chapter, c) =>
       chapter.steps.forEach((step, s) => {
         const stepPath = `/chapters/${c}/steps/${s}`;
@@ -130,11 +141,15 @@ function checkGuide(root: string, folder: string, world: GuideWorld, problem: Re
           used.add(path);
           if (!statOf(join(dir, path))?.isFile()) problem(guideFile, `${stepPath}/narration/${key}`, `no file ${path}`);
         }
-        const audio = step.narration.audio;
-        if (!statOf(join(dir, audio))?.isFile()) return;
-        if (!lengths.has(audio)) lengths.set(audio, narrationLength(dir, folder, audio, problem));
+        const { audio, captions } = step.narration;
+        if (!lengths.has(audio) && statOf(join(dir, audio))?.isFile()) lengths.set(audio, narrationLength(dir, folder, audio, problem));
+        // Undefined when the audio is missing or unreadable, which is reported above: nothing is checked against it.
         const lengthS = lengths.get(audio);
         if (lengthS !== undefined) checkCueTimes(lengthS, 'the narration');
+        if (!captioned.has(captions) && statOf(join(dir, captions))?.isFile()) {
+          captioned.add(captions);
+          checkCaptions(dir, folder, captions, lengthS, problem);
+        }
       }),
     );
     for (const file of files) {
@@ -170,6 +185,43 @@ function narrationLength(dir: string, folder: string, path: string, problem: Rep
   const kbps = (bytes.length * 8) / info.durationS / 1000;
   if (kbps > NARRATION_MAX_KBPS) problem(file, '', `${path} is ${kbps.toFixed(1)} kbit/s, over the ${NARRATION_MAX_KBPS} a narration may be`);
   return info.durationS;
+}
+
+/** A captions file read with the app's reader and held to its narration, `lengthS` when that is known; each way it fails a problem. */
+function checkCaptions(dir: string, folder: string, path: string, lengthS: number | undefined, problem: Report): void {
+  const file = `${folder}/${path}`;
+  const text = readFileSync(join(dir, path), 'utf8');
+  let cues: CaptionCue[];
+  try {
+    cues = parseVtt(text);
+  } catch (error) {
+    // The reader throws only to say what the file holds that the app cannot show; that is the guide's problem.
+    if (!(error instanceof Error)) throw error;
+    problem(file, '', `${path} is not captions the app can show: ${error.message}`);
+    return;
+  }
+  if (cues.length === 0) problem(file, '', `${path} has no captions`);
+  cues.forEach((cue, k) => {
+    const n = k + 1;
+    const before = k > 0 ? cues[k - 1] : undefined;
+    // One rule for both order and overlap: a cue out of order starts before the one ahead of it ends.
+    if (before !== undefined && cue.startS < before.endS) {
+      problem(file, '', `caption ${n} starts at ${cue.startS} s, before caption ${n - 1} ends at ${before.endS} s`);
+    }
+    if (lengthS !== undefined && cue.endS > lengthS) problem(file, '', `caption ${n} ends at ${cue.endS} s, past the end of the narration, ${lengthS} s`);
+    if (cue.lines.length > CAPTION_MAX_LINES) problem(file, '', `caption ${n} has ${cue.lines.length} lines; a caption has at most ${CAPTION_MAX_LINES}`);
+    cue.lines.forEach((line, l) => {
+      // Characters as a reader counts them, so a letter outside the BMP is one, not two UTF-16 units.
+      const count = [...line].length;
+      if (count > CAPTION_MAX_LINE_CHARS) problem(file, '', `caption ${n}, line ${l + 1} is ${count} characters; a line has at most ${CAPTION_MAX_LINE_CHARS}`);
+    });
+    // Only between captions: a narration may open and close on silence. An overlap was reported above.
+    // In whole milliseconds, as the file writes times, so 4.001 - 1.001 is exactly 3.
+    const gapMs = before === undefined ? 0 : Math.round((cue.startS - before.endS) * 1000);
+    if (gapMs > CAPTION_MAX_GAP_S * 1000) {
+      problem(file, '', `${gapMs / 1000} s with no caption before caption ${n}; a narration goes at most ${CAPTION_MAX_GAP_S} s without one`);
+    }
+  });
 }
 
 /** guide.json, if it is there, is JSON and passes the schema; each way it fails is a problem. */
