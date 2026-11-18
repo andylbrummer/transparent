@@ -76,7 +76,7 @@ function readIndex(root: string, problem: Report): string[] | undefined {
   const path = join(root, 'index.json');
   let index: unknown;
   try {
-    index = statOf(path) === undefined ? undefined : JSON.parse(readText(path));
+    index = statOf(path) === undefined ? undefined : JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
     // Only a parse error is the index's fault; a read that fails is not, and is thrown.
     if (!(error instanceof SyntaxError)) throw error;
@@ -138,7 +138,7 @@ function readGuide(dir: string, guideFile: string, problem: Report): Guide | und
   }
   let guide: unknown;
   try {
-    guide = JSON.parse(readText(path));
+    guide = JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
     problem(guideFile, '', `guide.json is not JSON: ${error.message}`);
@@ -182,9 +182,5 @@ function filesIn(dir: string, prefix = ''): FolderFile[] {
 function statOf(path: string): Stats | undefined {
   return lstatSync(path, { throwIfNoEntry: false });
 }
-
-// Bytes, then decoded: the tests compile this file with src, whose node:fs shims (src/layers/*/node-fs.d.ts) hide
-// Node's own readFileSync overloads and take no string path with an encoding.
-const readText = (path: string): string => new TextDecoder().decode(readFileSync(path));
 
 const mib = (bytes: number): string => (bytes / (1024 * 1024)).toFixed(1);
