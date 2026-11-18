@@ -362,7 +362,8 @@
         display: flex;
         gap: 6px;
       }
-      .play-bar button {
+      .play-bar button,
+      .guide-card button {
         min-height: 44px;
         padding: 0 12px;
         font: 600 14px/1 system-ui, -apple-system, sans-serif;
@@ -378,8 +379,53 @@
         min-width: 0;
         padding: 0 4px;
       }
-      .play-bar button:disabled {
+      .play-bar button:disabled,
+      .guide-card button:disabled {
         opacity: 0.4;
+      }
+      /* A guide's card (guide-session.ts): what a link opens, and its Start. In the lower third, clear of the view's
+         centre, where the guide will point; on its foot, so a phone on its side still shows all of it. */
+      .guide-card {
+        position: fixed;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom) + 16px);
+        transform: translateX(-50%);
+        z-index: 2;
+        box-sizing: border-box;
+        width: min(360px, calc(100vw - 24px));
+        padding: 14px 16px;
+        font: 14px/1.3 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        text-align: center;
+        background: rgba(12, 14, 32, 0.92);
+        border: 1px solid rgba(160, 180, 255, 0.35);
+        border-radius: 14px;
+        pointer-events: auto;
+        touch-action: manipulation;
+      }
+      .guide-card[hidden],
+      .guide-card [hidden] {
+        display: none;
+      }
+      .guide-card__title {
+        margin: 0 0 6px;
+        font: 600 17px/22px system-ui, -apple-system, sans-serif;
+      }
+      .guide-card__summary,
+      .guide-card__note {
+        margin: 0 0 10px;
+      }
+      .guide-card__note {
+        color: #cfd4e8;
+        overflow-wrap: anywhere;
+      }
+      .guide-card__buttons {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+      }
+      .guide-card__buttons button {
+        flex: 0 1 140px;
       }
       .play-bar__status {
         flex: 1;
@@ -712,7 +758,8 @@
       body.stereo #cardboard-calibrate,
       body.stereo #voice-talk,
       body.stereo #ar-toggle,
-      body.stereo .play-bar {
+      body.stereo .play-bar,
+      body.stereo .guide-card {
         display: none;
       }
       /* Calibrating: one readout per eye, under its convergence spot, so merged they read as one. */
@@ -827,8 +874,9 @@
         background: linear-gradient(to top, rgba(5, 5, 16, 0.85), transparent);
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
       }
-      /* The play bar takes the foot while a guide is open. */
-      body.guide-open #hud {
+      /* The play bar takes the foot while a guide is open, and a guide's card before it starts. */
+      body.guide-open #hud,
+      body:has(.guide-card:not([hidden])) #hud {
         display: none;
       }
     </style>
