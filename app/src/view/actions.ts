@@ -3,40 +3,17 @@
  * later, the voice AI may ask of the view. Actions are absolute - "these
  * switches on", never "toggle" - so the view at any point can be worked
  * out from the actions alone. Types only; view-control.ts does them.
+ * The actions and targets are derived from their schema (action-schema.ts).
  */
 
 import type * as THREE from 'three';
-import type { PlanetName } from '@transparent-earth/core';
-import type { LabelKind } from '../render/labels';
+import type { SchemaType, TARGET_SCHEMA, VIEW_ACTION_SCHEMA } from './action-schema';
 
-/** Something to look at. Every kind resolves to a direction from where the view stands (targets.ts). */
-export type Target =
-  /** The Sun, the Moon or a planet, at the app clock's time. */
-  | { readonly kind: 'body'; readonly body: 'sun' | 'moon' | PlanetName }
-  /** A fixed place on the sky, ICRS. */
-  | { readonly kind: 'sky'; readonly raDeg: number; readonly decDeg: number; readonly name?: string; readonly extentDeg?: number }
-  /** A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down. */
-  | { readonly kind: 'horizon'; readonly azDeg: number; readonly altDeg: number }
-  /** A place on or in the Earth. */
-  | { readonly kind: 'ground'; readonly lat: number; readonly lon: number; readonly depthKm?: number; readonly name?: string }
-  /**
-   * A name from the baked label files (geo/labels.json, geology.json,
-   * quakes.json). `labelKind` tells apart places that share a name: Georgia
-   * the country from Georgia the state.
-   */
-  | { readonly kind: 'label'; readonly name: string; readonly labelKind?: LabelKind };
+/** Something to look at. Every kind resolves to a direction from where the view stands (targets.ts). Written once, as a schema (action-schema.ts). */
+export type Target = SchemaType<typeof TARGET_SCHEMA>;
 
-export type ViewAction =
-  /** Every switch as the preset has it (ui/presets.ts). */
-  | { readonly do: 'preset'; readonly id: string }
-  /** Named switches on or off; the rest stay. */
-  | { readonly do: 'layers'; readonly on?: readonly string[]; readonly off?: readonly string[] }
-  /** Look at a target, optionally `fovDeg` wide. */
-  | { readonly do: 'look'; readonly target: Target; readonly fovDeg?: number }
-  /** The field of view with no target: 60 is the default. */
-  | { readonly do: 'fov'; readonly fovDeg: number }
-  /** A ring and a line of text on a target; `text: null` removes it. */
-  | { readonly do: 'mark'; readonly target: Target; readonly text: string | null };
+/** One thing asked of the view. Written once, as a schema (action-schema.ts). */
+export type ViewAction = SchemaType<typeof VIEW_ACTION_SCHEMA>;
 
 /** What aims the view: the device's pose, or the user's drag. */
 export type AimMode = 'pose' | 'manual';
