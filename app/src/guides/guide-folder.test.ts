@@ -5,10 +5,17 @@ import { join } from 'node:path';
 import { guidesProblems, type GuidesProblem } from '../../scripts/guide-folder';
 import { APP_WORLD } from './app-world.testdata';
 import { EXAMPLE_GUIDE } from './example-guide.testdata';
+import { readFixture, withDuration, withObjectType } from './m4a.testdata';
 
 const ID = EXAMPLE_GUIDE.id;
 const GUIDE_FILE = `${ID}/guide.json`;
 const MIB = 1024 * 1024;
+/**
+ * The example's narration: tone-mono, its header saying a minute, since the
+ * example's cues run to 27 s and the tone lasts 2.
+ */
+const NARRATION_S = 60;
+const narration = (bytes: Uint8Array = readFixture('tone-mono'), seconds = NARRATION_S): Uint8Array => withDuration(bytes, seconds);
 
 let root: string;
 const at = (...parts: string[]): string => join(root, ...parts);
@@ -18,11 +25,20 @@ const writeSized = (path: string, bytes: number): void => {
   writeFileSync(path, '');
   truncateSync(path, bytes);
 };
+/** A narration of `bytes` in all: the file and then a free box to fill it, left sparse. */
+const writeNarrationSized = (path: string, seconds: number, bytes: number): void => {
+  const audio = narration(undefined, seconds);
+  const free = new Uint8Array(8);
+  new DataView(free.buffer).setUint32(0, bytes - audio.length);
+  free.set(new TextEncoder().encode('free'), 4);
+  writeFileSync(path, new Uint8Array([...audio, ...free]));
+  truncateSync(path, bytes);
+};
 const problems = (): GuidesProblem[] => guidesProblems(root, APP_WORLD);
 /** The example guide as plain JSON, to change one thing in. */
 const guideJson = (): Record<string, unknown> => JSON.parse(JSON.stringify(EXAMPLE_GUIDE)) as Record<string, unknown>;
 
-/** A guides folder holding the example guide, with a few bytes in place of each narration file. */
+/** A guides folder holding the example guide, its narration a real .m4a and a few bytes in place of each captions file. */
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'guides-'));
   writeFileSync(at('index.json'), JSON.stringify([ID]));
@@ -30,7 +46,9 @@ beforeEach(() => {
   writeGuide(EXAMPLE_GUIDE);
   for (const chapter of EXAMPLE_GUIDE.chapters) {
     for (const step of chapter.steps) {
-      if ('narration' in step) for (const path of [step.narration.audio, step.narration.captions]) writeFileSync(at(ID, path), 'stand-in');
+      if (!('narration' in step)) continue;
+      writeFileSync(at(ID, step.narration.audio), narration());
+      writeFileSync(at(ID, step.narration.captions), 'stand-in');
     }
   }
 });
@@ -99,7 +117,8 @@ describe('guidesProblems', () => {
     ],
     [
       'a narration file over its budget',
-      () => writeSized(at(ID, 'audio/01-look-down.m4a'), 6 * MIB),
+      // Ten minutes long, so its bit rate is within the cap.
+      () => writeNarrationSized(at(ID, 'audio/01-look-down.m4a'), 600, 6 * MIB),
       { file: `${ID}/audio/01-look-down.m4a`, path: '', reason: 'audio/01-look-down.m4a is 6.0 MiB, over the 5 MiB a narration file may be' },
     ],
     [
@@ -107,7 +126,7 @@ describe('guidesProblems', () => {
       () => {
         // Each narration file at its cap and each captions file large: no one file is over, the folder is.
         for (const n of ['01-look-down', '02-shells', '03-deep-mantle']) {
-          writeSized(at(ID, `audio/${n}.m4a`), 5 * MIB);
+          writeNarrationSized(at(ID, `audio/${n}.m4a`), 600, 5 * MIB);
           writeSized(at(ID, `audio/${n}.vtt`), 2 * MIB);
         }
       },
@@ -121,6 +140,51 @@ describe('guidesProblems', () => {
         rmSync(at('outside.m4a'));
       },
       { file: `${ID}/audio/link.m4a`, path: '', reason: 'audio/link.m4a is a link' },
+    ],
+    [
+      'a narration that is not an .m4a',
+      () => writeFileSync(at(ID, 'audio/01-look-down.m4a'), 'This is not a narration.'),
+      { file: `${ID}/audio/01-look-down.m4a`, path: '', reason: 'audio/01-look-down.m4a is not an .m4a the app can play: not an MP4 file: no ftyp box' },
+    ],
+    [
+      'a narration that is not AAC-LC',
+      () => writeFileSync(at(ID, 'audio/01-look-down.m4a'), narration(withObjectType(readFixture('tone-mono'), 5))),
+      { file: `${ID}/audio/01-look-down.m4a`, path: '', reason: 'audio/01-look-down.m4a is not AAC-LC (audio object type 5)' },
+    ],
+    [
+      'a narration in stereo',
+      () => writeFileSync(at(ID, 'audio/01-look-down.m4a'), narration(readFixture('tone-stereo'))),
+      { file: `${ID}/audio/01-look-down.m4a`, path: '', reason: 'audio/01-look-down.m4a has 2 channels; narration is mono' },
+    ],
+    [
+      'a narration over its bit rate',
+      // 750,000 bytes in 60 s is 100 kbit/s.
+      () => writeNarrationSized(at(ID, 'audio/01-look-down.m4a'), NARRATION_S, 750_000),
+      { file: `${ID}/audio/01-look-down.m4a`, path: '', reason: 'audio/01-look-down.m4a is 100.0 kbit/s, over the 96 a narration may be' },
+    ],
+    [
+      'a cue past the end of its narration',
+      () => {
+        const guide = guideJson();
+        const steps = (guide.chapters as { steps: { cues: { at: number }[] }[] }[])[0].steps;
+        steps[0].cues[1].at = NARRATION_S + 1;
+        writeGuide(guide);
+      },
+      { file: GUIDE_FILE, path: '/chapters/0/steps/0/cues/1/at', reason: `cue at ${NARRATION_S + 1} is past the end of the narration, ${NARRATION_S} s` },
+    ],
+    [
+      "a cue past the end of its step's silence",
+      () => {
+        const guide = guideJson();
+        const steps = (guide.chapters as { steps: Record<string, unknown>[] }[])[0].steps;
+        // The last step, its narration taken out for a second's silence: its cues are at 0 and 2.
+        delete steps[2].narration;
+        steps[2].silenceS = 1;
+        writeGuide(guide);
+        rmSync(at(ID, 'audio/03-deep-mantle.m4a'));
+        rmSync(at(ID, 'audio/03-deep-mantle.vtt'));
+      },
+      { file: GUIDE_FILE, path: '/chapters/0/steps/2/cues/1/at', reason: "cue at 2 is past the end of the step's silence, 1 s" },
     ],
   ])('reports %s', (_, change, expected) => {
     change();

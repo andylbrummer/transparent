@@ -1,8 +1,9 @@
 /**
  * The guides folder, app/public/guides, held to what the app can play:
  * index.json matches the folders, each guide passes the schema and the
- * rules of src/guides/validate.ts, and each folder holds the files its guide
- * uses, with none left over and none over budget.
+ * rules of src/guides/validate.ts, each folder holds the files its guide
+ * uses, with none left over and none over budget, and each narration is mono
+ * AAC-LC and long enough for its cues.
  *
  * Node code (node:fs, node:path), used only by the validator's tests and
  * never bundled into the app. It lives in scripts/, the Node project, because
@@ -15,6 +16,7 @@ import { join } from 'node:path';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020';
 import type { Guide } from '../src/guides/format';
 import { GUIDE_SCHEMA } from '../src/guides/guide-schema';
+import { readM4aInfo, type M4aInfo } from '../src/guides/m4a-info';
 import { guideProblems, type GuideWorld } from '../src/guides/validate';
 
 /** Something wrong under the guides folder: which file, where in it, and why. */
@@ -32,6 +34,10 @@ export interface GuidesProblem {
 export const NARRATION_MAX_BYTES = 5 * 1024 * 1024;
 /** The most one guide's folder may weigh, guide.json and every file with it. */
 export const GUIDE_FOLDER_MAX_BYTES = 20 * 1024 * 1024;
+/** The highest bit rate of a narration, the file's bits over its length: speech needs no more, mono (spec/guides.md §9). */
+export const NARRATION_MAX_KBPS = 96;
+/** MPEG-4 audio object type 2, AAC-LC: the one every target browser plays. */
+const AAC_LC = 2;
 
 /** The files in the guides folder that are not guides. */
 const ROOT_FILES = ['index.json', 'guide.schema.json'];
@@ -104,14 +110,31 @@ function checkGuide(root: string, folder: string, world: GuideWorld, problem: Re
     for (const found of guideProblems(guide, world)) problem(guideFile, found.path, found.reason);
 
     const used = new Set<string>();
+    // Each narration file's length, read once however many steps use it; undefined when it cannot be read.
+    const lengths = new Map<string, number | undefined>();
     guide.chapters.forEach((chapter, c) =>
       chapter.steps.forEach((step, s) => {
-        if (!('narration' in step)) return;
+        const stepPath = `/chapters/${c}/steps/${s}`;
+        /** A cue past the step's end would never fire. */
+        const checkCueTimes = (lengthS: number, what: string): void => {
+          step.cues.forEach((cue, k) => {
+            if (cue.at > lengthS) problem(guideFile, `${stepPath}/cues/${k}/at`, `cue at ${cue.at} is past the end of ${what}, ${lengthS} s`);
+          });
+        };
+        if (!('narration' in step)) {
+          checkCueTimes(step.silenceS, "the step's silence");
+          return;
+        }
         for (const key of ['audio', 'captions'] as const) {
           const path = step.narration[key];
           used.add(path);
-          if (!statOf(join(dir, path))?.isFile()) problem(guideFile, `/chapters/${c}/steps/${s}/narration/${key}`, `no file ${path}`);
+          if (!statOf(join(dir, path))?.isFile()) problem(guideFile, `${stepPath}/narration/${key}`, `no file ${path}`);
         }
+        const audio = step.narration.audio;
+        if (!statOf(join(dir, audio))?.isFile()) return;
+        if (!lengths.has(audio)) lengths.set(audio, narrationLength(dir, folder, audio, problem));
+        const lengthS = lengths.get(audio);
+        if (lengthS !== undefined) checkCueTimes(lengthS, 'the narration');
       }),
     );
     for (const file of files) {
@@ -127,6 +150,26 @@ function checkGuide(root: string, folder: string, world: GuideWorld, problem: Re
   }
   const folderBytes = files.reduce((sum, file) => sum + file.bytes, 0);
   if (folderBytes > GUIDE_FOLDER_MAX_BYTES) problem(folder, '', `the folder is ${mib(folderBytes)} MiB, over the 20 MiB a guide may be`);
+}
+
+/** A narration file's length from its header, each way its format is wrong a problem; undefined if it has no header. */
+function narrationLength(dir: string, folder: string, path: string, problem: Report): number | undefined {
+  const file = `${folder}/${path}`;
+  const bytes = readFileSync(join(dir, path));
+  let info: M4aInfo;
+  try {
+    info = readM4aInfo(bytes);
+  } catch (error) {
+    // The reader throws only to say what the file lacks; that is the guide's problem, said where it is.
+    if (!(error instanceof Error)) throw error;
+    problem(file, '', `${path} is not an .m4a the app can play: ${error.message}`);
+    return undefined;
+  }
+  if (info.audioObjectType !== AAC_LC) problem(file, '', `${path} is not AAC-LC (audio object type ${info.audioObjectType})`);
+  if (info.channels !== 1) problem(file, '', `${path} has ${info.channels} channels; narration is mono`);
+  const kbps = (bytes.length * 8) / info.durationS / 1000;
+  if (kbps > NARRATION_MAX_KBPS) problem(file, '', `${path} is ${kbps.toFixed(1)} kbit/s, over the ${NARRATION_MAX_KBPS} a narration may be`);
+  return info.durationS;
 }
 
 /** guide.json, if it is there, is JSON and passes the schema; each way it fails is a problem. */
