@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import type { ActionOutcome, AwaitedGaze, FoldedView, Target, ViewAction } from '../view/actions';
 import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
+import { deferred } from './fake-audio.testdata';
 import { foldTo, type Guide } from './format';
 import { CONTINUE_OFFER_MS, REPEAT_S, createPlayer, type Narration, type PlayerDeps, type StepClock, type StepMedia } from './player';
 import type { CaptionCue } from './vtt';
@@ -70,16 +71,6 @@ const [FIRST, SECOND] = GUIDE.chapters;
 /** One chapter of two steps that each wait for the user to find north. */
 const TWO_GAZES: Guide = { ...GUIDE, chapters: [{ ...SECOND, steps: [SECOND.steps[0], { ...SECOND.steps[0], id: 'find-again' }] }] };
 
-/** A promise the test settles. */
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
 type Deferred<T> = ReturnType<typeof deferred<T>>;
 
 /**

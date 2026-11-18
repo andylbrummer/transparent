@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EXAMPLE_GUIDE } from './example-guide.testdata';
+import { deferred, FakeAudio } from './fake-audio.testdata';
 import type { Guide } from './format';
 import { createNarration, DOWNLOAD_STALL_MS, type NarrationDeps } from './narration';
 import type { Narration, StepMedia } from './player';
@@ -10,61 +11,6 @@ const SECOND: Narration = { audio: 'audio/02-shells.m4a', captions: 'audio/02-sh
 const THIRD: Narration = { audio: 'audio/03-sea.m4a', captions: 'audio/03-sea.vtt' };
 const VTT = 'WEBVTT\n\n00:00.000 --> 00:02.000\nLook down.\n';
 const url = (path: string): string => `/guides/${EXAMPLE_GUIDE.id}/${path}`;
-
-/** A promise the test settles. */
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-/**
- * An audio element that plays nothing. The test sets its time, whether it
- * has ended, how far it has loaded and its error; it records every src and
- * every currentTime set, and each play() hands back a promise the test
- * settles. Setting currentTime makes it not ended, as a seek before the
- * end does.
- */
-class FakeAudio extends EventTarget {
-  readonly srcs: string[] = [];
-  readonly timeSets: number[] = [];
-  readonly plays: ReturnType<typeof deferred<void>>[] = [];
-  pauses = 0;
-  ended = false;
-  paused = true;
-  readyState = 0;
-  error: MediaError | null = null;
-  private time = 0;
-
-  get src(): string {
-    return this.srcs.at(-1) ?? '';
-  }
-  set src(value: string) {
-    this.srcs.push(value);
-  }
-  get currentTime(): number {
-    return this.time;
-  }
-  set currentTime(value: number) {
-    this.timeSets.push(value);
-    this.time = value;
-    this.ended = false;
-  }
-  play(): Promise<void> {
-    this.paused = false;
-    const played = deferred<void>();
-    this.plays.push(played);
-    return played.promise;
-  }
-  pause(): void {
-    this.pauses++;
-    this.paused = true;
-  }
-}
 
 /** Each file a function, since a Response is read once: an Error is a fetch that rejects. */
 type Files = Record<string, () => Response | Error>;
