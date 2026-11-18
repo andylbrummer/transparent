@@ -1,0 +1,582 @@
+import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
+import type { ActionOutcome, AwaitedGaze, FoldedView, Target, ViewAction } from '../view/actions';
+import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
+import { foldTo, type Guide } from './format';
+import { CONTINUE_OFFER_MS, createPlayer, type Narration, type PlayerDeps, type StepClock, type StepMedia } from './player';
+import type { CaptionCue } from './vtt';
+
+const EAST: Target = { kind: 'horizon', azDeg: 90, altDeg: 0 };
+const NORTH: Target = { kind: 'horizon', azDeg: 0, altDeg: 0 };
+const narration = (name: string): Narration => ({ audio: `audio/${name}.m4a`, captions: `audio/${name}.vtt` });
+const SPOKEN = narration('01-spoken');
+
+/** Two chapters. The first: a narration, then a silence, both auto. The second: a narration with a gaze gate, then one with a continue gate. */
+const GUIDE: Guide = {
+  ...EXAMPLE_GUIDE,
+  id: 'two-chapters',
+  chapters: [
+    {
+      id: 'first',
+      title: 'First',
+      scene: { preset: 'default', look: { target: DOWN, fovDeg: 60 } },
+      steps: [
+        {
+          id: 'spoken',
+          narration: SPOKEN,
+          cues: [
+            { at: 0, do: 'mark', target: EAST, text: 'East' },
+            { at: 2, do: 'layers', on: ['aurora'] },
+            { at: 4, do: 'mark', target: NORTH, text: 'North' },
+            { at: 4, do: 'fov', fovDeg: 40 },
+            { at: 9, do: 'mark', target: EAST, text: null },
+          ],
+          advance: 'auto',
+        },
+        {
+          id: 'quiet',
+          silenceS: 3,
+          cues: [
+            { at: 0, do: 'mark', target: NORTH, text: null },
+            { at: 1.5, do: 'layers', off: ['aurora'] },
+          ],
+          advance: 'auto',
+        },
+      ],
+    },
+    {
+      id: 'second',
+      title: 'Second',
+      scene: { layers: ['clouds'], look: { target: DOWN, fovDeg: 60 } },
+      steps: [
+        {
+          id: 'find',
+          narration: narration('03-find'),
+          cues: [
+            { at: 0, do: 'mark', target: NORTH, text: 'Here' },
+            { at: 1, do: 'look', target: NORTH },
+          ],
+          advance: 'gaze',
+        },
+        { id: 'ask', narration: narration('04-ask'), cues: [{ at: 0, do: 'mark', target: NORTH, text: null }], advance: 'continue' },
+      ],
+    },
+  ],
+};
+const [FIRST, SECOND] = GUIDE.chapters;
+
+/** One chapter of two steps that each wait for the user to find north. */
+const TWO_GAZES: Guide = { ...GUIDE, chapters: [{ ...SECOND, steps: [SECOND.steps[0], { ...SECOND.steps[0], id: 'find-again' }] }] };
+
+/** A promise the test settles. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+type Deferred<T> = ReturnType<typeof deferred<T>>;
+
+/** A narration clock the test sets: its time, whether it is over and why it failed. It counts its plays and pauses. */
+function fakeClock() {
+  const fake = { t: 0, over: false, failure: null as string | null, plays: 0, pauses: 0 };
+  const clock: StepClock = {
+    timeS: () => fake.t,
+    isOver: () => fake.over,
+    failure: () => fake.failure,
+    play() {
+      fake.plays++;
+    },
+    pause() {
+      fake.pauses++;
+    },
+  };
+  return Object.assign(fake, { clock });
+}
+type FakeClock = ReturnType<typeof fakeClock>;
+
+/**
+ * A player over a view that records each perform and restore and hands back
+ * a promise the test settles, and a loadNarration that does the same.
+ * `view.awaited` is what awaitedGaze answers.
+ */
+function setup() {
+  const performed: { readonly action: ViewAction; readonly outcome: Deferred<ActionOutcome> }[] = [];
+  const restored: { readonly view: FoldedView; readonly outcome: Deferred<ActionOutcome> }[] = [];
+  const loads: { readonly guide: Guide; readonly narration: Narration; readonly media: Deferred<StepMedia> }[] = [];
+  const counts = { borrows: 0, ends: 0, stops: 0, awaited: null as AwaitedGaze | null };
+  const view: PlayerDeps['view'] = {
+    perform(action) {
+      const outcome = deferred<ActionOutcome>();
+      performed.push({ action, outcome });
+      return outcome.promise;
+    },
+    restore(folded) {
+      const outcome = deferred<ActionOutcome>();
+      restored.push({ view: folded, outcome });
+      return outcome.promise;
+    },
+    awaitedGaze: () => counts.awaited,
+    stopAwaitingGaze() {
+      counts.stops++;
+    },
+    borrow() {
+      counts.borrows++;
+      return {
+        end() {
+          counts.ends++;
+        },
+      };
+    },
+  };
+  const player = createPlayer({
+    view,
+    loadNarration(guide, narration) {
+      const media = deferred<StepMedia>();
+      loads.push({ guide, narration, media });
+      return media.promise;
+    },
+  });
+  const actions = (): ViewAction[] => performed.map((p) => p.action);
+  return { player, performed, restored, loads, view: counts, actions };
+}
+type Setup = ReturnType<typeof setup>;
+
+/** Lets every pending callback run, so a promise still pending after it is waiting on something. */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+const where = (guide: Guide, chapterIndex: number, stepIndex: number) => ({ guide, chapterIndex, stepIndex });
+
+/** Start `guide` and play its first step on `clock`: its scene restored and its narration loaded. */
+async function begin(t: Setup, guide: Guide = GUIDE, clock: FakeClock = fakeClock()): Promise<FakeClock> {
+  t.player.start(guide);
+  t.restored.at(-1)!.outcome.resolve({ ok: true });
+  t.loads.at(-1)!.media.resolve({ clock: clock.clock, captions: [] });
+  await settle();
+  expect(t.player.state().kind).toBe('playing');
+  return clock;
+}
+
+/** Play GUIDE through its first chapter into the second's first step, 'find', which plays on the clock returned. */
+async function toFind(t: Setup): Promise<FakeClock> {
+  const spoken = await begin(t);
+  spoken.t = 10;
+  spoken.over = true;
+  t.player.update(16);
+  await settle();
+  t.player.update(3000);
+  const find = fakeClock();
+  t.restored.at(-1)!.outcome.resolve({ ok: true });
+  t.loads.at(-1)!.media.resolve({ clock: find.clock, captions: [] });
+  await settle();
+  expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 0) });
+  return find;
+}
+
+/** Play GUIDE on to 'ask', the last step, whose clock is returned. */
+async function toAsk(t: Setup): Promise<FakeClock> {
+  const find = await toFind(t);
+  find.t = 5;
+  find.over = true;
+  t.player.update(16);
+  t.performed.at(-1)!.outcome.resolve({ ok: true });
+  await settle();
+  t.player.update(16);
+  const ask = fakeClock();
+  t.loads.at(-1)!.media.resolve({ clock: ask.clock, captions: [] });
+  await settle();
+  expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 1) });
+  return ask;
+}
+
+const aGaze: AwaitedGaze = { target: NORTH, name: null, direction: new THREE.Vector3(0, 1, 0), arriving: 0 };
+
+describe('createPlayer', () => {
+  it('borrows the view and loads the narration and the scene together, then plays', async () => {
+    const t = setup();
+    t.player.start(GUIDE);
+    expect(t.view.borrows).toBe(1);
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0) });
+    expect(t.restored.map((r) => r.view)).toEqual([foldTo(GUIDE, 0, 0, 0)]);
+    // Asked for while the scene is still on its way, not after it.
+    expect(t.loads.map((l) => [l.guide, l.narration])).toEqual([[GUIDE, SPOKEN]]);
+    const clock = fakeClock();
+    const captions: CaptionCue[] = [{ startS: 0, endS: 2, lines: ['Look down.'] }];
+    t.loads[0].media.resolve({ clock: clock.clock, captions });
+    await settle();
+    expect(t.player.state().kind).toBe('loading');
+    expect(clock.plays).toBe(0);
+    t.restored[0].outcome.resolve({ ok: true });
+    await settle();
+    expect(clock.plays).toBe(1);
+    expect(t.player.state()).toEqual({ kind: 'playing', ...where(GUIDE, 0, 0), tS: 0, captions });
+  });
+
+  it('fires each cue once as the clock passes it, in order, without waiting for the one before to settle', async () => {
+    const t = setup();
+    const clock = await begin(t);
+    const cues = FIRST.steps[0].cues;
+    t.player.update(16);
+    // The cue at 0 is in the scene restore has put in place already.
+    expect(t.actions()).toEqual([]);
+    clock.t = 1.99;
+    t.player.update(16);
+    expect(t.actions()).toEqual([]);
+    clock.t = 2;
+    t.player.update(16);
+    expect(t.actions()).toEqual([cues[1]]);
+    // That perform has not settled; a frame past two more cues fires both.
+    clock.t = 5;
+    t.player.update(16);
+    expect(t.player.state()).toMatchObject({ kind: 'playing', tS: 5 });
+    t.player.update(16);
+    expect(t.actions()).toEqual([cues[1], cues[2], cues[3]]);
+  });
+
+  it('fires the cues at 0 of a later step in the chapter, and skips those of a chapter’s first step', async () => {
+    const t = setup();
+    const spoken = await begin(t);
+    spoken.t = 10;
+    spoken.over = true;
+    t.player.update(16);
+    await settle();
+    t.player.update(0);
+    expect(t.actions().at(-1)).toEqual(FIRST.steps[1].cues[0]);
+    t.player.update(3000);
+    const before = t.actions().length;
+    t.restored.at(-1)!.outcome.resolve({ ok: true });
+    t.loads.at(-1)!.media.resolve({ clock: fakeClock().clock, captions: [] });
+    await settle();
+    t.player.update(16);
+    expect(t.actions().length).toBe(before);
+  });
+
+  it('moves on from an auto step as the narration ends: restoring only at a new chapter', async () => {
+    const t = setup();
+    const spoken = await begin(t);
+    spoken.over = true;
+    t.player.update(16);
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1) });
+    await settle();
+    expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1) });
+    expect(t.restored.length).toBe(1);
+    t.player.update(3000);
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0) });
+    expect(t.restored.map((r) => r.view)).toEqual([foldTo(GUIDE, 0, 0, 0), foldTo(GUIDE, 1, 0, 0)]);
+  });
+
+  it('times a silence by the frames given to update, with no narration and no captions', async () => {
+    const t = setup();
+    const spoken = await begin(t);
+    spoken.over = true;
+    t.player.update(16);
+    await settle();
+    expect(t.loads.length).toBe(1);
+    expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1), tS: 0, captions: [] });
+    const fired = t.actions().length;
+    t.player.update(1000);
+    expect(t.player.state()).toMatchObject({ tS: 1 });
+    expect(t.actions().slice(fired)).toEqual([FIRST.steps[1].cues[0]]);
+    t.player.update(500);
+    expect(t.actions().slice(fired)).toEqual(FIRST.steps[1].cues);
+    t.player.update(1499);
+    expect(t.player.state()).toMatchObject({ kind: 'playing', tS: 2.999 });
+    t.player.update(1);
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0) });
+  });
+
+  it('fires every cue left when the narration ends before the clock reaches them, then moves on', async () => {
+    const t = setup();
+    const clock = await begin(t);
+    clock.t = 8;
+    clock.over = true;
+    t.player.update(16);
+    expect(t.actions()).toEqual(FIRST.steps[0].cues.slice(1));
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1) });
+  });
+
+  it('waits at a gaze gate for the look to settle and the user to turn to it, and not before the narration ends', async () => {
+    const t = setup();
+    const find = await toFind(t);
+    // The gate is met, but the narration is not over.
+    t.player.update(16);
+    expect(t.player.state().kind).toBe('playing');
+    find.t = 1;
+    t.player.update(16);
+    expect(t.actions().at(-1)).toEqual(SECOND.steps[0].cues[1]);
+    find.over = true;
+    t.player.update(16);
+    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 0), gate: 'gaze', offerContinue: false });
+    t.performed.at(-1)!.outcome.resolve({ ok: true });
+    await settle();
+    t.view.awaited = aGaze;
+    t.player.update(16);
+    expect(t.player.state().kind).toBe('waiting');
+    t.view.awaited = null;
+    t.player.update(16);
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1) });
+  });
+
+  it('waits at a gaze gate, in a pose, until the user has turned to the look', async () => {
+    const t = setup();
+    const find = await toFind(t);
+    find.t = 5;
+    find.over = true;
+    t.view.awaited = aGaze;
+    t.player.update(16);
+    t.performed.at(-1)!.outcome.resolve({ ok: true, awaitingGaze: true });
+    await settle();
+    t.player.update(16);
+    expect(t.player.state().kind).toBe('waiting');
+    t.view.awaited = null;
+    t.player.update(16);
+    expect(t.player.state()).toMatchObject({ kind: 'loading', ...where(GUIDE, 1, 1) });
+  });
+
+  it('offers a way on after a gaze gate has waited 20 s, afresh at each gate', async () => {
+    const t = setup();
+    const find = await begin(t, TWO_GAZES);
+    find.over = true;
+    t.player.update(16);
+    expect(t.player.state()).toMatchObject({ kind: 'waiting', gate: 'gaze', offerContinue: false });
+    t.player.update(CONTINUE_OFFER_MS - 1);
+    expect(t.player.state()).toMatchObject({ offerContinue: false });
+    t.player.update(1);
+    expect(t.player.state()).toMatchObject({ offerContinue: true });
+    t.player.goOn();
+    const again = fakeClock();
+    t.loads.at(-1)!.media.resolve({ clock: again.clock, captions: [] });
+    await settle();
+    again.over = true;
+    t.player.update(16);
+    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(TWO_GAZES, 0, 1), gate: 'gaze', offerContinue: false });
+    t.player.update(CONTINUE_OFFER_MS - 1);
+    expect(t.player.state()).toMatchObject({ offerContinue: false });
+    t.player.update(1);
+    expect(t.player.state()).toMatchObject({ offerContinue: true });
+  });
+
+  it('goes on past a gaze gate when the user says so, giving up the look', async () => {
+    const t = setup();
+    const find = await toFind(t);
+    find.t = 5;
+    find.over = true;
+    t.player.update(16);
+    expect(t.player.state().kind).toBe('waiting');
+    t.player.goOn();
+    expect(t.view.stops).toBe(1);
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1) });
+  });
+
+  it('waits at a continue gate for the user alone, never offering a way on, and refuses go on unless waiting', async () => {
+    const t = setup();
+    const ask = await toAsk(t);
+    expect(() => t.player.goOn()).toThrow(new Error('the guide is not waiting to go on'));
+    ask.over = true;
+    t.player.update(16);
+    t.player.update(CONTINUE_OFFER_MS * 3);
+    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 1), gate: 'continue', offerContinue: false });
+    const stops = t.view.stops;
+    t.player.goOn();
+    expect(t.view.stops).toBe(stops);
+    expect(t.player.state()).toEqual({ kind: 'ended', ...where(GUIDE, 1, 1) });
+  });
+
+  it('ends after the last step with its clock paused, keeping the view until exit', async () => {
+    const t = setup();
+    const ask = await toAsk(t);
+    ask.over = true;
+    t.player.update(16);
+    t.player.goOn();
+    expect(t.player.state()).toEqual({ kind: 'ended', ...where(GUIDE, 1, 1) });
+    expect(ask.pauses).toBe(1);
+    const fired = t.actions().length;
+    t.player.update(1000);
+    expect(t.player.state()).toEqual({ kind: 'ended', ...where(GUIDE, 1, 1) });
+    expect(t.actions().length).toBe(fired);
+    expect(t.view.ends).toBe(0);
+    t.player.exit();
+    expect(t.player.state()).toEqual({ kind: 'idle' });
+    expect(t.view.ends).toBe(1);
+  });
+
+  it.each<[string, (t: Setup, clock: FakeClock) => Promise<void>, string]>([
+    [
+      'the narration fails to load',
+      async (t) => {
+        t.player.start(GUIDE);
+        t.loads[0].media.reject(new Error('audio/01-spoken.m4a: 404'));
+        await settle();
+      },
+      'first/spoken: audio/01-spoken.m4a: 404',
+    ],
+    [
+      'the narration fails to load with no Error',
+      async (t) => {
+        t.player.start(GUIDE);
+        t.loads[0].media.reject('gone');
+        await settle();
+      },
+      'first/spoken: gone',
+    ],
+    [
+      'the scene cannot be put in place',
+      async (t, clock) => {
+        t.player.start(GUIDE);
+        t.loads[0].media.resolve({ clock: clock.clock, captions: [] });
+        t.restored[0].outcome.resolve({ ok: false, code: 'unknown-layer', message: 'no layer switch shell-moho' });
+        await settle();
+      },
+      'first/spoken: no layer switch shell-moho',
+    ],
+    [
+      'a cue is refused',
+      async (t, clock) => {
+        await begin(t, GUIDE, clock);
+        clock.t = 2;
+        t.player.update(16);
+        t.performed[0].outcome.resolve({ ok: false, code: 'layer-unavailable', message: 'layer failed to load: aurora' });
+        await settle();
+      },
+      'first/spoken: layer failed to load: aurora',
+    ],
+    [
+      'a cue throws',
+      async (t, clock) => {
+        await begin(t, GUIDE, clock);
+        clock.t = 2;
+        t.player.update(16);
+        t.performed[0].outcome.reject(new Error('no lazy layer aurora'));
+        await settle();
+      },
+      'first/spoken: no lazy layer aurora',
+    ],
+    [
+      'the narration fails as it plays',
+      async (t, clock) => {
+        await begin(t, GUIDE, clock);
+        clock.failure = 'the audio could not be decoded';
+        t.player.update(16);
+      },
+      'first/spoken: the audio could not be decoded',
+    ],
+  ])('halts with the step named when %s', async (_, provoke, message) => {
+    const t = setup();
+    const clock = fakeClock();
+    await provoke(t, clock);
+    expect(t.player.state()).toEqual({ kind: 'error', ...where(GUIDE, 0, 0), message });
+    // Paused if it was ever played.
+    expect(clock.pauses).toBe(clock.plays);
+    clock.t = 20;
+    clock.over = true;
+    const fired = t.actions().length;
+    t.player.update(1000);
+    expect(t.player.state()).toEqual({ kind: 'error', ...where(GUIDE, 0, 0), message });
+    expect(t.actions().length).toBe(fired);
+    expect(t.view.ends).toBe(0);
+  });
+
+  it('names the step a failed cue is in, though the guide has gone on, and keeps the first failure', async () => {
+    const t = setup();
+    const find = await toFind(t);
+    find.t = 5;
+    find.over = true;
+    t.player.update(16);
+    t.player.goOn();
+    const look = t.performed.at(-1)!;
+    expect(look.action).toEqual(SECOND.steps[0].cues[1]);
+    look.outcome.resolve({ ok: false, code: 'target-unresolved', message: 'no position yet' });
+    await settle();
+    expect(t.player.state()).toEqual({ kind: 'error', ...where(GUIDE, 1, 1), message: 'second/find: no position yet' });
+    // The step it went on to loads after all: it does not play over the error.
+    const ask = fakeClock();
+    t.loads.at(-1)!.media.resolve({ clock: ask.clock, captions: [] });
+    t.performed[0].outcome.reject(new Error('later'));
+    await settle();
+    expect(ask.plays).toBe(0);
+    expect(t.player.state()).toMatchObject({ kind: 'error', message: 'second/find: no position yet' });
+  });
+
+  it('leaves the guide from loading: what arrives after is dropped', async () => {
+    const t = setup();
+    t.player.start(GUIDE);
+    t.player.exit();
+    expect(t.player.state()).toEqual({ kind: 'idle' });
+    expect(t.view.stops).toBe(1);
+    expect(t.view.ends).toBe(1);
+    const clock = fakeClock();
+    t.loads[0].media.resolve({ clock: clock.clock, captions: [] });
+    t.restored[0].outcome.resolve({ ok: true });
+    await settle();
+    expect(t.player.state()).toEqual({ kind: 'idle' });
+    expect(clock.plays).toBe(0);
+  });
+
+  it('leaves the guide as it plays: its clock paused, and a cue that fails after changes nothing', async () => {
+    const t = setup();
+    const clock = await begin(t);
+    clock.t = 2;
+    t.player.update(16);
+    t.player.exit();
+    expect(clock.pauses).toBe(1);
+    expect(t.view.ends).toBe(1);
+    t.performed[0].outcome.resolve({ ok: false, code: 'layer-unavailable', message: 'layer failed to load: aurora' });
+    await settle();
+    expect(t.player.state()).toEqual({ kind: 'idle' });
+  });
+
+  it('plays one guide at a time, refuses exit when none plays, and plays again after exit', async () => {
+    const t = setup();
+    expect(() => t.player.exit()).toThrow(new Error('no guide is playing'));
+    t.player.start(GUIDE);
+    expect(() => t.player.start(GUIDE)).toThrow(new Error('a guide is already playing'));
+    expect(t.view.borrows).toBe(1);
+    t.player.exit();
+    await begin(t, TWO_GAZES);
+    expect(t.view.borrows).toBe(2);
+    expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(TWO_GAZES, 0, 0) });
+  });
+
+  it('counts only its own run’s looks at a gaze gate', async () => {
+    const t = setup();
+    const first = await begin(t, TWO_GAZES);
+    first.t = 1;
+    t.player.update(16);
+    const oldLook = t.performed.at(-1)!;
+    t.player.exit();
+
+    const clock = await begin(t, TWO_GAZES);
+    clock.t = 1;
+    t.player.update(16);
+    const look = t.performed.at(-1)!;
+    expect(look).not.toBe(oldLook);
+    // The old look settling takes nothing off the new run's count.
+    oldLook.outcome.resolve({ ok: true });
+    await settle();
+    clock.over = true;
+    t.player.update(16);
+    expect(t.player.state().kind).toBe('waiting');
+    look.outcome.resolve({ ok: true });
+    await settle();
+    t.player.update(16);
+    expect(t.player.state()).toMatchObject({ kind: 'loading', ...where(TWO_GAZES, 0, 1) });
+  });
+
+  it('never counts a look still pending from a run that was left', async () => {
+    const t = setup();
+    const first = await begin(t, TWO_GAZES);
+    first.t = 1;
+    t.player.update(16);
+    t.player.exit();
+    const clock = await begin(t, TWO_GAZES);
+    clock.over = true;
+    t.player.update(16);
+    t.performed.at(-1)!.outcome.resolve({ ok: true });
+    await settle();
+    t.player.update(16);
+    expect(t.player.state()).toMatchObject({ kind: 'loading', ...where(TWO_GAZES, 0, 1) });
+  });
+});
