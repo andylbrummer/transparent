@@ -8,8 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "eslint 'src/**/*.ts'",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts' 'scripts/**/*.ts'",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "docs:sources": "vite-node scripts/data-sources.ts",
     "guides:schema": "vite-node scripts/guide-schema.ts"
   },
@@ -19,6 +19,7 @@
     "three": "^0.165.0"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "@types/three": "^0.185.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",

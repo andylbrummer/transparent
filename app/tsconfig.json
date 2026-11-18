@@ -10,6 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": [],
     "paths": {
       "@transparent-earth/core": ["../packages/core/src"],
       "@transparent-earth/core/*": ["../packages/core/src/*"]
