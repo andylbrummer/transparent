@@ -1,0 +1,1521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Transparent Earth guide",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Where an editor finds this schema: \"../guide.schema.json\"."
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "The guide's folder name and its deep link: ?guide=<id>."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+      "description": "BCP 47, as \"en\" or \"pt-BR\"."
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "geology",
+          "solar-system",
+          "stars",
+          "deep-space",
+          "sun",
+          "weather",
+          "near-space"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "authors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "licence": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The licence of the script and narration."
+    },
+    "credits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "what": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "licence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          }
+        },
+        "required": [
+          "what",
+          "source",
+          "licence",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "description": "Everything the guide uses that someone made."
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "description": "Lower-case words joined by hyphens."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scene": {
+            "description": "The whole view at the chapter's start: where a guide seeks to. Its switches as a preset has them, or as listed.",
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "look": {
+                    "type": "object",
+                    "properties": {
+                      "target": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                            "properties": {
+                              "kind": {
+                                "const": "body"
+                              },
+                              "body": {
+                                "enum": [
+                                  "sun",
+                                  "moon",
+                                  "mercury",
+                                  "venus",
+                                  "mars",
+                                  "jupiter",
+                                  "saturn",
+                                  "uranus",
+                                  "neptune"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A fixed place on the sky, ICRS.",
+                            "properties": {
+                              "kind": {
+                                "const": "sky"
+                              },
+                              "raDeg": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMaximum": 360
+                              },
+                              "decDeg": {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "extentDeg": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 180
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "raDeg",
+                              "decDeg"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                            "properties": {
+                              "kind": {
+                                "const": "horizon"
+                              },
+                              "azDeg": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMaximum": 360
+                              },
+                              "altDeg": {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "azDeg",
+                              "altDeg"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A place on or in the Earth.",
+                            "properties": {
+                              "kind": {
+                                "const": "ground"
+                              },
+                              "lat": {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              },
+                              "lon": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "depthKm": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 6371
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "lat",
+                              "lon"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.",
+                            "properties": {
+                              "kind": {
+                                "const": "label"
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "labelKind": {
+                                "enum": [
+                                  "country",
+                                  "state",
+                                  "city",
+                                  "plate",
+                                  "deep",
+                                  "hotspot",
+                                  "quake",
+                                  "subduction",
+                                  "volcano"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "fovDeg": {
+                        "type": "number",
+                        "minimum": 0.003,
+                        "maximum": 100
+                      }
+                    },
+                    "required": [
+                      "target",
+                      "fovDeg"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "preset",
+                  "look"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "layers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "uniqueItems": true,
+                    "description": "The switches that are on; every other is off. Empty is all off."
+                  },
+                  "look": {
+                    "type": "object",
+                    "properties": {
+                      "target": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                            "properties": {
+                              "kind": {
+                                "const": "body"
+                              },
+                              "body": {
+                                "enum": [
+                                  "sun",
+                                  "moon",
+                                  "mercury",
+                                  "venus",
+                                  "mars",
+                                  "jupiter",
+                                  "saturn",
+                                  "uranus",
+                                  "neptune"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A fixed place on the sky, ICRS.",
+                            "properties": {
+                              "kind": {
+                                "const": "sky"
+                              },
+                              "raDeg": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMaximum": 360
+                              },
+                              "decDeg": {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "extentDeg": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 180
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "raDeg",
+                              "decDeg"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                            "properties": {
+                              "kind": {
+                                "const": "horizon"
+                              },
+                              "azDeg": {
+                                "type": "number",
+                                "minimum": 0,
+                                "exclusiveMaximum": 360
+                              },
+                              "altDeg": {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "azDeg",
+                              "altDeg"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A place on or in the Earth.",
+                            "properties": {
+                              "kind": {
+                                "const": "ground"
+                              },
+                              "lat": {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              },
+                              "lon": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "depthKm": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 6371
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "lat",
+                              "lon"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.",
+                            "properties": {
+                              "kind": {
+                                "const": "label"
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "labelKind": {
+                                "enum": [
+                                  "country",
+                                  "state",
+                                  "city",
+                                  "plate",
+                                  "deep",
+                                  "hotspot",
+                                  "quake",
+                                  "subduction",
+                                  "volcano"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "fovDeg": {
+                        "type": "number",
+                        "minimum": 0.003,
+                        "maximum": 100
+                      }
+                    },
+                    "required": [
+                      "target",
+                      "fovDeg"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "layers",
+                  "look"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                      "description": "Lower-case words joined by hyphens."
+                    },
+                    "cues": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "description": "Every switch as the preset has it (ui/presets.ts).",
+                            "properties": {
+                              "do": {
+                                "const": "preset"
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "id",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Named switches on or off; the rest stay.",
+                            "properties": {
+                              "do": {
+                                "const": "layers"
+                              },
+                              "on": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "minItems": 1,
+                                "uniqueItems": true
+                              },
+                              "off": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "minItems": 1,
+                                "uniqueItems": true
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "at"
+                            ],
+                            "minProperties": 3,
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Look at a target, optionally `fovDeg` wide.",
+                            "properties": {
+                              "do": {
+                                "const": "look"
+                              },
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "body"
+                                      },
+                                      "body": {
+                                        "enum": [
+                                          "sun",
+                                          "moon",
+                                          "mercury",
+                                          "venus",
+                                          "mars",
+                                          "jupiter",
+                                          "saturn",
+                                          "uranus",
+                                          "neptune"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "body"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A fixed place on the sky, ICRS.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "sky"
+                                      },
+                                      "raDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "decDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "extentDeg": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 180
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "raDeg",
+                                      "decDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "horizon"
+                                      },
+                                      "azDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "altDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "azDeg",
+                                      "altDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A place on or in the Earth.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "ground"
+                                      },
+                                      "lat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "lon": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "depthKm": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 6371
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "lat",
+                                      "lon"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "label"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "labelKind": {
+                                        "enum": [
+                                          "country",
+                                          "state",
+                                          "city",
+                                          "plate",
+                                          "deep",
+                                          "hotspot",
+                                          "quake",
+                                          "subduction",
+                                          "volcano"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "fovDeg": {
+                                "type": "number",
+                                "minimum": 0.003,
+                                "maximum": 100
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "target",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "The field of view with no target: 60 is the default.",
+                            "properties": {
+                              "do": {
+                                "const": "fov"
+                              },
+                              "fovDeg": {
+                                "type": "number",
+                                "minimum": 30,
+                                "maximum": 100
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "fovDeg",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A ring and a line of text on a target; `text: null` removes it.",
+                            "properties": {
+                              "do": {
+                                "const": "mark"
+                              },
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "body"
+                                      },
+                                      "body": {
+                                        "enum": [
+                                          "sun",
+                                          "moon",
+                                          "mercury",
+                                          "venus",
+                                          "mars",
+                                          "jupiter",
+                                          "saturn",
+                                          "uranus",
+                                          "neptune"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "body"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A fixed place on the sky, ICRS.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "sky"
+                                      },
+                                      "raDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "decDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "extentDeg": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 180
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "raDeg",
+                                      "decDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "horizon"
+                                      },
+                                      "azDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "altDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "azDeg",
+                                      "altDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A place on or in the Earth.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "ground"
+                                      },
+                                      "lat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "lon": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "depthKm": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 6371
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "lat",
+                                      "lon"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "label"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "labelKind": {
+                                        "enum": [
+                                          "country",
+                                          "state",
+                                          "city",
+                                          "plate",
+                                          "deep",
+                                          "hotspot",
+                                          "quake",
+                                          "subduction",
+                                          "volcano"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "text": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "minLength": 1
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "target",
+                              "text",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "advance": {
+                      "enum": [
+                        "auto",
+                        "gaze",
+                        "continue"
+                      ],
+                      "description": "When the step is over: as the narration ends, once the user has turned to the look, or when they say so."
+                    },
+                    "narration": {
+                      "type": "object",
+                      "description": "Every narration has its captions.",
+                      "properties": {
+                        "audio": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.m4a$",
+                          "description": "An .m4a file in the guide's folder."
+                        },
+                        "captions": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$",
+                          "description": "A WebVTT file in the guide's folder."
+                        }
+                      },
+                      "required": [
+                        "audio",
+                        "captions"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "narration",
+                    "cues",
+                    "advance"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                      "description": "Lower-case words joined by hyphens."
+                    },
+                    "cues": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "description": "Every switch as the preset has it (ui/presets.ts).",
+                            "properties": {
+                              "do": {
+                                "const": "preset"
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "id",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Named switches on or off; the rest stay.",
+                            "properties": {
+                              "do": {
+                                "const": "layers"
+                              },
+                              "on": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "minItems": 1,
+                                "uniqueItems": true
+                              },
+                              "off": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "minItems": 1,
+                                "uniqueItems": true
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "at"
+                            ],
+                            "minProperties": 3,
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Look at a target, optionally `fovDeg` wide.",
+                            "properties": {
+                              "do": {
+                                "const": "look"
+                              },
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "body"
+                                      },
+                                      "body": {
+                                        "enum": [
+                                          "sun",
+                                          "moon",
+                                          "mercury",
+                                          "venus",
+                                          "mars",
+                                          "jupiter",
+                                          "saturn",
+                                          "uranus",
+                                          "neptune"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "body"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A fixed place on the sky, ICRS.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "sky"
+                                      },
+                                      "raDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "decDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "extentDeg": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 180
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "raDeg",
+                                      "decDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "horizon"
+                                      },
+                                      "azDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "altDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "azDeg",
+                                      "altDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A place on or in the Earth.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "ground"
+                                      },
+                                      "lat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "lon": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "depthKm": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 6371
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "lat",
+                                      "lon"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "label"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "labelKind": {
+                                        "enum": [
+                                          "country",
+                                          "state",
+                                          "city",
+                                          "plate",
+                                          "deep",
+                                          "hotspot",
+                                          "quake",
+                                          "subduction",
+                                          "volcano"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "fovDeg": {
+                                "type": "number",
+                                "minimum": 0.003,
+                                "maximum": 100
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "target",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "The field of view with no target: 60 is the default.",
+                            "properties": {
+                              "do": {
+                                "const": "fov"
+                              },
+                              "fovDeg": {
+                                "type": "number",
+                                "minimum": 30,
+                                "maximum": 100
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "fovDeg",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "A ring and a line of text on a target; `text: null` removes it.",
+                            "properties": {
+                              "do": {
+                                "const": "mark"
+                              },
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "body"
+                                      },
+                                      "body": {
+                                        "enum": [
+                                          "sun",
+                                          "moon",
+                                          "mercury",
+                                          "venus",
+                                          "mars",
+                                          "jupiter",
+                                          "saturn",
+                                          "uranus",
+                                          "neptune"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "body"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A fixed place on the sky, ICRS.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "sky"
+                                      },
+                                      "raDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "decDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "extentDeg": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 180
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "raDeg",
+                                      "decDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "horizon"
+                                      },
+                                      "azDeg": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "exclusiveMaximum": 360
+                                      },
+                                      "altDeg": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "azDeg",
+                                      "altDeg"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A place on or in the Earth.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "ground"
+                                      },
+                                      "lat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "lon": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "depthKm": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 6371
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "lat",
+                                      "lon"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "label"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "labelKind": {
+                                        "enum": [
+                                          "country",
+                                          "state",
+                                          "city",
+                                          "plate",
+                                          "deep",
+                                          "hotspot",
+                                          "quake",
+                                          "subduction",
+                                          "volcano"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "text": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "minLength": 1
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "target",
+                              "text",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "advance": {
+                      "enum": [
+                        "auto",
+                        "gaze",
+                        "continue"
+                      ],
+                      "description": "When the step is over: as the narration ends, once the user has turned to the look, or when they say so."
+                    },
+                    "silenceS": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Seconds with no narration."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "silenceS",
+                    "cues",
+                    "advance"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "scene",
+          "steps"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "formatVersion",
+    "id",
+    "title",
+    "summary",
+    "language",
+    "topics",
+    "authors",
+    "licence",
+    "credits",
+    "chapters"
+  ],
+  "additionalProperties": false
+}

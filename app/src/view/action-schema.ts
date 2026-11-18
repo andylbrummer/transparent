@@ -99,24 +99,29 @@ export const TARGET_SCHEMA = {
 
 const SWITCH_IDS = { type: 'array', items: NAME, minItems: 1, uniqueItems: true } as const;
 
-// Each action's fields have one home, so a guide's cue can add its own to them.
-const PRESET_FIELDS = {
+// Each action's description and fields have one home: a guide's cue is an action with a time added (guides/guide-schema.ts).
+export const PRESET_FIELDS = {
+  description: 'Every switch as the preset has it (ui/presets.ts).',
   properties: { do: { const: 'preset' }, id: NAME },
   required: ['do', 'id'],
 } as const;
-const LAYERS_FIELDS = {
+export const LAYERS_FIELDS = {
+  description: 'Named switches on or off; the rest stay.',
   properties: { do: { const: 'layers' }, on: SWITCH_IDS, off: SWITCH_IDS },
   required: ['do'],
 } as const;
-const LOOK_FIELDS = {
+export const LOOK_FIELDS = {
+  description: 'Look at a target, optionally `fovDeg` wide.',
   properties: { do: { const: 'look' }, target: TARGET_SCHEMA, fovDeg: { type: 'number', minimum: MIN_FOV_DEG, maximum: MAX_FOV_DEG } },
   required: ['do', 'target'],
 } as const;
-const FOV_FIELDS = {
+export const FOV_FIELDS = {
+  description: 'The field of view with no target: 60 is the default.',
   properties: { do: { const: 'fov' }, fovDeg: { type: 'number', minimum: FOV_NEEDS_TARGET_BELOW_DEG, maximum: MAX_FOV_DEG } },
   required: ['do', 'fovDeg'],
 } as const;
-const MARK_FIELDS = {
+export const MARK_FIELDS = {
+  description: 'A ring and a line of text on a target; `text: null` removes it.',
   properties: { do: { const: 'mark' }, target: TARGET_SCHEMA, text: { type: ['string', 'null'], minLength: 1 } },
   required: ['do', 'target', 'text'],
 } as const;
@@ -124,22 +129,11 @@ const MARK_FIELDS = {
 /** What a guide cue, a voice command and, later, the voice AI may ask of the view. */
 export const VIEW_ACTION_SCHEMA = {
   oneOf: [
-    { type: 'object', description: 'Every switch as the preset has it (ui/presets.ts).', ...PRESET_FIELDS, additionalProperties: false },
-    {
-      type: 'object',
-      description: 'Named switches on or off; the rest stay.',
-      ...LAYERS_FIELDS,
-      // `do` and at least one of on and off.
-      minProperties: 2,
-      additionalProperties: false,
-    },
-    { type: 'object', description: 'Look at a target, optionally `fovDeg` wide.', ...LOOK_FIELDS, additionalProperties: false },
-    { type: 'object', description: 'The field of view with no target: 60 is the default.', ...FOV_FIELDS, additionalProperties: false },
-    {
-      type: 'object',
-      description: 'A ring and a line of text on a target; `text: null` removes it.',
-      ...MARK_FIELDS,
-      additionalProperties: false,
-    },
+    { type: 'object', ...PRESET_FIELDS, additionalProperties: false },
+    // `do` and at least one of on and off.
+    { type: 'object', ...LAYERS_FIELDS, minProperties: 2, additionalProperties: false },
+    { type: 'object', ...LOOK_FIELDS, additionalProperties: false },
+    { type: 'object', ...FOV_FIELDS, additionalProperties: false },
+    { type: 'object', ...MARK_FIELDS, additionalProperties: false },
   ],
 } as const;

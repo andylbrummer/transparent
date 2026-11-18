@@ -23,7 +23,8 @@
     "lint": "npm run lint --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "dev": "npm run dev -w app",
-    "docs:sources": "npm run docs:sources -w app --"
+    "docs:sources": "npm run docs:sources -w app --",
+    "guides:schema": "npm run guides:schema -w app --"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

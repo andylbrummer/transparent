@@ -10,7 +10,8 @@
     "test": "vitest run",
     "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit",
-    "docs:sources": "vite-node scripts/data-sources.ts"
+    "docs:sources": "vite-node scripts/data-sources.ts",
+    "guides:schema": "vite-node scripts/guide-schema.ts"
   },
   "dependencies": {
     "@transparent-earth/core": "*",
