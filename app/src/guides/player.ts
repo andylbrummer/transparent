@@ -43,9 +43,11 @@ export interface StepMedia {
 export type Narration = Extract<Step, { narration: unknown }>['narration'];
 
 export interface PlayerDeps {
-  readonly view: Pick<ViewControl, 'perform' | 'restore' | 'awaitedGaze' | 'stopAwaitingGaze' | 'borrow'>;
+  readonly view: Pick<ViewControl, 'perform' | 'restore' | 'preload' | 'awaitedGaze' | 'stopAwaitingGaze' | 'borrow'>;
   /** A narrated step's audio and captions, ready to play from its start. Rejects with an Error that says why not. */
   loadNarration(guide: Guide, narration: Narration): Promise<StepMedia>;
+  /** Fetch a narrated step's audio and captions ahead of need. It reports nothing: loadNarration will. */
+  preloadNarration(guide: Guide, narration: Narration): void;
 }
 
 /** Where a guide is. */
@@ -189,6 +191,9 @@ export function createPlayer(deps: PlayerDeps): Player {
     const scene: Promise<ActionOutcome> = restoring
       ? deps.view.restore(foldTo(guide, chapterIndex, stepIndex, tS))
       : Promise.resolve({ ok: true });
+    // After the step's own load, never before. The narration keeps its latest load and its latest preload: asked
+    // ahead first, the next step's files would push out this step's, fetched ahead a step ago, just as they are wanted.
+    preloadAfter(current);
     // Only while this load is still what the player waits on: an exit, a jump, or a cue of the step before that has
     // failed since, leaves it.
     const stillLoading = (): boolean => thisRun === run && current.phase === loading;
@@ -208,6 +213,21 @@ export function createPlayer(deps: PlayerDeps): Player {
         if (stillLoading()) fail(current, chapterIndex, stepIndex, reason(error));
       }
     );
+  }
+
+  /**
+   * Start loading the step after the one `current` has just gone to, while this one plays: its narration, and the
+   * layers of its chapter's scene when it opens a new chapter. Before the chapter is half done, as spec/guides.md
+   * §8.6 has it, would take a count of the chapter's time; its last step is near enough.
+   */
+  function preloadAfter(current: Session): void {
+    const after = stepAfter(current);
+    if (!after) return;
+    const { guide } = current;
+    const step = guide.chapters[after.chapterIndex].steps[after.stepIndex];
+    if ('narration' in step) deps.preloadNarration(guide, step.narration);
+    // A head start only, so its outcome is not read: the chapter's own restore reports when the guide gets there.
+    if (after.chapterIndex !== current.chapterIndex) deps.view.preload(foldTo(guide, after.chapterIndex, 0, 0)).catch(() => {});
   }
 
   /** A step's narration, or a silence the player times itself. */

@@ -10,6 +10,7 @@ const EAST: Target = { kind: 'horizon', azDeg: 90, altDeg: 0 };
 const NORTH: Target = { kind: 'horizon', azDeg: 0, altDeg: 0 };
 const narration = (name: string): Narration => ({ audio: `audio/${name}.m4a`, captions: `audio/${name}.vtt` });
 const SPOKEN = narration('01-spoken');
+const FIND = narration('03-find');
 const ASK = narration('04-ask');
 
 /** Two chapters. The first: a narration, then a silence, both auto. The second: a narration with a gaze gate, then one with a continue gate. */
@@ -52,7 +53,7 @@ const GUIDE: Guide = {
       steps: [
         {
           id: 'find',
-          narration: narration('03-find'),
+          narration: FIND,
           cues: [
             { at: 0, do: 'mark', target: NORTH, text: 'Here' },
             { at: 1, do: 'look', target: NORTH },
@@ -108,14 +109,19 @@ function fakeClock() {
 type FakeClock = ReturnType<typeof fakeClock>;
 
 /**
- * A player over a view that records each perform and restore and hands back
- * a promise the test settles, and a loadNarration that does the same.
- * `view.awaited` is what awaitedGaze answers.
+ * A player over a view that records each perform, restore and preload and
+ * hands back a promise the test settles, and a loadNarration that does the
+ * same. Each narration fetched ahead is recorded. `view.awaited` is what
+ * awaitedGaze answers.
  */
 function setup() {
   const performed: { readonly action: ViewAction; readonly outcome: Deferred<ActionOutcome> }[] = [];
   const restored: { readonly view: FoldedView; readonly outcome: Deferred<ActionOutcome> }[] = [];
   const loads: { readonly guide: Guide; readonly narration: Narration; readonly media: Deferred<StepMedia> }[] = [];
+  const preloaded: { readonly view: FoldedView; readonly outcome: Deferred<ActionOutcome> }[] = [];
+  const preloadedNarrations: Narration[] = [];
+  /** Each narration asked for, to load or to fetch ahead, in the order asked. */
+  const asked: string[] = [];
   const counts = { borrows: 0, ends: 0, stops: 0, awaited: null as AwaitedGaze | null };
   const view: PlayerDeps['view'] = {
     perform(action) {
@@ -126,6 +132,11 @@ function setup() {
     restore(folded) {
       const outcome = deferred<ActionOutcome>();
       restored.push({ view: folded, outcome });
+      return outcome.promise;
+    },
+    preload(folded) {
+      const outcome = deferred<ActionOutcome>();
+      preloaded.push({ view: folded, outcome });
       return outcome.promise;
     },
     awaitedGaze: () => counts.awaited,
@@ -145,12 +156,17 @@ function setup() {
     view,
     loadNarration(guide, narration) {
       const media = deferred<StepMedia>();
+      asked.push(`load ${narration.audio}`);
       loads.push({ guide, narration, media });
       return media.promise;
     },
+    preloadNarration(_, narration) {
+      asked.push(`preload ${narration.audio}`);
+      preloadedNarrations.push(narration);
+    },
   });
   const actions = (): ViewAction[] => performed.map((p) => p.action);
-  return { player, performed, restored, loads, view: counts, actions };
+  return { player, performed, restored, loads, preloaded, preloadedNarrations, asked, view: counts, actions };
 }
 type Setup = ReturnType<typeof setup>;
 
@@ -913,6 +929,68 @@ describe('createPlayer', () => {
       t.restored.at(-1)!.outcome.resolve({ ok: false, code: 'unknown-layer', message: 'no layer switch clouds' });
       await settle();
       expect(t.player.state()).toEqual({ kind: 'error', ...where(GUIDE, 1, 0), message: 'second/find: no layer switch clouds' });
+    });
+  });
+
+  describe('preload', () => {
+    /** Play GUIDE's first step through to its second, 'quiet', the first chapter's last. */
+    async function toQuiet(t: Setup): Promise<void> {
+      const spoken = await begin(t);
+      spoken.t = 10;
+      spoken.over = true;
+      t.player.update(16);
+      await settle();
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1) });
+    }
+
+    it('fetches the next step’s narration as a step starts, alongside its own, and nothing for a silence', () => {
+      const t = setup();
+      t.player.start({ ...GUIDE, chapters: [SECOND] });
+      expect(t.loads.map((load) => load.narration)).toEqual([FIND]);
+      expect(t.preloadedNarrations).toEqual([ASK]);
+      const quietNext = setup();
+      quietNext.player.start(GUIDE);
+      expect(quietNext.loads.map((load) => load.narration)).toEqual([SPOKEN]);
+      expect(quietNext.preloadedNarrations).toEqual([]);
+    });
+
+    it('loads the next chapter’s scene at a chapter’s last step, and not before', async () => {
+      const t = setup();
+      const spoken = await begin(t);
+      expect(t.preloaded).toEqual([]);
+      spoken.t = 10;
+      spoken.over = true;
+      t.player.update(16);
+      expect(t.player.state()).toMatchObject({ kind: 'loading', ...where(GUIDE, 0, 1) });
+      expect(t.preloaded.map((preload) => preload.view)).toEqual([foldTo(GUIDE, 1, 0, 0)]);
+      expect(t.preloadedNarrations).toEqual([FIND]);
+    });
+
+    it('asks for a step’s own narration before the next step’s', () => {
+      const t = setup();
+      t.player.start({ ...GUIDE, chapters: [SECOND] });
+      expect(t.asked).toEqual([`load ${FIND.audio}`, `preload ${ASK.audio}`]);
+    });
+
+    it('loads nothing ahead from the guide’s last step', async () => {
+      const t = setup();
+      await toAsk(t);
+      // All from the steps before: 'find' asked for 'ask', and 'quiet' for the second chapter.
+      expect(t.preloadedNarrations).toEqual([FIND, ASK]);
+      expect(t.preloaded.length).toBe(1);
+    });
+
+    // An unhandled rejection would fail the run.
+    it.each<[string, (outcome: Deferred<ActionOutcome>) => void]>([
+      ['refused', (outcome) => outcome.resolve({ ok: false, code: 'layer-unavailable', message: 'layer failed to load: clouds' })],
+      ['rejected', (outcome) => outcome.reject(new Error('no lazy layer clouds'))],
+    ])('changes nothing when the scene loaded ahead is %s', async (_, settleWith) => {
+      const t = setup();
+      await toQuiet(t);
+      const before = t.player.state();
+      settleWith(t.preloaded[0].outcome);
+      await settle();
+      expect(t.player.state()).toEqual(before);
     });
   });
 });
