@@ -79,8 +79,8 @@ export const CONTINUE_OFFER_MS = 20_000;
 export const REPEAT_S = 10;
 
 export interface Player {
-  /** Borrow the view and play `guide` from its first step. */
-  start(guide: Guide): void;
+  /** Borrow the view and play `guide` from the start of a step: its first, unless `at` names another. */
+  start(guide: Guide, at?: { readonly chapterIndex: number; readonly stepIndex: number }): void;
   /** The user says go on: meets the gate the guide is waiting at. */
   goOn(): void;
   /** Stop the narration and the step's clock with it. An ease under way finishes; the view stays as it is. */
@@ -342,11 +342,15 @@ export function createPlayer(deps: PlayerDeps): Player {
   }
 
   return {
-    start(guide) {
+    start(guide, { chapterIndex, stepIndex } = { chapterIndex: 0, stepIndex: 0 }) {
       if (session) throw new Error('a guide is already playing');
+      // Before the borrow, so nothing is left to undo: a link's step is checked against the guide by its caller.
+      if (guide.chapters[chapterIndex]?.steps[stepIndex] === undefined) {
+        throw new RangeError(`the guide has no step ${chapterIndex}/${stepIndex}`);
+      }
       const borrow = deps.view.borrow();
-      session = { guide, borrow, chapterIndex: 0, stepIndex: 0, phase: { kind: 'loading' }, unsettledLooks: 0, paused: false };
-      jump(session, 0, 0, 0);
+      session = { guide, borrow, chapterIndex, stepIndex, phase: { kind: 'loading' }, unsettledLooks: 0, paused: false };
+      jump(session, chapterIndex, stepIndex, 0);
     },
     goOn() {
       const current = session;

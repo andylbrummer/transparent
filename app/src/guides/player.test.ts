@@ -565,6 +565,32 @@ describe('createPlayer', () => {
     expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(TWO_GAZES, 0, 0) });
   });
 
+  it('starts at the step it is given, the view folded to that step’s start', async () => {
+    const t = setup();
+    t.player.start(GUIDE, { chapterIndex: 1, stepIndex: 1 });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
+    expect(t.restored.map((restore) => restore.view)).toEqual([foldTo(GUIDE, 1, 1, 0)]);
+    expect(t.loads.map((load) => load.narration)).toEqual([ASK]);
+    const ask = fakeClock();
+    t.restored[0].outcome.resolve({ ok: true });
+    t.loads[0].media.resolve({ clock: ask.clock, captions: [] });
+    await settle();
+    expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 1) });
+    expect(ask.plays).toBe(1);
+  });
+
+  it.each([
+    [2, 0],
+    [1, 2],
+    [-1, 0],
+    [0, 0.5],
+  ])('refuses to start at step %i/%s, which the guide does not have, before borrowing the view', (chapterIndex, stepIndex) => {
+    const t = setup();
+    expect(() => t.player.start(GUIDE, { chapterIndex, stepIndex })).toThrow(new Error(`the guide has no step ${chapterIndex}/${stepIndex}`));
+    expect(t.view.borrows).toBe(0);
+    expect(t.player.state()).toEqual({ kind: 'idle' });
+  });
+
   it('counts only its own run’s looks at a gaze gate', async () => {
     const t = setup();
     const first = await begin(t, TWO_GAZES);
