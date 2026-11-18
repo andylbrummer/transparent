@@ -7,6 +7,10 @@
     <!-- No icon file: an empty one stops the browser asking for /favicon.ico and logging a 404. -->
     <link rel="icon" href="data:," />
     <style>
+      :root {
+        /* The compass bar's height: the gaze pointer's clear area starts beneath it. */
+        --compass-bar-height: calc(env(safe-area-inset-top) + 46px);
+      }
       html, body {
         margin: 0;
         padding: 0;
@@ -116,7 +120,7 @@
         top: 0;
         left: 0;
         right: 0;
-        height: calc(env(safe-area-inset-top) + 46px);
+        height: var(--compass-bar-height);
         overflow: hidden;
         /* Over the scene and the labels, but drags pass through to the view. */
         z-index: 1;
@@ -207,6 +211,66 @@
         transform: translateX(-50%);
         font: 600 11px/1 system-ui, -apple-system, sans-serif;
         color: #9fdcff;
+      }
+      /* The way to a target the user has to turn to. Its box is the clear
+         area: the view beneath the compass bar and inside the safe area.
+         A target outside the box counts as out of sight, so it gets the
+         arrow rather than a ring under the bar. Over the buttons, so the
+         arrow is never under one; drags pass through. */
+      .gaze-pointer {
+        position: fixed;
+        top: var(--compass-bar-height);
+        right: env(safe-area-inset-right);
+        bottom: env(safe-area-inset-bottom);
+        left: env(safe-area-inset-left);
+        z-index: 2;
+        pointer-events: none;
+        font: 600 14px/1.2 system-ui, -apple-system, sans-serif;
+        color: #ffd27a;
+        text-shadow: 0 0 3px #000, 0 1px 2px #000;
+        white-space: nowrap;
+      }
+      .gaze-pointer__arrow,
+      .gaze-pointer__ring,
+      .gaze-pointer__name {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      /* The glyph is at the edge and the text inward of it, whichever edge that is. */
+      .gaze-pointer__arrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .gaze-pointer__arrow[data-edge='left'] {
+        flex-direction: row-reverse;
+      }
+      .gaze-pointer__arrow[data-edge='top'] {
+        flex-direction: column-reverse;
+      }
+      .gaze-pointer__arrow[data-edge='bottom'] {
+        flex-direction: column;
+      }
+      .gaze-pointer__glyph {
+        font-size: 20px;
+        line-height: 1;
+      }
+      /* Read out, not seen: the pointer going up and the arrival, once each. */
+      .gaze-pointer__status {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+      .gaze-pointer__ring {
+        width: 48px;
+        height: 48px;
+        margin: -24px 0 0 -24px;
+        border: 2px solid currentColor;
+        border-radius: 50%;
+        box-shadow: 0 0 3px #000, inset 0 0 3px #000;
       }
       #reset-offset,
       #layers-toggle,

@@ -59,6 +59,7 @@ import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './vo
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
+import { GazePointer } from './view/gaze-pointer';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -306,6 +307,7 @@ export function init(): App | null {
   container.appendChild(hud);
 
   const compassBar = new CompassBar(container);
+  const gazePointer = new GazePointer(container);
 
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
@@ -621,6 +623,8 @@ export function init(): App | null {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const stereo = !ar && position !== null && cardboard.isActive();
+    // Cardboard and AR draw no pointer yet (phase 3); arrival is still counted there.
+    gazePointer.setVisible(position !== null && !ar && !stereo);
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
@@ -704,6 +708,7 @@ export function init(): App | null {
         globe.update(camera, renderer.domElement.height);
         labels.update(camera, width, height, undefined, skyRotation);
         compassBar.update(camera, position, width);
+        gazePointer.update(viewControl.awaitedGaze(), camera, width, height);
       }
       renderer.render(scene, camera);
     }
@@ -778,6 +783,7 @@ export function init(): App | null {
       renderer.domElement.remove();
       hud.remove();
       compassBar.dispose();
+      gazePointer.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();
     },
