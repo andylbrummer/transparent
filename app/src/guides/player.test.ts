@@ -199,7 +199,7 @@ describe('createPlayer', () => {
     const t = setup();
     t.player.start(GUIDE);
     expect(t.view.borrows).toBe(1);
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0), paused: false });
     expect(t.restored.map((r) => r.view)).toEqual([foldTo(GUIDE, 0, 0, 0)]);
     // Asked for while the scene is still on its way, not after it.
     expect(t.loads.map((l) => [l.guide, l.narration])).toEqual([[GUIDE, SPOKEN]]);
@@ -212,7 +212,7 @@ describe('createPlayer', () => {
     t.restored[0].outcome.resolve({ ok: true });
     await settle();
     expect(clock.plays).toBe(1);
-    expect(t.player.state()).toEqual({ kind: 'playing', ...where(GUIDE, 0, 0), tS: 0, captions });
+    expect(t.player.state()).toEqual({ kind: 'playing', ...where(GUIDE, 0, 0), paused: false, tS: 0, captions });
   });
 
   it('fires each cue once as the clock passes it, in order, without waiting for the one before to settle', async () => {
@@ -259,12 +259,12 @@ describe('createPlayer', () => {
     const spoken = await begin(t);
     spoken.over = true;
     t.player.update(16);
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1), paused: false });
     await settle();
     expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1) });
     expect(t.restored.length).toBe(1);
     t.player.update(3000);
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0), paused: false });
     expect(t.restored.map((r) => r.view)).toEqual([foldTo(GUIDE, 0, 0, 0), foldTo(GUIDE, 1, 0, 0)]);
   });
 
@@ -285,7 +285,7 @@ describe('createPlayer', () => {
     t.player.update(1499);
     expect(t.player.state()).toMatchObject({ kind: 'playing', tS: 2.999 });
     t.player.update(1);
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0), paused: false });
   });
 
   it('fires every cue left when the narration ends before the clock reaches them, then moves on', async () => {
@@ -295,7 +295,7 @@ describe('createPlayer', () => {
     clock.over = true;
     t.player.update(16);
     expect(t.actions()).toEqual(FIRST.steps[0].cues.slice(1));
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1), paused: false });
   });
 
   it('waits at a gaze gate for the look to settle and the user to turn to it, and not before the narration ends', async () => {
@@ -309,7 +309,7 @@ describe('createPlayer', () => {
     expect(t.actions().at(-1)).toEqual(SECOND.steps[0].cues[1]);
     find.over = true;
     t.player.update(16);
-    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 0), gate: 'gaze', offerContinue: false });
+    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 0), paused: false, gate: 'gaze', offerContinue: false });
     t.performed.at(-1)!.outcome.resolve({ ok: true });
     await settle();
     t.view.awaited = aGaze;
@@ -317,7 +317,7 @@ describe('createPlayer', () => {
     expect(t.player.state().kind).toBe('waiting');
     t.view.awaited = null;
     t.player.update(16);
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
   });
 
   it('waits at a gaze gate, in a pose, until the user has turned to the look', async () => {
@@ -352,7 +352,7 @@ describe('createPlayer', () => {
     await settle();
     again.over = true;
     t.player.update(16);
-    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(TWO_GAZES, 0, 1), gate: 'gaze', offerContinue: false });
+    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(TWO_GAZES, 0, 1), paused: false, gate: 'gaze', offerContinue: false });
     t.player.update(CONTINUE_OFFER_MS - 1);
     expect(t.player.state()).toMatchObject({ offerContinue: false });
     t.player.update(1);
@@ -368,7 +368,7 @@ describe('createPlayer', () => {
     expect(t.player.state().kind).toBe('waiting');
     t.player.goOn();
     expect(t.view.stops).toBe(1);
-    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1) });
+    expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
   });
 
   it('waits at a continue gate for the user alone, never offering a way on, and refuses go on unless waiting', async () => {
@@ -378,7 +378,7 @@ describe('createPlayer', () => {
     ask.over = true;
     t.player.update(16);
     t.player.update(CONTINUE_OFFER_MS * 3);
-    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 1), gate: 'continue', offerContinue: false });
+    expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 1), paused: false, gate: 'continue', offerContinue: false });
     const stops = t.view.stops;
     t.player.goOn();
     expect(t.view.stops).toBe(stops);
@@ -578,5 +578,125 @@ describe('createPlayer', () => {
     await settle();
     t.player.update(16);
     expect(t.player.state()).toMatchObject({ kind: 'loading', ...where(TWO_GAZES, 0, 1) });
+  });
+
+  describe('pause', () => {
+    it('stops the clock and the cues with it, and goes on from there on resume', async () => {
+      const t = setup();
+      const clock = await begin(t);
+      t.player.pause();
+      expect(clock.pauses).toBe(1);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', paused: true });
+      // A clock that has run on regardless fires nothing while paused.
+      clock.t = 5;
+      t.player.update(16);
+      expect(t.actions()).toEqual([]);
+      t.player.resume();
+      expect(clock.plays).toBe(2);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', paused: false });
+      t.player.update(16);
+      expect(t.actions()).toEqual(FIRST.steps[0].cues.slice(1, 4));
+    });
+
+    it('stops a silence: frames while paused do not count', async () => {
+      const t = setup();
+      const spoken = await begin(t);
+      spoken.over = true;
+      t.player.update(16);
+      await settle();
+      t.player.pause();
+      t.player.update(5000);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1), paused: true, tS: 0 });
+      t.player.resume();
+      t.player.update(1000);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1), paused: false, tS: 1 });
+    });
+
+    it('holds a gate while paused: no going on and no count toward the offer, until resume', async () => {
+      const t = setup();
+      const find = await toFind(t);
+      find.t = 5;
+      find.over = true;
+      t.player.update(16);
+      t.player.pause();
+      t.performed.at(-1)!.outcome.resolve({ ok: true });
+      await settle();
+      t.player.update(CONTINUE_OFFER_MS);
+      expect(t.player.state()).toEqual({ kind: 'waiting', ...where(GUIDE, 1, 0), paused: true, gate: 'gaze', offerContinue: false });
+      t.player.resume();
+      t.player.update(16);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
+    });
+
+    it('lets a step paused as it loads arrive silent, and play on resume', async () => {
+      const t = setup();
+      t.player.start(GUIDE);
+      t.player.pause();
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0), paused: true });
+      const clock = fakeClock();
+      t.restored[0].outcome.resolve({ ok: true });
+      t.loads[0].media.resolve({ clock: clock.clock, captions: [] });
+      await settle();
+      expect(t.player.state()).toEqual({ kind: 'playing', ...where(GUIDE, 0, 0), paused: true, tS: 0, captions: [] });
+      expect(clock.plays).toBe(0);
+      t.player.resume();
+      expect(clock.plays).toBe(1);
+    });
+
+    it('goes on from a paused gate when the user says so, the next step arriving paused', async () => {
+      const t = setup();
+      const find = await toFind(t);
+      find.t = 5;
+      find.over = true;
+      t.player.update(16);
+      t.player.pause();
+      t.player.goOn();
+      expect(t.view.stops).toBe(1);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: true });
+      const ask = fakeClock();
+      t.loads.at(-1)!.media.resolve({ clock: ask.clock, captions: [] });
+      await settle();
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 1), paused: true });
+      expect(ask.plays).toBe(0);
+    });
+
+    it('refuses pause unless a step loads, plays or waits unpaused, and resume unless paused', async () => {
+      const t = setup();
+      expect(() => t.player.pause()).toThrow(new Error('the guide cannot be paused now'));
+      expect(() => t.player.resume()).toThrow(new Error('the guide is not paused'));
+      const clock = await begin(t);
+      expect(() => t.player.resume()).toThrow(new Error('the guide is not paused'));
+      t.player.pause();
+      expect(() => t.player.pause()).toThrow(new Error('the guide cannot be paused now'));
+      // A cue that fails while paused halts the guide, and the halt is not paused.
+      clock.t = 2;
+      t.player.resume();
+      t.player.update(16);
+      t.player.pause();
+      t.performed[0].outcome.resolve({ ok: false, code: 'layer-unavailable', message: 'layer failed to load: aurora' });
+      await settle();
+      expect(t.player.state()).toEqual({ kind: 'error', ...where(GUIDE, 0, 0), message: 'first/spoken: layer failed to load: aurora' });
+      expect(() => t.player.pause()).toThrow(new Error('the guide cannot be paused now'));
+      expect(() => t.player.resume()).toThrow(new Error('the guide is not paused'));
+      t.player.exit();
+
+      const ask = await toAsk(t);
+      ask.over = true;
+      t.player.update(16);
+      t.player.goOn();
+      expect(t.player.state().kind).toBe('ended');
+      expect(() => t.player.pause()).toThrow(new Error('the guide cannot be paused now'));
+      expect(() => t.player.resume()).toThrow(new Error('the guide is not paused'));
+    });
+
+    it('leaves a paused guide, and the next one starts unpaused', async () => {
+      const t = setup();
+      await begin(t);
+      t.player.pause();
+      t.player.exit();
+      expect(t.player.state()).toEqual({ kind: 'idle' });
+      t.player.start(GUIDE);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0), paused: false });
+    });
   });
 });

@@ -25,6 +25,7 @@ export interface StepClock {
   isOver(): boolean;
   /** Why it can no longer play, when the download or the decoder has failed; null while it can. */
   failure(): string | null;
+  /** Run on from where it stands. Nothing once it is over: it does not start again. */
   play(): void;
   pause(): void;
 }
@@ -50,13 +51,17 @@ export interface PlayerAt {
   readonly stepIndex: number;
 }
 
+/**
+ * `paused`: pause() has stopped the guide. A flag rather than a state, since a guide can be paused while a step loads,
+ * plays or waits, and goes on from there.
+ */
 export type PlayerState =
   | { readonly kind: 'idle' }
   /** The step's narration, or the layers of a chapter's scene, are on their way. */
-  | (PlayerAt & { readonly kind: 'loading' })
-  | (PlayerAt & { readonly kind: 'playing'; readonly tS: number; readonly captions: readonly CaptionCue[] })
+  | (PlayerAt & { readonly kind: 'loading'; readonly paused: boolean })
+  | (PlayerAt & { readonly kind: 'playing'; readonly paused: boolean; readonly tS: number; readonly captions: readonly CaptionCue[] })
   /** The narration is over and the step's gate is not yet met. `offerContinue`: the user has looked for 20 s; offer a way on. */
-  | (PlayerAt & { readonly kind: 'waiting'; readonly gate: 'gaze' | 'continue'; readonly offerContinue: boolean })
+  | (PlayerAt & { readonly kind: 'waiting'; readonly paused: boolean; readonly gate: 'gaze' | 'continue'; readonly offerContinue: boolean })
   /** Halted. `message` names the step. */
   | (PlayerAt & { readonly kind: 'error'; readonly message: string })
   /** The last step is done; the guide's view stays until exit(). */
@@ -70,6 +75,10 @@ export interface Player {
   start(guide: Guide): void;
   /** The user says go on: meets the gate the guide is waiting at. */
   goOn(): void;
+  /** Stop the narration and the step's clock with it. An ease under way finishes; the view stays as it is. */
+  pause(): void;
+  /** Go on from where pause() stopped. */
+  resume(): void;
   /** Leave the guide from any state: the view goes back as it was. */
   exit(): void;
   /** Once a frame, before ViewControl.update: fires the cues that are due and moves on when a step is done. */
@@ -111,6 +120,8 @@ interface Session {
   unsettledLooks: number;
   /** The clock last played, so exit, an error or the end can stop it. */
   clock: StepClock | null;
+  /** pause() has stopped the guide: only while a step loads, plays or waits. */
+  paused: boolean;
 }
 
 export function createPlayer(deps: PlayerDeps): Player {
@@ -148,7 +159,8 @@ export function createPlayer(deps: PlayerDeps): Player {
         let nextCue = 0;
         if (restoring) while (nextCue < step.cues.length && step.cues[nextCue].at <= 0) nextCue++;
         current.clock = loaded.clock;
-        loaded.clock.play();
+        // Paused while it loaded, as leaving the tab does: it waits at its start, silent, for resume.
+        if (!current.paused) loaded.clock.play();
         current.phase = { kind: 'playing', step: { clock: loaded.clock, captions: loaded.captions, silence: silenceClock, nextCue } };
       },
       (error: unknown) => {
@@ -191,6 +203,7 @@ export function createPlayer(deps: PlayerDeps): Player {
     if (stepIndex + 1 < guide.chapters[chapterIndex].steps.length) return enter(current, chapterIndex, stepIndex + 1);
     if (chapterIndex + 1 < guide.chapters.length) return enter(current, chapterIndex + 1, 0);
     current.clock?.pause();
+    current.paused = false;
     current.phase = { kind: 'ended' };
   }
 
@@ -202,12 +215,14 @@ export function createPlayer(deps: PlayerDeps): Player {
     if (current.phase.kind === 'error') return;
     const chapter = current.guide.chapters[chapterIndex];
     current.clock?.pause();
+    current.paused = false;
     current.phase = { kind: 'error', message: `${chapter.id}/${chapter.steps[stepIndex].id}: ${why}` };
   }
 
   function update(deltaMs: number): void {
     const current = session;
-    if (!current) return;
+    // Paused, nothing moves: no cue, no silence, no count toward the offer, and no gate, so the guide cannot go on.
+    if (!current || current.paused) return;
     const { phase } = current;
     if (phase.kind === 'playing') {
       const step = current.guide.chapters[current.chapterIndex].steps[current.stepIndex];
@@ -229,16 +244,19 @@ export function createPlayer(deps: PlayerDeps): Player {
 
   function state(): PlayerState {
     if (!session) return { kind: 'idle' };
-    const { guide, chapterIndex, stepIndex, phase } = session;
+    const { guide, chapterIndex, stepIndex, phase, paused } = session;
     const at: PlayerAt = { guide, chapterIndex, stepIndex };
     switch (phase.kind) {
       case 'loading':
-      case 'ended':
-        return { ...at, kind: phase.kind };
+        return { ...at, kind: 'loading', paused };
       case 'playing':
-        return { ...at, kind: 'playing', tS: phase.step.clock.timeS(), captions: phase.step.captions };
-      case 'waiting':
-        return { ...at, kind: 'waiting', gate: phase.gate, offerContinue: phase.gate === 'gaze' && phase.waitedMs >= CONTINUE_OFFER_MS };
+        return { ...at, kind: 'playing', paused, tS: phase.step.clock.timeS(), captions: phase.step.captions };
+      case 'waiting': {
+        const offerContinue = phase.gate === 'gaze' && phase.waitedMs >= CONTINUE_OFFER_MS;
+        return { ...at, kind: 'waiting', paused, gate: phase.gate, offerContinue };
+      }
+      case 'ended':
+        return { ...at, kind: 'ended' };
       case 'error':
         return { ...at, kind: 'error', message: phase.message };
     }
@@ -248,7 +266,8 @@ export function createPlayer(deps: PlayerDeps): Player {
     start(guide) {
       if (session) throw new Error('a guide is already playing');
       run++;
-      session = { guide, borrow: deps.view.borrow(), chapterIndex: 0, stepIndex: 0, phase: { kind: 'loading' }, unsettledLooks: 0, clock: null };
+      const borrow = deps.view.borrow();
+      session = { guide, borrow, chapterIndex: 0, stepIndex: 0, phase: { kind: 'loading' }, unsettledLooks: 0, clock: null, paused: false };
       enter(session, 0, 0);
     },
     goOn() {
@@ -257,6 +276,22 @@ export function createPlayer(deps: PlayerDeps): Player {
       // The user gave up looking: the look's field of view is not applied.
       if (current.phase.gate === 'gaze') deps.view.stopAwaitingGaze();
       next(current);
+    },
+    pause() {
+      const current = session;
+      const kind = current?.phase.kind;
+      if (!current || current.paused || (kind !== 'loading' && kind !== 'playing' && kind !== 'waiting')) {
+        throw new Error('the guide cannot be paused now');
+      }
+      current.paused = true;
+      // Only a playing step's clock runs: a waiting one is over, and a loading one has not started.
+      if (current.phase.kind === 'playing') current.phase.step.clock.pause();
+    },
+    resume() {
+      const current = session;
+      if (!current?.paused) throw new Error('the guide is not paused');
+      current.paused = false;
+      if (current.phase.kind === 'playing') current.phase.step.clock.play();
     },
     exit() {
       const current = session;
