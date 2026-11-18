@@ -18,8 +18,10 @@
       /* On body, not :root, so that it follows --captions-foot where body.guide-open raises it: a custom property's
          var() is worked out where it is declared. */
       body {
-        /* The voice readout's foot, one eye: above a caption of two lines. */
-        --voice-readout-foot: calc(var(--captions-foot) + 64px);
+        /* Just above a caption of two lines: what stands over the captions stands from here. */
+        --captions-top: calc(var(--captions-foot) + 64px);
+        /* The voice readout's foot, one eye. */
+        --voice-readout-foot: var(--captions-top);
       }
       body.guide-open {
         --captions-foot: calc(var(--play-bar-height) + 8px);
@@ -242,6 +244,12 @@
         color: #ffd27a;
         text-shadow: 0 0 3px #000, 0 1px 2px #000;
         white-space: nowrap;
+      }
+      /* While a guide is open the play bar takes the foot and the captions stand on it. An arrow at the bottom edge
+         stays above a caption of two lines whether or not one is showing, so the clear area is not measured again
+         each time a caption comes or goes. */
+      body.guide-open .gaze-pointer {
+        bottom: calc(env(safe-area-inset-bottom) + var(--captions-top));
       }
       .gaze-pointer__arrow,
       .gaze-pointer__ring,

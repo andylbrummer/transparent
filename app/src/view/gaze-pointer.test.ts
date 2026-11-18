@@ -184,6 +184,22 @@ describe('GazePointer', () => {
     expect(t.part('arrow').style.transform).not.toBe(before);
   });
 
+  it('measures the clear area again when the page’s classes change, as a guide’s play bar taking the foot does', () => {
+    const t = setup();
+    const looking = gaze(mars, 'Mars', toward(74));
+    t.pointer.update(looking, t.camera, WIDTH, HEIGHT);
+    document.body.classList.add('guide-open');
+    try {
+      t.pointer.update(looking, t.camera, WIDTH, HEIGHT);
+      t.pointer.update(looking, t.camera, WIDTH, HEIGHT);
+      expect(t.measure).toHaveBeenCalledTimes(2);
+    } finally {
+      document.body.classList.remove('guide-open');
+    }
+    t.pointer.update(looking, t.camera, WIDTH, HEIGHT);
+    expect(t.measure).toHaveBeenCalledTimes(3);
+  });
+
   it('does nothing while hidden, and leaves with dispose', () => {
     const t = setup();
     t.pointer.setVisible(false);

@@ -5,8 +5,8 @@
  * while the user holds it at the centre. The pointer only points: it never
  * turns the view.
  *
- * "Can be seen" means inside the clear area: beneath the compass bar and
- * within the safe area. A target under the bar projects onto the screen
+ * "Can be seen" means inside the clear area: beneath the compass bar, above
+ * a guide's play bar and within the safe area. A target under the bar projects onto the screen
  * and is still hidden, so it gets the arrow.
  *
  * One eye only, for now: Cardboard and AR hide it, and arrival is still
@@ -141,7 +141,10 @@ export class GazePointer {
   private readonly forward = new THREE.Vector3();
   private visible = true;
   private clear: ClearArea = { left: 0, top: 0, width: 0, height: 0 };
-  /** The viewport size the clear area was measured at: measuring every frame would force a layout every frame. */
+  /**
+   * The viewport size and the page's classes the clear area was measured at: measuring every frame would force a
+   * layout every frame. A class on the body can move what covers the view, as a guide's play bar does at the foot.
+   */
   private measuredKey = '';
   /** The look the status last announced, so it is announced once: its key, its name and where it is. */
   private announced: { readonly key: string; readonly name: string | null; readonly direction: THREE.Vector3 } | null = null;
@@ -187,7 +190,7 @@ export class GazePointer {
   /** Show the way to `gaze` for this frame's camera, in a viewport `width` by `height` CSS px; nothing for null. */
   update(gaze: AwaitedGaze | null, camera: THREE.PerspectiveCamera, width: number, height: number): void {
     if (!this.visible) return;
-    const key = `${width}:${height}`;
+    const key = `${width}:${height}:${this.root.ownerDocument.body.className}`;
     if (key !== this.measuredKey) {
       this.measuredKey = key;
       const box = this.root.getBoundingClientRect();

@@ -61,6 +61,8 @@ import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
 import { GazePointer } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
+import { guideLink } from './guides/guide-files';
+import { createGuideSession, type GuideStatus } from './guides/guide-session';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -86,8 +88,6 @@ export interface App {
   readonly look: LookController;
   /** The view's actions, for the browser harness: perform a look or a mark by hand. */
   readonly viewControl: ViewControl;
-  /** The caption overlay, for the browser harness: set cues and a time by hand until the player drives it. */
-  readonly captions: CaptionOverlay;
   getSensorState(): SensorState;
   getAppState(): AppState;
   getAvailableModes(): readonly RenderMode[];
@@ -96,6 +96,8 @@ export interface App {
   getVisibleLabels(): string[];
   /** The app clock's current instant. */
   getDate(): Date;
+  /** The guide's card and player, for the browser harness. */
+  getGuide(): GuideStatus;
   /** The Cardboard spyglass's state and window, for the browser harness. */
   getSpyglass(): {
     readonly state: SpyglassState['kind'];
@@ -402,6 +404,24 @@ export function init(): App | null {
     prefersReducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
     addLabels: (spec) => labels.addGroup(spec),
   });
+  const guideSession = createGuideSession({
+    parent: container,
+    view: viewControl,
+    audio: new Audio(),
+    fetch: (url, init) => fetch(url, init),
+    baseUrl: import.meta.env.BASE_URL,
+    objectUrl: { create: (blob) => URL.createObjectURL(blob), revoke: (url) => URL.revokeObjectURL(url) },
+    captions,
+    labels: () => geoStatus,
+  });
+  // A link opens the guide's card; one that cannot be read opens it too, to say why.
+  const link = guideLink(window.location.search);
+  if (link) guideSession.open(link);
+  // Hiding the page pauses the guide, and coming back does not resume it: the user says when the voice goes on.
+  const onVisibilityChange = (): void => {
+    if (document.hidden) guideSession.pause();
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
   for (const layer of layerSwitches) {
     if ('lazy' in layer.target && layerVisibility[layer.id]) applyLayer(layer, true);
     // The globe is there from the start, without waiting on the map data.
@@ -634,7 +654,9 @@ export function init(): App | null {
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
     const deltaMs = nowMs - lastFrameMs;
-    // Every frame, whatever is showing: an ease must always be able to finish or stop.
+    // Every frame, whatever is showing: an ease must always be able to finish or stop. The guide just before, so a
+    // cue it fires takes effect in this frame.
+    guideSession.update(deltaMs);
     viewControl.update(deltaMs);
     // In AR the camera is the device's, put in the Earth frame where the window was placed.
     if (ar) arRunner.update(frame, camera);
@@ -746,13 +768,13 @@ export function init(): App | null {
     globe,
     look,
     viewControl,
-    captions,
     getSensorState: () => sensorState,
     getAppState: () => appState,
     getAvailableModes: () => availableModes,
     getFrameCount: () => frameCount,
     getVisibleLabels: () => labels.visibleNames(),
     getDate: () => clock.now(),
+    getGuide: () => guideSession.getGuide(),
     getSpyglass: () => {
       const state = spyglass.getState();
       return {
@@ -771,6 +793,7 @@ export function init(): App | null {
       window.removeEventListener('resize', onResize);
       screen.orientation?.removeEventListener('change', renderHud);
       window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
@@ -790,6 +813,8 @@ export function init(): App | null {
       hud.remove();
       compassBar.dispose();
       gazePointer.dispose();
+      // Before the captions: leaving the guide takes its captions down.
+      guideSession.dispose();
       captions.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();
