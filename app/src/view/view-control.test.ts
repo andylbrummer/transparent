@@ -1058,6 +1058,73 @@ describe('createViewControl', () => {
       );
       expect(markTexts(t)).toEqual(['East again', 'North again']);
     });
+
+    describe('preload', () => {
+      /** A setup whose every layer load is a spy, by id. */
+      function spied() {
+        const loads = Object.fromEntries(definitions.map((d) => [d.id, vi.fn(d.load)]));
+        return { ...setup(null, loads), loads };
+      }
+
+      it('loads the lazy layers a view would turn on, and changes nothing: no switch, no save, no mark, no aim', async () => {
+        const t = spied();
+        await t.viewControl.perform({ do: 'mark', target: north, text: 'North' });
+        const on = onIds(t);
+        const state = t.look.getState();
+        // A look and a mark that do not resolve yet: preload has nothing to do with them.
+        const madagascar = { kind: 'label', name: 'Madagascar' } as const;
+        const view = scene({ only: ['cmb', 'aurora'] }, { look: { target: madagascar, fovDeg: 60 }, marks: [{ target: madagascar, text: 'Here' }] });
+        expect(await t.viewControl.preload(view)).toEqual({ ok: true });
+        expect(t.loads.cmb).toHaveBeenCalledOnce();
+        expect(t.loads.aurora).toHaveBeenCalledOnce();
+        expect(t.loads['x-ray']).not.toHaveBeenCalled();
+        expect(t.changes).toEqual([]);
+        expect(t.stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+        expect(onIds(t)).toEqual(on);
+        expect(markTexts(t)).toEqual(['North']);
+        expect(t.look.getState()).toBe(state);
+      });
+
+      it.each<[string, FoldedView['layers']]>([
+        ['a list', { only: ['x-ray', 'cmb'] }],
+        ['a preset and what went on since', { preset: 'sky', on: ['cmb'], off: [] }],
+      ])('loads only the last of an exclusive group turned on, as restore shows: %s', async (_, layers) => {
+        const t = spied();
+        expect(await t.viewControl.preload(scene(layers))).toEqual({ ok: true });
+        expect(t.loads.cmb).toHaveBeenCalledOnce();
+        expect(t.loads['x-ray']).not.toHaveBeenCalled();
+      });
+
+      it.each<[string, FoldedView['layers'], object]>([
+        ['an unknown preset', { preset: 'no-such', on: ['cmb'], off: [] }, { code: 'unknown-preset', message: 'no preset no-such' }],
+        ['an unknown switch', { only: ['cmb', 'nope'] }, { code: 'unknown-layer', message: 'no layer switch nope' }],
+      ])('refuses %s as restore does, and loads nothing', async (_, layers, refusal) => {
+        const t = spied();
+        expect(await t.viewControl.preload(scene(layers))).toEqual({ ok: false, ...refusal });
+        for (const load of Object.values(t.loads)) expect(load).not.toHaveBeenCalled();
+      });
+
+      it('says which layer failed to load', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const load = vi.fn<LayerDefinition['load']>().mockRejectedValueOnce(new Error('offline'));
+        const t = setup(null, { cmb: load });
+        expect(await t.viewControl.preload(scene({ only: ['cmb'] }))).toEqual({ ok: false, code: 'layer-unavailable', message: 'layer failed to load: cmb' });
+        expect(t.input('cmb').checked).toBe(false);
+        error.mockRestore();
+      });
+
+      it('leaves restore nothing to wait for', async () => {
+        const cmb = heldLoad();
+        const t = setup(null, { cmb: cmb.load });
+        const preloading = t.viewControl.preload(scene({ only: ['cmb'] }));
+        cmb.finish();
+        expect(await preloading).toEqual({ ok: true });
+        const flag = settledFlag(t.viewControl.restore(scene({ only: ['cmb'] })));
+        await settle();
+        expect(flag.settled).toBe(true);
+        expect(cmb.load).toHaveBeenCalledOnce();
+      });
+    });
   });
 
   describe('borrow', () => {

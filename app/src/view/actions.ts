@@ -87,6 +87,11 @@ export interface ViewControl {
    */
   restore(view: FoldedView): Promise<ActionOutcome>;
   /**
+   * Load ahead the layers `view` would turn on, showing nothing and flipping no switch. The outcome is what restore
+   * would say of its switches: an unknown preset or switch, or a layer that failed to load.
+   */
+  preload(view: FoldedView): Promise<ActionOutcome>;
+  /**
    * Borrow the view, for a guide. Until `end()` no switch is saved; `end()` puts the switches and the field of view
    * back as they stood, takes every mark down, and stops an ease or a look that waits. The aim stays where the user
    * has it. One borrow at a time.

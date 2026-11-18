@@ -243,18 +243,10 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
 
   // Like perform, every change is made before the first await, so it is all in place by the time restore returns.
   async function restore(view: FoldedView): Promise<ActionOutcome> {
-    const { layers, look } = view;
+    const { look } = view;
     // Check everything before changing anything, so a mistake leaves the user where they were.
-    // What the preset turns on, before what was flipped since: none for a listed scene.
-    let presetOn: readonly string[] = [];
-    if ('preset' in layers) {
-      const preset = deps.presets.find((p) => p.id === layers.preset);
-      if (!preset) return { ok: false, code: 'unknown-preset', message: `no preset ${layers.preset}` };
-      presetOn = preset.on;
-    }
-    const named = 'only' in layers ? layers.only : [...layers.off, ...layers.on];
-    const unknown = [...new Set(named.filter((id) => !switchesById.has(id)))];
-    if (unknown.length > 0) return { ok: false, code: 'unknown-layer', message: `no layer switch ${unknown.join(', ')}` };
+    const switches = switchesOn(view.layers);
+    if (!switches.ok) return switches;
     const badFov = fovOutOfRange(look.fovDeg);
     if (badFov) return badFov;
     const located = locate(look.target);
@@ -267,8 +259,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       placed.push({ target: mark.target, text: mark.text, direction: found.direction });
     }
 
-    const on = 'only' in layers ? turnOnInOrder([], layers.only) : turnOnInOrder(presetOn.filter((id) => !layers.off.includes(id)), layers.on);
-    deps.layersPanel.showOnly(on);
+    deps.layersPanel.showOnly(switches.on);
     endEase({ ok: true });
     const posed = aimMode() === 'pose';
     // The guide cannot turn someone holding the phone, at a cut any more than in an ease: the pointer shows the way.
@@ -280,9 +271,35 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     takeMarksDown();
     for (const mark of placed) putMark(mark.target, mark.text, mark.direction);
 
-    const loaded = await lazyLayersLoaded(on.map((id) => switchesById.get(id)!));
+    const loaded = await lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!));
     if (!loaded.ok) return loaded;
     return posed ? { ok: true, awaitingGaze: true } : { ok: true };
+  }
+
+  async function preload(view: FoldedView): Promise<ActionOutcome> {
+    // The switches alone: the look and the marks load nothing, and may not resolve until the view gets there.
+    const switches = switchesOn(view.layers);
+    if (!switches.ok) return switches;
+    return lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!));
+  }
+
+  /**
+   * The switches `layers` leaves on, in the order they were turned on, or why it cannot be shown. Restore and preload
+   * both work it out here, so what is loaded ahead is what restore turns on.
+   */
+  function switchesOn(layers: FoldedView['layers']): { readonly ok: true; readonly on: string[] } | Extract<ActionOutcome, { ok: false }> {
+    // What the preset turns on, before what was flipped since: none for a listed scene.
+    let presetOn: readonly string[] = [];
+    if ('preset' in layers) {
+      const preset = deps.presets.find((p) => p.id === layers.preset);
+      if (!preset) return { ok: false, code: 'unknown-preset', message: `no preset ${layers.preset}` };
+      presetOn = preset.on;
+    }
+    const named = 'only' in layers ? layers.only : [...layers.off, ...layers.on];
+    const unknown = [...new Set(named.filter((id) => !switchesById.has(id)))];
+    if (unknown.length > 0) return { ok: false, code: 'unknown-layer', message: `no layer switch ${unknown.join(', ')}` };
+    const on = 'only' in layers ? turnOnInOrder([], layers.only) : turnOnInOrder(presetOn.filter((id) => !layers.off.includes(id)), layers.on);
+    return { ok: true, on };
   }
 
   function borrow(): { end(): void } {
@@ -433,5 +450,5 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return { ok: true, direction: found.direction, ...horizonOf(found.direction, position), offCentreDeg };
   }
 
-  return { perform, restore, borrow, locate, awaitedGaze, stopAwaitingGaze, update };
+  return { perform, restore, preload, borrow, locate, awaitedGaze, stopAwaitingGaze, update };
 }
