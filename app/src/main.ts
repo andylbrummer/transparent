@@ -60,6 +60,7 @@ import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
 import { GazePointer } from './view/gaze-pointer';
+import { CaptionOverlay } from './guides/captions';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -85,6 +86,8 @@ export interface App {
   readonly look: LookController;
   /** The view's actions, for the browser harness: perform a look or a mark by hand. */
   readonly viewControl: ViewControl;
+  /** The caption overlay, for the browser harness: set cues and a time by hand until the player drives it. */
+  readonly captions: CaptionOverlay;
   getSensorState(): SensorState;
   getAppState(): AppState;
   getAvailableModes(): readonly RenderMode[];
@@ -308,6 +311,7 @@ export function init(): App | null {
 
   const compassBar = new CompassBar(container);
   const gazePointer = new GazePointer(container);
+  const captions = new CaptionOverlay(container);
 
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
@@ -623,8 +627,9 @@ export function init(): App | null {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const stereo = !ar && position !== null && cardboard.isActive();
-    // Cardboard and AR draw no pointer yet (phase 3); arrival is still counted there.
+    // Cardboard and AR draw no pointer and no captions yet (phase 3); arrival is still counted there.
     gazePointer.setVisible(position !== null && !ar && !stereo);
+    captions.setVisible(position !== null && !ar && !stereo);
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
@@ -741,6 +746,7 @@ export function init(): App | null {
     globe,
     look,
     viewControl,
+    captions,
     getSensorState: () => sensorState,
     getAppState: () => appState,
     getAvailableModes: () => availableModes,
@@ -784,6 +790,7 @@ export function init(): App | null {
       hud.remove();
       compassBar.dispose();
       gazePointer.dispose();
+      captions.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();
     },

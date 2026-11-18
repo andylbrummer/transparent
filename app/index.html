@@ -10,6 +10,10 @@
       :root {
         /* The compass bar's height: the gaze pointer's clear area starts beneath it. */
         --compass-bar-height: calc(env(safe-area-inset-top) + 46px);
+        /* Clear of the HUD at three lines, as a narrow phone wraps it; the play bar will raise it. */
+        --captions-foot: 80px;
+        /* The voice readout's foot, one eye: above a caption of two lines. */
+        --voice-readout-foot: calc(var(--captions-foot) + 64px);
       }
       html, body {
         margin: 0;
@@ -271,6 +275,35 @@
         border: 2px solid currentColor;
         border-radius: 50%;
         box-shadow: 0 0 3px #000, inset 0 0 3px #000;
+      }
+      /* The narration's captions, near the foot of the view and inside the safe
+         area. Under the gaze pointer (z-index 2), so a ring or an arrow is never
+         hidden by the plate; a caption change is a cut, so there is nothing for
+         reduced motion to take away. */
+      .captions {
+        position: fixed;
+        left: env(safe-area-inset-left);
+        right: env(safe-area-inset-right);
+        bottom: calc(env(safe-area-inset-bottom) + var(--captions-foot));
+        z-index: 1;
+        display: flex;
+        justify-content: center;
+        padding: 0 10px;
+        pointer-events: none;
+      }
+      /* A line the validator allows fits a 360 px phone unwrapped; one that still wraps, in a wide face, breaks
+         evenly rather than leaving a word alone, and a long word never runs off the plate. */
+      .captions__plate {
+        margin: 0;
+        padding: 6px 8px;
+        font: 500 clamp(16px, 4.4vw, 17px)/1.35 system-ui, -apple-system, sans-serif;
+        color: #fff;
+        text-align: center;
+        white-space: pre-line;
+        text-wrap: balance;
+        overflow-wrap: anywhere;
+        background: rgba(5, 5, 16, 0.82);
+        border-radius: 8px;
       }
       #reset-offset,
       #layers-toggle,
@@ -606,7 +639,8 @@
         font-size: 20px;
         color: #9fdcff;
       }
-      /* Voice: what was heard and the reply; in Cardboard one copy per eye (VoiceOverlay.place). */
+      /* Voice: what was heard and the reply; in Cardboard one copy per eye (VoiceOverlay.place).
+         On one screen it stands on its foot above a two-line caption, so the two never cover each other. */
       #voice-status {
         position: fixed;
         inset: 0;
@@ -621,6 +655,7 @@
       }
       .voice-status__readout {
         position: absolute;
+        bottom: calc(env(safe-area-inset-bottom) + var(--voice-readout-foot));
         transform: translateX(-50%);
         width: max-content;
         padding: 8px 12px;

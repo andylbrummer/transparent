@@ -55,17 +55,21 @@ export class VoiceOverlay {
     return !this.element.hidden;
   }
 
-  /** Place the readouts on a screen width×height CSS px: one, or in stereo one per eye, `spacingPx` apart. */
+  /**
+   * Place the readouts on a screen width×height CSS px: one, or in stereo one per eye, `spacingPx` apart.
+   * The one-eye readout's height is the stylesheet's, so it stands above the captions whether or not one shows.
+   */
   place(stereo: boolean, width: number, height: number, spacingPx: number): void {
     const key = `${stereo}:${width}:${height}:${Math.round(spacingPx)}`;
     if (key === this.placedKey) return;
     this.placedKey = key;
-    const top = `${Math.round(height * (stereo ? 0.7 : 0.82))}px`;
     const lefts = stereo ? [width / 2 - spacingPx / 2, width / 2 + spacingPx / 2] : [width / 2];
     this.readouts.forEach((readout, i) => {
       readout.hidden = i >= lefts.length;
       readout.style.left = `${lefts[i] ?? 0}px`;
-      readout.style.top = top;
+      // One eye: the stylesheet stands it on its foot, above the captions. In stereo it hangs from 70% of the height.
+      readout.style.top = stereo ? `${Math.round(height * 0.7)}px` : '';
+      readout.style.bottom = stereo ? 'auto' : '';
       readout.style.maxWidth = `${Math.round(stereo ? spacingPx * 0.9 : width * 0.8)}px`;
     });
   }
