@@ -80,6 +80,9 @@ interface FatLineLayer {
   dispose(): void;
 }
 
+/** What keeps its keys while it has the focus: a guide's key pressed there is the control's, not the guide's. */
+const FOCUS_KEEPS_KEYS = 'button, input, select, textarea, a';
+
 export interface App {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
@@ -545,6 +548,14 @@ export function init(): App | null {
         e.preventDefault();
         return;
       }
+    }
+    // A guide's key is one press, not one held down, and with Ctrl, Cmd or Alt it is the browser's shortcut, not the
+    // guide's. A focused control keeps its keys: Space on a button already clicks it, so taking it here too would do
+    // two things at once. Taken, Space does not scroll the page.
+    const guideKey = !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof Element && e.target.matches(FOCUS_KEEPS_KEYS));
+    if (guideKey && guideSession.onKey(e.key)) {
+      e.preventDefault();
+      return;
     }
     look.onKeyDown(e.key);
   };

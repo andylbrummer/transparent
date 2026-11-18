@@ -11,7 +11,7 @@ import type { CaptionOverlay } from './captions';
 import type { Guide } from './format';
 import { fetchGuide, guideFileUrl, type GuideLink } from './guide-files';
 import { createNarration, type NarrationAudio, type NarrationDeps } from './narration';
-import { PlayBar } from './play-bar';
+import { controlEnabled, PlayBar, type Control, type PlayBarActions } from './play-bar';
 import { createPlayer, type PlayerDeps, type PlayerState } from './player';
 import type { CaptionCue } from './vtt';
 
@@ -55,6 +55,8 @@ export interface GuideSession {
   /** Pause if the guide is playing on: for the page being hidden, and for the browser stopping the sound. */
   pause(): void;
   getGuide(): GuideStatus;
+  /** A key pressed on the page: true when the guide took it. Space pauses or resumes, N and B step, Escape leaves. */
+  onKey(key: string): boolean;
   /** Leave the guide if one is open, then let go of the narration and the page. */
   dispose(): void;
 }
@@ -98,7 +100,8 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     narration.unlock().catch(() => {});
   };
 
-  const bar = new PlayBar(deps.parent, {
+  // The bar's buttons and the keys alike: a key does what its button does.
+  const controls: PlayBarActions = {
     pauseOrResume: () => (isPaused(player.state()) ? player.resume() : pause()),
     // At a gate goOn() meets it; next() would jump and put the view in place afresh.
     next: () => (player.state().kind === 'waiting' ? player.goOn() : player.next()),
@@ -114,7 +117,8 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
       player.toChapter(0);
     },
     leave,
-  });
+  };
+  const bar = new PlayBar(deps.parent, controls);
 
   const guideCard = new GuideCard(deps.parent, {
     start() {
@@ -124,17 +128,19 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
       card = CLOSED;
       showCard();
     },
-    close() {
-      opens++;
-      card = CLOSED;
-      showCard();
-    },
+    close: closeCard,
   });
 
   function pause(): void {
     const state = player.state();
     const playingOn = state.kind === 'loading' || state.kind === 'playing' || state.kind === 'waiting';
     if (playingOn && !state.paused) player.pause();
+  }
+
+  function closeCard(): void {
+    opens++;
+    card = CLOSED;
+    showCard();
   }
 
   function leave(): void {
@@ -211,6 +217,21 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     showCard();
   }
 
+  function onKey(key: string): boolean {
+    // Escape leaves at once, without asking, or closes the card the link opened.
+    if (key === 'Escape') {
+      if (player.state().kind !== 'idle') leave();
+      else if (card.kind !== 'closed') closeCard();
+      else return false;
+      return true;
+    }
+    // A key whose button is disabled is not taken, so it reaches the look.
+    const control = KEY_CONTROLS.get(key);
+    if (control === undefined || !controlEnabled(player.state(), control)) return false;
+    controls[control]();
+    return true;
+  }
+
   function getGuide(): GuideStatus {
     const state = player.state();
     const at = state.kind === 'idle' ? null : state;
@@ -237,8 +258,17 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     guideCard.dispose();
   }
 
-  return { open, update, pause, getGuide, dispose };
+  return { open, update, pause, getGuide, onKey, dispose };
 }
+
+/** The play bar's control each key presses. Escape is not here: it closes the card as well as leaving. */
+const KEY_CONTROLS: ReadonlyMap<string, Control> = new Map([
+  [' ', 'pauseOrResume'],
+  ['n', 'next'],
+  ['N', 'next'],
+  ['b', 'back'],
+  ['B', 'back'],
+]);
 
 /** What the card says of the map's names while the guide waits for them. */
 const LABELS_NOTE: Readonly<Record<ReturnType<GuideSessionDeps['labels']>, string>> = {

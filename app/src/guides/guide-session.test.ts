@@ -144,6 +144,19 @@ async function startPlaying(t: Setup, at: { chapterIndex: number; stepIndex: num
   expect(t.session.getGuide().state).toBe('playing');
 }
 
+/** Start a guide whose first step's audio is not found: the guide halts on the error. */
+async function halt(t: Setup): Promise<void> {
+  t.files[LOOK_DOWN_AUDIO] = () => new Response('', { status: 404 });
+  await start(t);
+  await settle();
+}
+
+/** Play the last step and go on past it: the guide ends. */
+async function end(t: Setup): Promise<void> {
+  await startPlaying(t, LAST_STEP);
+  button(bar, 'Next')!.click();
+}
+
 /** The browser refuses the sound the Start tap asked for: the next tap has to unlock the element again. */
 async function refuseSound(t: Setup): Promise<void> {
   t.audio.plays[0].reject(REFUSED);
@@ -393,21 +406,8 @@ describe('createGuideSession', () => {
 
   it.each<[string, (t: Setup) => Promise<void>]>([
     ['no guide is open', async () => {}],
-    [
-      'the guide has halted',
-      async (t) => {
-        t.files[LOOK_DOWN_AUDIO] = () => new Response('', { status: 404 });
-        await start(t);
-        await settle();
-      },
-    ],
-    [
-      'the guide has ended',
-      async (t) => {
-        await startPlaying(t, LAST_STEP);
-        button(bar, 'Next')!.click();
-      },
-    ],
+    ['the guide has halted', halt],
+    ['the guide has ended', end],
     [
       'the guide is paused already',
       async (t) => {
@@ -459,6 +459,82 @@ describe('createGuideSession', () => {
     t.session.update(16);
     expect(visible(bar())).toBe(false);
     expect(document.body.classList.contains('guide-open')).toBe(false);
+  });
+
+  it('pauses and resumes at Space', async () => {
+    const t = setup();
+    await startPlaying(t);
+    expect(t.session.onKey(' ')).toBe(true);
+    expect(t.session.getGuide().paused).toBe(true);
+    expect(t.session.onKey(' ')).toBe(true);
+    expect(t.session.getGuide().paused).toBe(false);
+  });
+
+  it.each(['n', 'N'])('goes to the next step at %s while a step plays, as Next does', async (key) => {
+    const t = setup();
+    await startPlaying(t);
+    const restores = t.world.restores;
+    expect(t.session.onKey(key)).toBe(true);
+    expect(t.session.getGuide()).toMatchObject({ state: 'loading', stepIndex: 1 });
+    expect(t.world.restores).toBe(restores + 1);
+  });
+
+  it('goes on at N while the guide waits for it, as Next does', async () => {
+    const t = setup({ guide: AT_CONTINUE });
+    await startPlaying(t);
+    t.audio.ended = true;
+    t.session.update(16);
+    expect(t.session.getGuide().state).toBe('waiting');
+    const restores = t.world.restores;
+    expect(t.session.onKey('n')).toBe(true);
+    expect(t.session.getGuide()).toMatchObject({ state: 'loading', stepIndex: 1 });
+    expect(t.world.restores).toBe(restores);
+  });
+
+  it.each(['b', 'B'])('goes back a step at %s, as Back does', async (key) => {
+    const t = setup();
+    await startPlaying(t, LAST_STEP);
+    expect(t.session.onKey(key)).toBe(true);
+    expect(t.session.getGuide()).toMatchObject({ state: 'loading', stepIndex: 1 });
+  });
+
+  it('leaves the guide at Escape, at once, as Leave does', async () => {
+    const t = setup();
+    await startPlaying(t);
+    expect(t.session.onKey('Escape')).toBe(true);
+    expect(t.session.getGuide()).toMatchObject({ id: null, state: 'idle' });
+    expect(t.world.ends).toBe(1);
+    expect(t.captionCalls.at(-1)).toEqual(['setCues', null]);
+  });
+
+  it('closes the card at Escape, as Close does', async () => {
+    const t = setup();
+    t.session.open({ id: ID, at: null });
+    await settle();
+    t.session.update(16);
+    expect(t.session.onKey('Escape')).toBe(true);
+    expect(visible(card())).toBe(false);
+    expect(t.session.getGuide()).toMatchObject({ id: null, card: 'closed', state: 'idle' });
+  });
+
+  it.each<[string, string, (t: Setup) => Promise<void>]>([
+    [' ', 'the guide has halted', halt],
+    ['n', 'the guide has halted', halt],
+    [' ', 'the guide has ended', end],
+    ['ArrowLeft', 'a step plays', (t) => startPlaying(t)],
+    ['Enter', 'a step plays', (t) => startPlaying(t)],
+  ])('leaves %j to the page when %s, its button disabled or the key not the guide’s', async (key, _, reach) => {
+    const t = setup();
+    await reach(t);
+    const before = t.session.getGuide();
+    expect(t.session.onKey(key)).toBe(false);
+    expect(t.session.getGuide()).toEqual(before);
+  });
+
+  it.each([' ', 'n', 'b', 'Escape'])('leaves %j to the page when no guide is open', (key) => {
+    const t = setup();
+    expect(t.session.onKey(key)).toBe(false);
+    expect(t.session.getGuide()).toMatchObject({ card: 'closed', state: 'idle' });
   });
 
   it('leaves the guide before cutting off its downloads at dispose, so no abort shows as an error', async () => {

@@ -15,7 +15,7 @@ export interface PlayBarActions {
   leave(): void;
 }
 
-type Control = 'back' | 'repeat' | 'pauseOrResume' | 'next' | 'leave';
+export type Control = 'back' | 'repeat' | 'pauseOrResume' | 'next' | 'leave';
 const CONTROLS: readonly Control[] = ['back', 'repeat', 'pauseOrResume', 'next', 'leave'];
 
 /** The button the status line offers, by its label: what pressing it does. */
@@ -41,6 +41,11 @@ const ENABLED: Readonly<Record<Exclude<PlayerState['kind'], 'idle'>, Readonly<Re
   error: { back: false, repeat: false, pauseOrResume: false, next: false, leave: true },
   ended: { back: true, repeat: false, pauseOrResume: false, next: false, leave: true },
 };
+
+/** Whether a control does anything in `state`: its button is enabled, and its key, if it has one, is taken. */
+export function controlEnabled(state: PlayerState, control: Control): boolean {
+  return state.kind !== 'idle' && ENABLED[state.kind][control];
+}
 
 /**
  * The guide's controls and its status, along the foot of the page. It shows what it is given and passes
