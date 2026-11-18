@@ -3,13 +3,14 @@ import * as THREE from 'three';
 import type { ActionOutcome, AwaitedGaze, FoldedView, Target, ViewAction } from '../view/actions';
 import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
 import { foldTo, type Guide } from './format';
-import { CONTINUE_OFFER_MS, createPlayer, type Narration, type PlayerDeps, type StepClock, type StepMedia } from './player';
+import { CONTINUE_OFFER_MS, REPEAT_S, createPlayer, type Narration, type PlayerDeps, type StepClock, type StepMedia } from './player';
 import type { CaptionCue } from './vtt';
 
 const EAST: Target = { kind: 'horizon', azDeg: 90, altDeg: 0 };
 const NORTH: Target = { kind: 'horizon', azDeg: 0, altDeg: 0 };
 const narration = (name: string): Narration => ({ audio: `audio/${name}.m4a`, captions: `audio/${name}.vtt` });
 const SPOKEN = narration('01-spoken');
+const ASK = narration('04-ask');
 
 /** Two chapters. The first: a narration, then a silence, both auto. The second: a narration with a gaze gate, then one with a continue gate. */
 const GUIDE: Guide = {
@@ -58,7 +59,7 @@ const GUIDE: Guide = {
           ],
           advance: 'gaze',
         },
-        { id: 'ask', narration: narration('04-ask'), cues: [{ at: 0, do: 'mark', target: NORTH, text: null }], advance: 'continue' },
+        { id: 'ask', narration: ASK, cues: [{ at: 0, do: 'mark', target: NORTH, text: null }], advance: 'continue' },
       ],
     },
   ],
@@ -80,9 +81,12 @@ function deferred<T>() {
 }
 type Deferred<T> = ReturnType<typeof deferred<T>>;
 
-/** A narration clock the test sets: its time, whether it is over and why it failed. It counts its plays and pauses. */
+/**
+ * A narration clock the test sets: its time, whether it is over and why it failed. It counts its plays and pauses
+ * and records each seek, which moves it there and makes it not over.
+ */
 function fakeClock() {
-  const fake = { t: 0, over: false, failure: null as string | null, plays: 0, pauses: 0 };
+  const fake = { t: 0, over: false, failure: null as string | null, plays: 0, pauses: 0, seeks: [] as number[] };
   const clock: StepClock = {
     timeS: () => fake.t,
     isOver: () => fake.over,
@@ -92,6 +96,11 @@ function fakeClock() {
     },
     pause() {
       fake.pauses++;
+    },
+    seek(tS) {
+      fake.seeks.push(tS);
+      fake.t = tS;
+      fake.over = false;
     },
   };
   return Object.assign(fake, { clock });
@@ -697,6 +706,213 @@ describe('createPlayer', () => {
       expect(t.player.state()).toEqual({ kind: 'idle' });
       t.player.start(GUIDE);
       expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0), paused: false });
+    });
+  });
+
+  describe('jump', () => {
+    /** Finish the jump just made: its restore, and its narration on `clock` when it loads one. */
+    async function land(t: Setup, clock?: FakeClock): Promise<void> {
+      t.restored.at(-1)!.outcome.resolve({ ok: true });
+      if (clock) t.loads.at(-1)!.media.resolve({ clock: clock.clock, captions: [] });
+      await settle();
+    }
+
+    it('goes to the next step’s start: the view folded there, its narration loaded and played from 0', async () => {
+      const t = setup();
+      const find = await toFind(t);
+      find.t = 0.5;
+      t.player.next();
+      expect(find.pauses).toBe(1);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
+      expect(t.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 1, 1, 0));
+      expect(t.loads.at(-1)!.narration).toEqual(ASK);
+      const ask = fakeClock();
+      await land(t, ask);
+      expect(ask.seeks).toEqual([0]);
+      expect(ask.plays).toBe(1);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 1) });
+      // Its cue at 0 is in the view restore put in place.
+      const fired = t.actions().length;
+      t.player.update(16);
+      expect(t.actions().length).toBe(fired);
+    });
+
+    it('goes on to the next chapter, from the last step to the end, and no further', async () => {
+      const t = setup();
+      await begin(t);
+      t.player.next();
+      await land(t);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 1) });
+      t.player.next();
+      expect(t.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 1, 0, 0));
+      await land(t, fakeClock());
+      t.player.next();
+      const ask = fakeClock();
+      await land(t, ask);
+      const restores = t.restored.length;
+      t.player.next();
+      expect(t.player.state()).toEqual({ kind: 'ended', ...where(GUIDE, 1, 1) });
+      expect(ask.pauses).toBe(1);
+      expect(t.restored.length).toBe(restores);
+      expect(() => t.player.next()).toThrow(new Error('the guide cannot go to the next step now'));
+    });
+
+    it('goes back to the step before, across a chapter, to the first step’s own start, and from the end to the last step', async () => {
+      const t = setup();
+      const spoken = await begin(t);
+      spoken.t = 3;
+      t.player.back();
+      expect(t.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 0, 0, 0));
+      // The step's narration is in hand: no second load.
+      expect(t.loads.length).toBe(1);
+      await land(t);
+      expect(spoken.seeks).toEqual([0, 0]);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 0) });
+
+      const u = setup();
+      await toFind(u);
+      u.player.back();
+      expect(u.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 1), paused: false });
+      expect(u.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 0, 1, 0));
+
+      const v = setup();
+      const ask = await toAsk(v);
+      ask.over = true;
+      v.player.update(16);
+      v.player.goOn();
+      const loads = v.loads.length;
+      v.player.back();
+      expect(v.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
+      expect(v.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 1, 1, 0));
+      expect(v.loads.length).toBe(loads);
+    });
+
+    it('repeats the last 10 s, no further back than the start: cues before stay done and those after fire again', async () => {
+      const t = setup();
+      const clock = await begin(t);
+      const cues = FIRST.steps[0].cues;
+      clock.t = 12;
+      t.player.update(16);
+      expect(t.actions()).toEqual(cues.slice(1));
+      t.player.repeat();
+      expect(t.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 0, 0, 12 - REPEAT_S));
+      expect(t.loads.length).toBe(1);
+      await land(t);
+      expect(clock.seeks.at(-1)).toBe(2);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', tS: 2 });
+      t.player.update(16);
+      expect(t.actions()).toEqual(cues.slice(1));
+      clock.t = 12;
+      t.player.update(16);
+      expect(t.actions()).toEqual([...cues.slice(1), ...cues.slice(2)]);
+      clock.t = 4;
+      t.player.repeat();
+      expect(t.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 0, 0, 0));
+      await land(t);
+      expect(clock.seeks.at(-1)).toBe(0);
+    });
+
+    it('repeats from a gate, playing again', async () => {
+      const t = setup();
+      const find = await toFind(t);
+      find.t = 5;
+      find.over = true;
+      t.player.update(16);
+      expect(t.player.state().kind).toBe('waiting');
+      t.player.repeat();
+      await land(t);
+      expect(find.seeks.at(-1)).toBe(0);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 0), tS: 0 });
+      expect(() => setup().player.repeat()).toThrow(new Error('the guide cannot repeat now'));
+    });
+
+    it('goes to a chapter’s first step, and refuses a chapter the guide does not have', async () => {
+      const t = setup();
+      expect(() => t.player.toChapter(1)).toThrow(new Error('the guide cannot change chapter now'));
+      await begin(t);
+      t.player.toChapter(1);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0), paused: false });
+      expect(t.restored.at(-1)!.view).toEqual(foldTo(GUIDE, 1, 0, 0));
+      for (const bad of [2, -1, 0.5, NaN]) {
+        expect(() => t.player.toChapter(bad)).toThrow(new RangeError(`guide two-chapters has no chapter ${bad}`));
+      }
+    });
+
+    it('retries the step an error halted in, loading its narration again', async () => {
+      const t = setup();
+      const clock = await begin(t);
+      expect(() => t.player.retry()).toThrow(new Error('the guide cannot retry now'));
+      clock.failure = 'the audio could not be decoded';
+      t.player.update(16);
+      expect(t.player.state().kind).toBe('error');
+      t.player.retry();
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 0, 0), paused: false });
+      expect(t.restored.map((r) => r.view)).toEqual([foldTo(GUIDE, 0, 0, 0), foldTo(GUIDE, 0, 0, 0)]);
+      expect(t.loads.length).toBe(2);
+      const again = fakeClock();
+      await land(t, again);
+      expect(again.plays).toBe(1);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 0, 0) });
+    });
+
+    it('drops what the step it left was waiting for: a late refusal changes nothing, and an old look holds no gate', async () => {
+      const t = setup();
+      const find = await toFind(t);
+      find.t = 1;
+      t.player.update(16);
+      const oldLook = t.performed.at(-1)!;
+      t.player.repeat();
+      await land(t);
+      find.t = 5;
+      t.player.update(16);
+      const look = t.performed.at(-1)!;
+      expect(look).not.toBe(oldLook);
+      look.outcome.resolve({ ok: true });
+      oldLook.outcome.resolve({ ok: false, code: 'target-unresolved', message: 'no position yet' });
+      await settle();
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 0) });
+      find.over = true;
+      t.player.update(16);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 1), paused: false });
+    });
+
+    it('keeps a paused guide paused through a jump: the step lands silent, its clock moved to the place', async () => {
+      const t = setup();
+      await begin(t);
+      t.player.pause();
+      t.player.toChapter(1);
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0), paused: true });
+      const find = fakeClock();
+      await land(t, find);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 0), paused: true });
+      expect(find.seeks).toEqual([0]);
+      expect(find.plays).toBe(0);
+    });
+
+    it('lets the last of two jumps win: the first one’s load lands into nothing', async () => {
+      const t = setup();
+      t.player.start(GUIDE);
+      t.player.toChapter(1);
+      const first = fakeClock();
+      t.restored[0].outcome.resolve({ ok: true });
+      t.loads[0].media.resolve({ clock: first.clock, captions: [] });
+      await settle();
+      expect(t.player.state()).toEqual({ kind: 'loading', ...where(GUIDE, 1, 0), paused: false });
+      expect(first.plays).toBe(0);
+      const find = fakeClock();
+      await land(t, find);
+      expect(find.plays).toBe(1);
+      expect(t.player.state()).toMatchObject({ kind: 'playing', ...where(GUIDE, 1, 0) });
+    });
+
+    it('halts naming the step it was going to when its view cannot be put in place', async () => {
+      const t = setup();
+      await begin(t);
+      t.player.toChapter(1);
+      t.loads.at(-1)!.media.resolve({ clock: fakeClock().clock, captions: [] });
+      t.restored.at(-1)!.outcome.resolve({ ok: false, code: 'unknown-layer', message: 'no layer switch clouds' });
+      await settle();
+      expect(t.player.state()).toEqual({ kind: 'error', ...where(GUIDE, 1, 0), message: 'second/find: no layer switch clouds' });
     });
   });
 });

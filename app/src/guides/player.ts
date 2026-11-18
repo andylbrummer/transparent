@@ -2,6 +2,8 @@
  * The guide player: a state machine that plays a guide's steps in order
  * (spec/guides.md §5). It fires each cue when the step's clock passes it,
  * and moves on when the narration is over and the step's gate is met.
+ * Every move elsewhere in the guide is a jump: the view there is a fold of
+ * the cues up to it (foldTo), put in place in one go, with no undo.
  *
  * Pure: no DOM, no audio, no fetch and no timers. The narration comes in
  * through loadNarration and the view goes out through ViewControl, so the
@@ -28,6 +30,8 @@ export interface StepClock {
   /** Run on from where it stands. Nothing once it is over: it does not start again. */
   play(): void;
   pause(): void;
+  /** Jump to `tS`, clamped to the narration's length. isOver() is false again unless that is its end. */
+  seek(tS: number): void;
 }
 
 /** What a narrated step plays: its clock and its captions. */
@@ -69,6 +73,8 @@ export type PlayerState =
 
 /** How long a gaze gate waits before the player offers a way on. */
 export const CONTINUE_OFFER_MS = 20_000;
+/** How far repeat() goes back. */
+export const REPEAT_S = 10;
 
 export interface Player {
   /** Borrow the view and play `guide` from its first step. */
@@ -79,6 +85,19 @@ export interface Player {
   pause(): void;
   /** Go on from where pause() stopped. */
   resume(): void;
+  /**
+   * To the start of the next step; from the last step, to the guide's end. At a gate too it jumps, folding the view
+   * afresh: goOn() is what meets the gate, so a Next button calls goOn() while the guide waits and next() otherwise.
+   */
+  next(): void;
+  /** To the start of the step before; from the first step, to its own start. */
+  back(): void;
+  /** Back REPEAT_S within the step, no further than its start. */
+  repeat(): void;
+  /** To a chapter's first step. */
+  toChapter(chapterIndex: number): void;
+  /** From an error: the step it halted in, again from its start. */
+  retry(): void;
   /** Leave the guide from any state: the view goes back as it was. */
   exit(): void;
   /** Once a frame, before ViewControl.update: fires the cues that are due and moves on when a step is done. */
@@ -91,23 +110,27 @@ interface SilenceClock extends StepClock {
   advance(deltaMs: number): void;
 }
 
-/** The step under way, once its media is in. */
-interface StepPlay {
-  readonly clock: StepClock;
-  readonly captions: readonly CaptionCue[];
+/** A step's media once in. Kept while the guide stays in the step, so a jump within it does not load it again. */
+interface LoadedStep extends StepMedia {
   /** The same clock, for a silence: update moves it on. Null for a narration, which keeps its own time. */
   readonly silence: SilenceClock | null;
-  /** The next cue to fire. */
-  nextCue: number;
 }
 
 /** What the player is doing with the guide; null when it has none. */
 type Phase =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'playing'; readonly step: StepPlay }
-  | { readonly kind: 'waiting'; readonly gate: 'gaze' | 'continue'; waitedMs: number }
+  /** `nextCue`: the next of the step's cues to fire. */
+  | { readonly kind: 'playing'; readonly loaded: LoadedStep; nextCue: number }
+  | { readonly kind: 'waiting'; readonly loaded: LoadedStep; readonly gate: 'gaze' | 'continue'; waitedMs: number }
   | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ended' };
+  /** The last step's media, if it got as far as playing, for a jump back into it. */
+  | { readonly kind: 'ended'; readonly loaded: LoadedStep | null };
+
+type PhaseKind = Phase['kind'];
+
+/** Where next(), back() and toChapter() may be called; next() not from the end, which it would go past. */
+const MOVING: readonly PhaseKind[] = ['loading', 'playing', 'waiting', 'ended'];
+const PLAYING_ON: readonly PhaseKind[] = ['loading', 'playing', 'waiting'];
 
 /** The guide being played and the view it has borrowed. */
 interface Session {
@@ -118,50 +141,68 @@ interface Session {
   phase: Phase;
   /** Looks performed whose promise has not settled: an ease under way. A gaze gate waits for them. */
   unsettledLooks: number;
-  /** The clock last played, so exit, an error or the end can stop it. */
-  clock: StepClock | null;
   /** pause() has stopped the guide: only while a step loads, plays or waits. */
   paused: boolean;
 }
 
+/** The step's clock, where the phase has one: the clock to stop when the guide leaves it. */
+const clockOf = (phase: Phase): StepClock | null => ('loaded' in phase ? (phase.loaded?.clock ?? null) : null);
+
 export function createPlayer(deps: PlayerDeps): Player {
   let session: Session | null = null;
-  // Every start and exit begins a new run. A promise from an earlier run settles into nothing: its guide is gone.
+  // Every start, exit and jump begins a new run. A promise from an earlier run settles into nothing: what it was for is gone.
   let run = 0;
 
-  /** Load step `stepIndex` of chapter `chapterIndex`, then play it. */
-  function enter(current: Session, chapterIndex: number, stepIndex: number): void {
-    const { guide } = current;
+  /** The session, if the guide is in one of `kinds`; else `verb` cannot be done now. */
+  function sessionIn(kinds: readonly PhaseKind[], verb: string): Session {
+    if (!session || !kinds.includes(session.phase.kind)) throw new Error(`the guide cannot ${verb} now`);
+    return session;
+  }
+
+  /** Drop whatever the step being left was still waiting for, so a late answer cannot halt or hold up what comes next. */
+  function dropPending(current: Session): void {
+    run++;
+    current.unsettledLooks = 0;
+  }
+
+  /**
+   * Put the view as the guide has it `tS` into step `stepIndex` of chapter `chapterIndex`, then play the step from
+   * there. `playedOn`: the step before is done and this one follows it, as playing through does. Then what the step
+   * before is still waiting for stays, and the view is not put in place but at a chapter's start: within a chapter
+   * the step goes on from the cues before it.
+   */
+  function jump(current: Session, chapterIndex: number, stepIndex: number, tS: number, playedOn = false): void {
+    const { guide, phase } = current;
+    clockOf(phase)?.pause();
+    if (!playedOn) dropPending(current);
     const thisRun = run;
+    // The same step's media, if it is in hand: a jump within a step does not load it again.
+    const inHand = 'loaded' in phase && chapterIndex === current.chapterIndex && stepIndex === current.stepIndex ? phase.loaded : null;
     const step = guide.chapters[chapterIndex].steps[stepIndex];
     current.chapterIndex = chapterIndex;
     current.stepIndex = stepIndex;
     const loading: Phase = { kind: 'loading' };
     current.phase = loading;
     // Both may wait on the network, so both start now and are waited for together.
-    let silenceClock: SilenceClock | null = null;
-    let media: Promise<StepMedia>;
-    if ('narration' in step) media = deps.loadNarration(guide, step.narration);
-    else {
-      silenceClock = silence(step.silenceS);
-      media = Promise.resolve({ clock: silenceClock, captions: [] });
-    }
-    // A chapter starts from its whole scene. A later step goes on from the cues before it, which are in the view already.
-    const restoring = stepIndex === 0;
-    const scene: Promise<ActionOutcome> = restoring ? deps.view.restore(foldTo(guide, chapterIndex, 0, 0)) : Promise.resolve({ ok: true });
-    // Only while this load is still what the player waits on: an exit, or a cue of the step before that has failed since, leaves it.
+    const media = inHand ? Promise.resolve(inHand) : load(guide, step);
+    const restoring = !playedOn || stepIndex === 0;
+    const scene: Promise<ActionOutcome> = restoring
+      ? deps.view.restore(foldTo(guide, chapterIndex, stepIndex, tS))
+      : Promise.resolve({ ok: true });
+    // Only while this load is still what the player waits on: an exit, a jump, or a cue of the step before that has
+    // failed since, leaves it.
     const stillLoading = (): boolean => thisRun === run && current.phase === loading;
     Promise.all([media, scene]).then(
       ([loaded, outcome]) => {
         if (!stillLoading()) return;
         if (!outcome.ok) return fail(current, chapterIndex, stepIndex, outcome.message);
-        // The scene was folded at the step's start, so its cues at 0 are in the view already.
+        // The view put in place holds the cues up to tS already. Played on within a chapter, it holds none of this step's.
         let nextCue = 0;
-        if (restoring) while (nextCue < step.cues.length && step.cues[nextCue].at <= 0) nextCue++;
-        current.clock = loaded.clock;
-        // Paused while it loaded, as leaving the tab does: it waits at its start, silent, for resume.
+        if (restoring) while (nextCue < step.cues.length && step.cues[nextCue].at <= tS) nextCue++;
+        loaded.clock.seek(tS);
+        // Paused while it loaded, as leaving the tab does: it waits where it is, silent, for resume.
         if (!current.paused) loaded.clock.play();
-        current.phase = { kind: 'playing', step: { clock: loaded.clock, captions: loaded.captions, silence: silenceClock, nextCue } };
+        current.phase = { kind: 'playing', loaded, nextCue };
       },
       (error: unknown) => {
         if (stillLoading()) fail(current, chapterIndex, stepIndex, reason(error));
@@ -169,15 +210,22 @@ export function createPlayer(deps: PlayerDeps): Player {
     );
   }
 
-  /** Fire the step's cues due by `tS`, in order, each once. */
-  function fireDue(current: Session, step: StepPlay, cues: readonly Cue[], tS: number): void {
-    while (step.nextCue < cues.length && cues[step.nextCue].at <= tS) fire(current, cues[step.nextCue++]);
+  /** A step's narration, or a silence the player times itself. */
+  function load(guide: Guide, step: Step): Promise<LoadedStep> {
+    if ('narration' in step) return deps.loadNarration(guide, step.narration).then((media) => ({ ...media, silence: null }));
+    const clock = silence(step.silenceS);
+    return Promise.resolve({ clock, captions: [], silence: clock });
+  }
+
+  /** Fire the playing step's cues due by `tS`, in order, each once. */
+  function fireDue(current: Session, playing: { nextCue: number }, cues: readonly Cue[], tS: number): void {
+    while (playing.nextCue < cues.length && cues[playing.nextCue].at <= tS) fire(current, cues[playing.nextCue++]);
   }
 
   /** Perform a cue and go on without waiting: an ease can outlast the time to the next cue. */
   function fire(current: Session, cue: Cue): void {
     const thisRun = run;
-    // Named in an error as the step the cue is in, which the guide may have left by the time it fails.
+    // Named in an error as the step the cue is in, which the guide may have played on from by the time it fails.
     const { chapterIndex, stepIndex } = current;
     const look = cue.do === 'look';
     if (look) current.unsettledLooks++;
@@ -197,14 +245,25 @@ export function createPlayer(deps: PlayerDeps): Player {
     return current.unsettledLooks === 0 && deps.view.awaitedGaze() === null;
   }
 
-  /** The step after the one `current` is at, or the end of the guide. */
-  function next(current: Session): void {
-    const { guide, chapterIndex, stepIndex } = current;
-    if (stepIndex + 1 < guide.chapters[chapterIndex].steps.length) return enter(current, chapterIndex, stepIndex + 1);
-    if (chapterIndex + 1 < guide.chapters.length) return enter(current, chapterIndex + 1, 0);
-    current.clock?.pause();
+  /** The step after the one `current` is at; null from the last. */
+  function stepAfter({ guide, chapterIndex, stepIndex }: Session): { chapterIndex: number; stepIndex: number } | null {
+    if (stepIndex + 1 < guide.chapters[chapterIndex].steps.length) return { chapterIndex, stepIndex: stepIndex + 1 };
+    if (chapterIndex + 1 < guide.chapters.length) return { chapterIndex: chapterIndex + 1, stepIndex: 0 };
+    return null;
+  }
+
+  /** The step is over and its gate met: play on into the next, or end the guide. */
+  function stepDone(current: Session): void {
+    const after = stepAfter(current);
+    if (after) jump(current, after.chapterIndex, after.stepIndex, 0, true);
+    else end(current);
+  }
+
+  function end(current: Session): void {
+    const { phase } = current;
+    clockOf(phase)?.pause();
     current.paused = false;
-    current.phase = { kind: 'ended' };
+    current.phase = { kind: 'ended', loaded: 'loaded' in phase ? phase.loaded : null };
   }
 
   /**
@@ -214,7 +273,7 @@ export function createPlayer(deps: PlayerDeps): Player {
   function fail(current: Session, chapterIndex: number, stepIndex: number, why: string): void {
     if (current.phase.kind === 'error') return;
     const chapter = current.guide.chapters[chapterIndex];
-    current.clock?.pause();
+    clockOf(current.phase)?.pause();
     current.paused = false;
     current.phase = { kind: 'error', message: `${chapter.id}/${chapter.steps[stepIndex].id}: ${why}` };
   }
@@ -226,18 +285,18 @@ export function createPlayer(deps: PlayerDeps): Player {
     const { phase } = current;
     if (phase.kind === 'playing') {
       const step = current.guide.chapters[current.chapterIndex].steps[current.stepIndex];
-      const { clock } = phase.step;
-      phase.step.silence?.advance(deltaMs);
+      const { clock, silence } = phase.loaded;
+      silence?.advance(deltaMs);
       const failure = clock.failure();
       if (failure !== null) return fail(current, current.chapterIndex, current.stepIndex, failure);
-      fireDue(current, phase.step, step.cues, clock.timeS());
+      fireDue(current, phase, step.cues, clock.timeS());
       if (!clock.isOver()) return;
       // Every cue left, since only the clock knows when the step ends (foldTo takes them all past the end too).
-      fireDue(current, phase.step, step.cues, Infinity);
-      if (step.advance === 'auto' || (step.advance === 'gaze' && looksDone(current))) return next(current);
-      current.phase = { kind: 'waiting', gate: step.advance, waitedMs: 0 };
+      fireDue(current, phase, step.cues, Infinity);
+      if (step.advance === 'auto' || (step.advance === 'gaze' && looksDone(current))) return stepDone(current);
+      current.phase = { kind: 'waiting', loaded: phase.loaded, gate: step.advance, waitedMs: 0 };
     } else if (phase.kind === 'waiting') {
-      if (phase.gate === 'gaze' && looksDone(current)) return next(current);
+      if (phase.gate === 'gaze' && looksDone(current)) return stepDone(current);
       phase.waitedMs += deltaMs;
     }
   }
@@ -250,7 +309,7 @@ export function createPlayer(deps: PlayerDeps): Player {
       case 'loading':
         return { ...at, kind: 'loading', paused };
       case 'playing':
-        return { ...at, kind: 'playing', paused, tS: phase.step.clock.timeS(), captions: phase.step.captions };
+        return { ...at, kind: 'playing', paused, tS: phase.loaded.clock.timeS(), captions: phase.loaded.captions };
       case 'waiting': {
         const offerContinue = phase.gate === 'gaze' && phase.waitedMs >= CONTINUE_OFFER_MS;
         return { ...at, kind: 'waiting', paused, gate: phase.gate, offerContinue };
@@ -265,17 +324,16 @@ export function createPlayer(deps: PlayerDeps): Player {
   return {
     start(guide) {
       if (session) throw new Error('a guide is already playing');
-      run++;
       const borrow = deps.view.borrow();
-      session = { guide, borrow, chapterIndex: 0, stepIndex: 0, phase: { kind: 'loading' }, unsettledLooks: 0, clock: null, paused: false };
-      enter(session, 0, 0);
+      session = { guide, borrow, chapterIndex: 0, stepIndex: 0, phase: { kind: 'loading' }, unsettledLooks: 0, paused: false };
+      jump(session, 0, 0, 0);
     },
     goOn() {
       const current = session;
       if (current?.phase.kind !== 'waiting') throw new Error('the guide is not waiting to go on');
       // The user gave up looking: the look's field of view is not applied.
       if (current.phase.gate === 'gaze') deps.view.stopAwaitingGaze();
-      next(current);
+      stepDone(current);
     },
     pause() {
       const current = session;
@@ -285,20 +343,54 @@ export function createPlayer(deps: PlayerDeps): Player {
       }
       current.paused = true;
       // Only a playing step's clock runs: a waiting one is over, and a loading one has not started.
-      if (current.phase.kind === 'playing') current.phase.step.clock.pause();
+      if (current.phase.kind === 'playing') current.phase.loaded.clock.pause();
     },
     resume() {
       const current = session;
       if (!current?.paused) throw new Error('the guide is not paused');
       current.paused = false;
-      if (current.phase.kind === 'playing') current.phase.step.clock.play();
+      if (current.phase.kind === 'playing') current.phase.loaded.clock.play();
+    },
+    next() {
+      const current = sessionIn(PLAYING_ON, 'go to the next step');
+      const after = stepAfter(current);
+      if (after) return jump(current, after.chapterIndex, after.stepIndex, 0);
+      dropPending(current);
+      end(current);
+    },
+    back() {
+      const current = sessionIn(MOVING, 'go back');
+      const { guide, chapterIndex, stepIndex, phase } = current;
+      // The end is the last step finished, so back from it is that step again.
+      if (phase.kind === 'ended' || (chapterIndex === 0 && stepIndex === 0)) return jump(current, chapterIndex, stepIndex, 0);
+      if (stepIndex > 0) return jump(current, chapterIndex, stepIndex - 1, 0);
+      jump(current, chapterIndex - 1, guide.chapters[chapterIndex - 1].steps.length - 1, 0);
+    },
+    repeat() {
+      const current = sessionIn(['playing', 'waiting'], 'repeat');
+      // Both phases let through have the step's clock.
+      const clock = clockOf(current.phase)!;
+      jump(current, current.chapterIndex, current.stepIndex, Math.max(0, clock.timeS() - REPEAT_S));
+    },
+    toChapter(chapterIndex) {
+      const current = sessionIn(MOVING, 'change chapter');
+      const { guide } = current;
+      if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= guide.chapters.length) {
+        throw new RangeError(`guide ${guide.id} has no chapter ${chapterIndex}`);
+      }
+      jump(current, chapterIndex, 0, 0);
+    },
+    retry() {
+      const current = sessionIn(['error'], 'retry');
+      // The error phase holds no media, so the step loads again: what failed may well have been its narration.
+      jump(current, current.chapterIndex, current.stepIndex, 0);
     },
     exit() {
       const current = session;
       if (!current) throw new Error('no guide is playing');
       run++;
       session = null;
-      current.clock?.pause();
+      clockOf(current.phase)?.pause();
       deps.view.stopAwaitingGaze();
       current.borrow.end();
     },
@@ -312,18 +404,25 @@ const reason = (error: unknown): string => (error instanceof Error ? error.messa
 
 /** The clock of a silence `lengthS` seconds long. */
 function silence(lengthS: number): SilenceClock {
+  // Where the last seek put it, and the frame time summed since: seconds from summed milliseconds, not summed
+  // seconds, so a whole number of frames lands on the length exactly.
+  let fromS = 0;
   let elapsedMs = 0;
   let playing = false;
-  // Seconds from the summed milliseconds, not summed seconds, so a whole number of frames lands on the length exactly.
+  const atS = (): number => fromS + elapsedMs / 1000;
   return {
-    timeS: () => Math.min(lengthS, elapsedMs / 1000),
-    isOver: () => elapsedMs / 1000 >= lengthS,
+    timeS: () => Math.min(lengthS, atS()),
+    isOver: () => atS() >= lengthS,
     failure: () => null,
     play() {
       playing = true;
     },
     pause() {
       playing = false;
+    },
+    seek(tS) {
+      fromS = Math.min(lengthS, Math.max(0, tS));
+      elapsedMs = 0;
     },
     advance(deltaMs) {
       if (playing) elapsedMs += deltaMs;
