@@ -337,6 +337,106 @@ describe('createNarration', () => {
     expect(t.created.length).toBe(1);
   });
 
+  describe('preload', () => {
+    const THIRD: Narration = { audio: 'audio/03-sea.m4a', captions: 'audio/03-sea.vtt' };
+
+    /** A file that answers each fetch with the next of `answers`, the last for every fetch after. */
+    const answering =
+      (...answers: (() => Response)[]): (() => Response) =>
+      () =>
+        (answers.length > 1 ? answers.shift()! : answers[0])();
+    const ok = (body: string) => () => new Response(body);
+    const status = (code: number) => () => new Response('', { status: code });
+
+    it('hands a load the fetch a preload made, without asking the network again', async () => {
+      const t = setup();
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      await settle();
+      let media: StepMedia | undefined;
+      void t.narration.loadNarration(EXAMPLE_GUIDE, FIRST).then((loaded) => (media = loaded));
+      await settle();
+      expect(media?.captions).toEqual(parseVtt(VTT));
+      expect(t.fetched).toEqual([url(FIRST.audio), url(FIRST.captions)]);
+      expect(await t.created[0].text()).toBe('first audio');
+    });
+
+    it('shares a preload still on its way with the load that comes for it', async () => {
+      const answers = new Map<string, ReturnType<typeof deferred<Response>>>();
+      const t = setup({
+        fetch(requested) {
+          const answer = deferred<Response>();
+          answers.set(requested, answer);
+          return answer.promise;
+        },
+      });
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      const loading = t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(t.fetched).toEqual([url(FIRST.audio), url(FIRST.captions)]);
+      answers.get(url(FIRST.audio))!.resolve(new Response('first audio'));
+      answers.get(url(FIRST.captions))!.resolve(new Response(VTT));
+      expect((await loading).captions).toEqual(parseVtt(VTT));
+      expect(t.audio.srcs).toEqual(['blob:1']);
+    });
+
+    // An unhandled rejection from the preload would fail the run.
+    it.each<[string, () => Response, string | null]>([
+      ['plays when the fetch then works', ok('first audio'), null],
+      ['rejects with its own failure when the fetch fails again', status(404), 'audio/01-look-down.m4a: HTTP 404'],
+    ])('says nothing when a preload fails, and the load fetches again: %s', async (_, second, failure) => {
+      const t = setup({ files: { [url(FIRST.audio)]: answering(status(503), second) } });
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      await settle();
+      const loading = t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      if (failure === null) await expect(loading).resolves.toMatchObject({ captions: parseVtt(VTT) });
+      else await expect(loading).rejects.toThrow(new Error(failure));
+      expect(t.fetched.filter((fetched) => fetched === url(FIRST.audio)).length).toBe(2);
+    });
+
+    it('forgets a load that failed, so the retry fetches again', async () => {
+      const t = setup({ files: { [url(FIRST.audio)]: answering(status(503), ok('first audio')) } });
+      await expect(t.narration.loadNarration(EXAMPLE_GUIDE, FIRST)).rejects.toThrow(new Error('audio/01-look-down.m4a: HTTP 503'));
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(t.fetched.filter((fetched) => fetched === url(FIRST.audio)).length).toBe(2);
+      expect(t.audio.srcs).toEqual(['blob:1']);
+    });
+
+    it('keeps only the latest load and the latest preload', async () => {
+      const t = setup({ files: { [url(THIRD.audio)]: ok('third audio'), [url(THIRD.captions)]: ok(VTT) } });
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      t.narration.preload(EXAMPLE_GUIDE, SECOND);
+      await t.narration.loadNarration(EXAMPLE_GUIDE, SECOND);
+      t.narration.preload(EXAMPLE_GUIDE, THIRD);
+      await settle();
+      expect(t.fetched.length).toBe(6);
+      // The step playing and the step after it are still in hand.
+      await t.narration.loadNarration(EXAMPLE_GUIDE, SECOND);
+      t.narration.preload(EXAMPLE_GUIDE, THIRD);
+      await settle();
+      expect(t.fetched.length).toBe(6);
+      // The step before is fetched again.
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(t.fetched.slice(6)).toEqual([url(FIRST.audio), url(FIRST.captions)]);
+    });
+
+    it('never touches the element', async () => {
+      const t = setup();
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      await settle();
+      expect(t.audio.srcs).toEqual([]);
+      expect(t.audio.plays).toEqual([]);
+      expect(t.created).toEqual([]);
+    });
+
+    it('forgets every fetch on dispose', async () => {
+      const t = setup();
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      await settle();
+      t.narration.dispose();
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      expect(t.fetched).toEqual([url(FIRST.audio), url(FIRST.captions), url(FIRST.audio), url(FIRST.captions)]);
+    });
+  });
+
   describe('unlock', () => {
     it('sets the silence and plays it before returning, inside the tap', () => {
       const t = setup();

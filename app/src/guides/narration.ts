@@ -45,7 +45,9 @@ export interface NarrationPlayer {
   unlock(): Promise<void>;
   /** PlayerDeps.loadNarration: the step's audio in the element and its captions read. Never throws: it rejects. */
   loadNarration(guide: Guide, narration: Narration): Promise<StepMedia>;
-  /** Stop, let go of the element's listeners and every object URL. */
+  /** Fetch a step's audio and captions ahead of need. Says nothing if it fails: loadNarration will fetch again and report. */
+  preload(guide: Guide, narration: Narration): void;
+  /** Stop, let go of the element's listeners, every object URL and every fetch kept. */
   dispose(): void;
 }
 
@@ -55,6 +57,12 @@ const HAVE_METADATA = 1;
 /** The unlock's silence: as short and as small as a WAV a browser plays everywhere comes. */
 const SILENCE_SAMPLE_RATE = 8000;
 const SILENCE_S = 0.05;
+
+/** A narration's audio and captions as fetched, before its audio is in the element. */
+interface Fetched {
+  readonly sound: Blob;
+  readonly captions: CaptionCue[];
+}
 
 /** A step's clock and what the element's events tell it while its narration is in the element. */
 interface AudioClock extends StepClock {
@@ -75,6 +83,12 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
   /** The element has played once inside a tap: the browser lets it play from now on. */
   let unlocked = false;
   let unlocking: Promise<void> | null = null;
+  /**
+   * Fetches by audio URL, so a load finds the one a preload started. Only two are kept, the latest load's and the
+   * latest preload's: the step playing and the step after it.
+   */
+  const fetches = new Map<string, Promise<Fetched>>();
+  const kept: Record<'load' | 'preload', string | null> = { load: null, preload: null };
 
   const onError = (): void => current?.mediaFailed();
   const onLoadedMetadata = (): void => current?.metadataLoaded();
@@ -85,6 +99,47 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
 
   async function loadNarration(guide: Guide, narration: Narration): Promise<StepMedia> {
     const call = ++calls;
+    const { sound, captions } = await fetched(guide, narration, 'load');
+    // A later call has come since: it owns the element. This one is a step the player has already left.
+    if (call !== calls) return { clock: NEVER_IN_THE_ELEMENT, captions };
+    const clock = audioClock();
+    current?.retire();
+    if (objectUrl !== null) deps.objectUrl.revoke(objectUrl);
+    objectUrl = deps.objectUrl.create(sound);
+    audio.src = objectUrl;
+    current = clock;
+    // Not waiting for loadedmetadata or canplay: iOS may send neither before the first play. A decoder failure shows
+    // as failure() instead.
+    return { clock, captions };
+  }
+
+  function preload(guide: Guide, narration: Narration): void {
+    // The failure is not lost: the step's own load fetches again and rejects with it, when the player can show it.
+    fetched(guide, narration, 'preload').catch(() => {});
+  }
+
+  /**
+   * The narration's fetch, the one already started or a new one, kept as the latest of `by`. Async so that even a URL
+   * that cannot be made rejects rather than throws.
+   */
+  async function fetched(guide: Guide, narration: Narration, by: keyof typeof kept): Promise<Fetched> {
+    const url = deps.fileUrl(guide, narration.audio);
+    let fetching = fetches.get(url);
+    if (!fetching) {
+      const started = fetchNarration(guide, narration);
+      // A failure is forgotten, so a retry fetches again instead of being handed the same error.
+      started.catch(() => {
+        if (fetches.get(url) === started) fetches.delete(url);
+      });
+      fetches.set(url, started);
+      fetching = started;
+    }
+    kept[by] = url;
+    for (const key of fetches.keys()) if (key !== kept.load && key !== kept.preload) fetches.delete(key);
+    return fetching;
+  }
+
+  async function fetchNarration(guide: Guide, narration: Narration): Promise<Fetched> {
     // Both at once, and both must arrive. The audio's failure is the one told when both fail, so the message is fixed.
     const [sound, captions] = await Promise.allSettled([
       fetchFile(guide, narration.audio, (response) => response.blob()),
@@ -92,17 +147,7 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
     ]);
     if (sound.status === 'rejected') throw sound.reason;
     if (captions.status === 'rejected') throw captions.reason;
-    // A later call has come since: it owns the element. This one is a step the player has already left.
-    if (call !== calls) return { clock: NEVER_IN_THE_ELEMENT, captions: captions.value };
-    const clock = audioClock();
-    current?.retire();
-    if (objectUrl !== null) deps.objectUrl.revoke(objectUrl);
-    objectUrl = deps.objectUrl.create(sound.value);
-    audio.src = objectUrl;
-    current = clock;
-    // Not waiting for loadedmetadata or canplay: iOS may send neither before the first play. A decoder failure shows
-    // as failure() instead.
-    return { clock, captions: captions.value };
+    return { sound: sound.value, captions: captions.value };
   }
 
   /** A file of the guide, read by `read`. Every failure names the file. */
@@ -235,9 +280,10 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
     calls++;
     if (objectUrl !== null) deps.objectUrl.revoke(objectUrl);
     objectUrl = null;
+    fetches.clear();
   }
 
-  return { unlock, loadNarration, dispose };
+  return { unlock, loadNarration, preload, dispose };
 }
 
 /** SILENCE_S of silence as a WAV file: a 44-byte header, then 8-bit mono samples. */
