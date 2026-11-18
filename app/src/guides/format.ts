@@ -2,13 +2,20 @@
  * The guide file format as the player reads it, and foldTo, the view a
  * guide has reached at any point. The types are derived from the schema
  * in guide-schema.ts, the one place the format is written; only types are
- * imported from it, so the schema itself stays out of the app.
+ * imported from it, so the schema itself stays out of the app. The two
+ * values the app checks at run time, the format version and the id
+ * pattern, are kept here instead, and the schema takes them from here.
  */
 
 import type { FoldedView } from '../view/actions';
 import type { SchemaType } from '../view/action-schema';
 import { foldAction } from '../view/fold';
 import type { GUIDE_SCHEMA } from './guide-schema';
+
+/** The guide format this app plays. A guide says which it was written for. */
+export const GUIDE_FORMAT_VERSION = 1;
+/** Every id in a guide, its own included: lower-case words joined by hyphens. */
+export const ID_PATTERN = '^[a-z0-9]+(-[a-z0-9]+)*$';
 
 /** A guide file, as guide.schema.json describes it. */
 export type Guide = SchemaType<typeof GUIDE_SCHEMA>;

@@ -4,8 +4,8 @@ import Ajv2020 from 'ajv/dist/2020';
 import type { Credit } from '../layers/types';
 import type { ViewAction } from '../view/actions';
 import { DOWN, EXAMPLE_GUIDE as guide } from './example-guide.testdata';
-import type { Cue, Guide } from './format';
-import { GUIDE_FORMAT_VERSION, GUIDE_SCHEMA, guideSchemaText } from './guide-schema';
+import { GUIDE_FORMAT_VERSION, type Cue, type Guide } from './format';
+import { GUIDE_SCHEMA, guideSchemaText } from './guide-schema';
 
 const isGuide = new Ajv2020().compile(GUIDE_SCHEMA);
 

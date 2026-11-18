@@ -9,11 +9,10 @@
  */
 
 import { FOV_FIELDS, LAYERS_FIELDS, LOOK_FIELDS, MARK_FIELDS, PRESET_FIELDS, TARGET_SCHEMA } from '../view/action-schema';
+// Kept in format.ts, which the app imports, so that checking a guide at run time does not bring this schema with it.
+import { GUIDE_FORMAT_VERSION, ID_PATTERN } from './format';
 
-/** The guide format this app plays. A guide says which it was written for. */
-export const GUIDE_FORMAT_VERSION = 1;
-
-const ID = { type: 'string', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', description: 'Lower-case words joined by hyphens.' } as const;
+const ID = { type: 'string', pattern: ID_PATTERN, description: 'Lower-case words joined by hyphens.' } as const;
 const TEXT = { type: 'string', minLength: 1 } as const;
 // Not `format: 'uri'`: ajv only knows formats with another package.
 const HTTPS_URL = { type: 'string', pattern: '^https://' } as const;
