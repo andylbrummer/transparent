@@ -1059,4 +1059,99 @@ describe('createViewControl', () => {
       expect(markTexts(t)).toEqual(['East again', 'North again']);
     });
   });
+
+  describe('borrow', () => {
+    const east = { kind: 'horizon', azDeg: 90, altDeg: 0 } as const;
+    const north = { kind: 'horizon', azDeg: 0, altDeg: 0 } as const;
+    const pose: DeviceAttitude = { alpha: 0, beta: 0, gamma: 0 };
+
+    /** The switches on, by id, in no particular order. */
+    const onIds = ({ switches, input }: ReturnType<typeof setup>): string[] =>
+      switches
+        .filter((s) => input(s.id).checked)
+        .map((s) => s.id)
+        .sort();
+
+    /** The texts of the marks in the view, in the order they went up. */
+    const markTexts = ({ labelParent }: ReturnType<typeof setup>): (string | null)[] =>
+      [...labelParent.querySelectorAll('.place-label--ring')].map((e) => e.textContent);
+
+    /** What a guide does to the switches: a preset, a flip and a whole view. */
+    async function playGuide({ viewControl }: ReturnType<typeof setup>): Promise<void> {
+      expect(await viewControl.perform({ do: 'preset', id: 'night' })).toEqual({ ok: true });
+      expect(await viewControl.perform({ do: 'layers', on: ['cmb'], off: ['clouds'] })).toEqual({ ok: true });
+      const view: FoldedView = { layers: { only: ['aurora', 'clouds'] }, look: { target: east, fovDeg: 30 }, marks: [] };
+      expect(await viewControl.restore(view)).toEqual({ ok: true });
+    }
+
+    it('saves no switch while borrowed, and puts the switches back at the end', async () => {
+      const t = setup(JSON.stringify({ cmb: true }));
+      const before = onIds(t);
+      const borrow = t.viewControl.borrow();
+      await playGuide(t);
+      expect(onIds(t)).toEqual(['aurora', 'clouds']);
+      expect(t.stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+      borrow.end();
+      expect(onIds(t)).toEqual(before);
+      expect(t.stored.has(LAYERS_STORAGE_KEY)).toBe(false);
+    });
+
+    it('leaves what was saved before the borrow as it was, to the letter', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'layers', on: ['aurora'] });
+      const saved = t.stored.get(LAYERS_STORAGE_KEY);
+      expect(saved).toBeDefined();
+      const borrow = t.viewControl.borrow();
+      await playGuide(t);
+      borrow.end();
+      expect(t.stored.get(LAYERS_STORAGE_KEY)).toBe(saved);
+    });
+
+    it('puts the field of view back and leaves the aim where it is', async () => {
+      const t = setup();
+      t.view.reducedMotion = true;
+      await t.viewControl.perform({ do: 'fov', fovDeg: 50 });
+      const borrow = t.viewControl.borrow();
+      await t.viewControl.perform({ do: 'look', target: east, fovDeg: 20 });
+      const turned = t.look.getState();
+      expect(turned.fovDeg).toBe(20);
+      borrow.end();
+      expect(t.look.getState()).toEqual({ ...turned, fovDeg: 50 });
+    });
+
+    it('takes every mark down and ends an ease under way, which leaves the view there', async () => {
+      const t = setup();
+      const borrow = t.viewControl.borrow();
+      await t.viewControl.perform({ do: 'mark', target: north, text: 'North' });
+      await t.viewControl.perform({ do: 'mark', target: east, text: 'East' });
+      const easing = t.viewControl.perform({ do: 'look', target: north });
+      t.viewControl.update(EASE_MIN_MS / 2);
+      borrow.end();
+      expect(markTexts(t)).toEqual([]);
+      expect(await easing).toEqual({ ok: true });
+      const ended = t.look.getState();
+      t.viewControl.update(EASE_MIN_MS);
+      expect(t.look.getState()).toBe(ended);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+    });
+
+    it('stops a look that waits on the user', async () => {
+      const t = setup();
+      t.view.attitude = pose;
+      const borrow = t.viewControl.borrow();
+      expect(await t.viewControl.perform({ do: 'look', target: east })).toEqual({ ok: true, awaitingGaze: true });
+      borrow.end();
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+    });
+
+    it('lends the view once at a time, ends a borrow once, and lends it again after', () => {
+      const t = setup();
+      const borrow = t.viewControl.borrow();
+      expect(() => t.viewControl.borrow()).toThrow(new Error('the view is already borrowed'));
+      borrow.end();
+      expect(() => borrow.end()).toThrow(new Error('the view borrow has already ended'));
+      const again = t.viewControl.borrow();
+      again.end();
+    });
+  });
 });

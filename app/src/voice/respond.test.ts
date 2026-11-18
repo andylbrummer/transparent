@@ -36,6 +36,10 @@ function app(
         applyPreset: (preset) => done.push(`preset:${preset.id}`),
         setLayer: (id, visible) => done.push(`${visible ? 'on' : 'off'}:${id}`),
         showOnly: (on) => done.push(`only:${on.join(',')}`),
+        borrow: () => {
+          done.push('borrow');
+          return { end: () => done.push('end borrow') };
+        },
       },
       lazyLayers: state.lazyLayers ?? { preload: () => Promise.resolve() },
       camera: new THREE.PerspectiveCamera(),

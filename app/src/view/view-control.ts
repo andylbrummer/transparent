@@ -23,7 +23,7 @@ export interface ViewControlDeps {
   /** Every switch an action may name. */
   readonly switches: readonly LayerSwitch[];
   /** Switches are flipped through the panel, so its rows, the save and the scene stay in step. */
-  readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer' | 'showOnly'>;
+  readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer' | 'showOnly' | 'borrow'>;
   /** The lazy layers: a switch-on is not done until its layer has loaded. */
   readonly lazyLayers: Pick<LayerManager, 'preload'>;
   /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
@@ -100,6 +100,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   let easing: Easing | null = null;
   let awaiting: Gaze | null = null;
   const marks = new Map<string, Mark>();
+  let borrowed = false;
 
   /**
    * Wait for the lazy layers among `switches` to load; the rest are drawn
@@ -276,13 +277,35 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       awaiting = null;
       setAim({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: look.fovDeg });
     }
-    for (const mark of marks.values()) mark.group.remove();
-    marks.clear();
+    takeMarksDown();
     for (const mark of placed) putMark(mark.target, mark.text, mark.direction);
 
     const loaded = await lazyLayersLoaded(on.map((id) => switchesById.get(id)!));
     if (!loaded.ok) return loaded;
     return posed ? { ok: true, awaitingGaze: true } : { ok: true };
+  }
+
+  function borrow(): { end(): void } {
+    if (borrowed) throw new Error('the view is already borrowed');
+    const fovDeg = deps.look.getState().fovDeg;
+    const panel = deps.layersPanel.borrow();
+    borrowed = true;
+    let ended = false;
+    return {
+      end: () => {
+        if (ended) throw new Error('the view borrow has already ended');
+        ended = true;
+        endEase({ ok: true });
+        awaiting = null;
+        takeMarksDown();
+        // The width goes back at once and exactly, not through setFov: it is the user's own, neither eased nor held
+        // to a pose's limit. The aim is left alone: the user is looking there now.
+        const state = deps.look.getState();
+        deps.look.setAim(state.yawRad, state.pitchRad, fovDeg);
+        panel.end();
+        borrowed = false;
+      },
+    };
   }
 
   /**
@@ -302,6 +325,11 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   /** A look's wait on the user, its target found at `located`; `fovDeg` is applied on arrival. */
   function gazeOn(target: Target, located: Located, fovDeg: number | undefined): Gaze {
     return { target, name: targetName(target), direction: located.direction.clone(), fovDeg, withinMs: 0 };
+  }
+
+  function takeMarksDown(): void {
+    for (const mark of marks.values()) mark.group.remove();
+    marks.clear();
   }
 
   /** Put a mark with `text` on `target`, found along `direction`, in place of any mark already on it. */
@@ -405,5 +433,5 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return { ok: true, direction: found.direction, ...horizonOf(found.direction, position), offCentreDeg };
   }
 
-  return { perform, restore, locate, awaitedGaze, stopAwaitingGaze, update };
+  return { perform, restore, borrow, locate, awaitedGaze, stopAwaitingGaze, update };
 }

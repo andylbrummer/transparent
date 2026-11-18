@@ -86,6 +86,12 @@ export interface ViewControl {
    * the guide's to turn, its look waits on the user (`awaitingGaze`), as a performed look does.
    */
   restore(view: FoldedView): Promise<ActionOutcome>;
+  /**
+   * Borrow the view, for a guide. Until `end()` no switch is saved; `end()` puts the switches and the field of view
+   * back as they stood, takes every mark down, and stops an ease or a look that waits. The aim stays where the user
+   * has it. One borrow at a time.
+   */
+  borrow(): { end(): void };
   /** Where a target is now and how far the view's centre is from it. */
   locate(target: Target): Located | TargetUnresolved;
   /** The look still waiting on the user to turn; null once they have arrived, or when no look waits. */
