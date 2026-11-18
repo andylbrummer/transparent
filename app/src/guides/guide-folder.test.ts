@@ -225,9 +225,9 @@ describe('guidesProblems on captions', () => {
     ],
     ['a caption ending at the end of the narration', vtt(['00:57.000', '00:58.000', 'a'], ['00:58.000', '01:00.000', 'b']), []],
     ['a caption of three lines', vtt(['00:00.000', '00:01.000', 'a', 'b', 'c']), ['caption 1 has 3 lines; a caption has at most 2']],
-    ['a line of 43 characters', vtt(['00:00.000', '00:01.000', 'x'.repeat(42), 'x'.repeat(43)]), ['caption 1, line 2 is 43 characters; a line has at most 42']],
-    // Two characters outside the BMP: 44 UTF-16 units, 42 characters.
-    ['a line of 42 characters, two of them astral', vtt(['00:00.000', '00:01.000', ASTRAL.repeat(2) + 'x'.repeat(40)]), []],
+    ['a line of 38 characters', vtt(['00:00.000', '00:01.000', 'x'.repeat(37), 'x'.repeat(38)]), ['caption 1, line 2 is 38 characters; a line has at most 37']],
+    // Two characters outside the BMP: 39 UTF-16 units, 37 characters.
+    ['a line of 37 characters, two of them astral', vtt(['00:00.000', '00:01.000', ASTRAL.repeat(2) + 'x'.repeat(35)]), []],
     ['a gap of 3.1 s', vtt(['00:00.000', '00:01.000', 'a'], ['00:04.100', '00:05.000', 'b']), ['3.1 s with no caption before caption 2; a narration goes at most 3 s without one']],
     ['a gap of 3 s', vtt(['00:00.000', '00:01.000', 'a'], ['00:04.000', '00:05.000', 'b']), []],
     // 4.001 - 1.001 is 3.0000000000000004 in floating point.

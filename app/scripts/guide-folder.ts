@@ -43,8 +43,8 @@ export const NARRATION_MAX_KBPS = 96;
 const AAC_LC = 2;
 /** The most lines one caption may have (spec/guides.md §9). */
 export const CAPTION_MAX_LINES = 2;
-/** The most characters in one line of a caption. */
-export const CAPTION_MAX_LINE_CHARS = 42;
+/** The most characters in one line of a caption: what fits a 360 px phone unwrapped at the smallest caption type, 16 px. */
+export const CAPTION_MAX_LINE_CHARS = 37;
 /** The longest a narration may run between two captions: longer, and speech is likely going uncaptioned. */
 export const CAPTION_MAX_GAP_S = 3;
 
