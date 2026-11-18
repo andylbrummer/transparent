@@ -10,10 +10,19 @@
       :root {
         /* The compass bar's height: the gaze pointer's clear area starts beneath it. */
         --compass-bar-height: calc(env(safe-area-inset-top) + 46px);
-        /* Clear of the HUD at three lines, as a narrow phone wraps it; the play bar will raise it. */
+        /* Clear of the HUD at three lines, as a narrow phone wraps it; while a guide is open, clear of the play bar. */
         --captions-foot: 80px;
+        /* The play bar's height above the safe area: a heading of two lines, the controls and the status line. */
+        --play-bar-height: 154px;
+      }
+      /* On body, not :root, so that it follows --captions-foot where body.guide-open raises it: a custom property's
+         var() is worked out where it is declared. */
+      body {
         /* The voice readout's foot, one eye: above a caption of two lines. */
         --voice-readout-foot: calc(var(--captions-foot) + 64px);
+      }
+      body.guide-open {
+        --captions-foot: calc(var(--play-bar-height) + 8px);
       }
       html, body {
         margin: 0;
@@ -304,6 +313,102 @@
         overflow-wrap: anywhere;
         background: rgba(5, 5, 16, 0.82);
         border-radius: 8px;
+      }
+      /* A guide's controls and status (play-bar.ts), along the foot while a guide is open. The captions stand on it,
+         and it is over them; level with the gaze pointer. Its height is fixed, so the captions never jump: a message
+         too long for its place scrolls there, beside its button. Five buttons in one row down to a 360 px phone. */
+      .play-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2;
+        box-sizing: border-box;
+        height: calc(var(--play-bar-height) + env(safe-area-inset-bottom));
+        padding: 8px calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        font: 14px/1.3 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        /* Denser than the caption plate: map labels behind the buttons and the status would read through. */
+        background: rgba(5, 5, 16, 0.92);
+        pointer-events: auto;
+        touch-action: manipulation;
+      }
+      .play-bar[hidden],
+      .play-bar [hidden] {
+        display: none;
+      }
+      .play-bar > * {
+        width: min(100%, 560px);
+      }
+      .play-bar__heading p {
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .play-bar__title {
+        font: 600 15px/20px system-ui, -apple-system, sans-serif;
+      }
+      .play-bar__where {
+        font-size: 13px;
+        line-height: 18px;
+        color: #cfd4e8;
+      }
+      .play-bar__controls {
+        display: flex;
+        gap: 6px;
+      }
+      .play-bar button {
+        min-height: 44px;
+        padding: 0 12px;
+        font: 600 14px/1 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        background: rgba(20, 24, 48, 0.78);
+        border: 1px solid rgba(160, 180, 255, 0.45);
+        border-radius: 22px;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      .play-bar__controls button {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0 4px;
+      }
+      .play-bar button:disabled {
+        opacity: 0.4;
+      }
+      .play-bar__status {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+      }
+      .play-bar__message {
+        min-width: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        text-align: left;
+      }
+      /* Centred by auto margins, not align-items: a message taller than its place then starts at its top and
+         scrolls, where align-items: center would push its first line out of reach above. */
+      .play-bar__message > *,
+      .play-bar__status > button {
+        margin-block: auto;
+      }
+      .play-bar__detail {
+        font-size: 12px;
+        line-height: 16px;
+        color: #cfd4e8;
+        overflow-wrap: anywhere;
+        /* To be copied into a report. */
+        user-select: text;
+        -webkit-user-select: text;
       }
       #reset-offset,
       #layers-toggle,
@@ -606,7 +711,8 @@
       body.stereo #cardboard-toggle,
       body.stereo #cardboard-calibrate,
       body.stereo #voice-talk,
-      body.stereo #ar-toggle {
+      body.stereo #ar-toggle,
+      body.stereo .play-bar {
         display: none;
       }
       /* Calibrating: one readout per eye, under its convergence spot, so merged they read as one. */
@@ -720,6 +826,10 @@
         color: #cfd4e8;
         background: linear-gradient(to top, rgba(5, 5, 16, 0.85), transparent);
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      }
+      /* The play bar takes the foot while a guide is open. */
+      body.guide-open #hud {
+        display: none;
       }
     </style>
   </head>
