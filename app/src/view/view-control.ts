@@ -13,9 +13,9 @@ import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
-import type { ActionOutcome, AimMode, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
+import type { ActionOutcome, AimMode, AwaitedGaze, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
-import { horizonOf, targetDirection, targetKey, type LabelIndex } from './targets';
+import { horizonOf, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
 
 export interface ViewControlDeps {
   /** Every preset an action may name. */
@@ -47,6 +47,12 @@ export interface ViewControlDeps {
 /** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
 export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
 
+/** A target is centred when it has stayed this near the view's centre for ARRIVE_MS. Looser and quicker than the spyglass's stare: arriving only lets a guide move on. */
+export const ARRIVE_DEG = 8;
+export const ARRIVE_MS = 600;
+/** In a pose a look narrows no further than this: a hand cannot hold a narrower view still. */
+export const POSE_MIN_FOV_DEG = 5;
+
 /** What a target other than a label is resolved with before the label files arrive: it needs none. */
 const NO_LABELS: LabelIndex = new Map();
 
@@ -62,10 +68,21 @@ interface Mark {
   readonly group: LabelGroup;
 }
 
+/** A look waiting on the user to turn: what AwaitedGaze shows, the field of view to apply on arrival, and the time spent centred. */
+interface Gaze {
+  readonly target: Target;
+  readonly name: string | null;
+  /** Found again every frame, in place, so a pointer can hold on to it. */
+  readonly direction: THREE.Vector3;
+  readonly fovDeg: number | undefined;
+  withinMs: number;
+}
+
 /** An ease under way, and the action waiting on it. */
 interface Easing {
   readonly ease: AimEase;
-  readonly action: 'look' | 'fov';
+  /** A look's wait, should the user take the view over before it ends; null for a field of view alone. */
+  readonly gaze: Gaze | null;
   readonly resolve: (outcome: ActionOutcome) => void;
   elapsedMs: number;
   /** The look state as the ease last left it: any other means the user has moved the view. */
@@ -73,11 +90,15 @@ interface Easing {
 }
 
 export function createViewControl(deps: ViewControlDeps): ViewControl & {
-  /** Advance an ease by a frame's time and keep the marks on their targets. Call once a frame, before the camera is aimed. */
+  /**
+   * Advance an ease by a frame's time, keep the marks on their targets and see whether the user has turned to a look
+   * that waits. Call once a frame, before the camera is aimed.
+   */
   update(deltaMs: number): void;
 } {
   const switchesById = new Map(deps.switches.map((s) => [s.id, s]));
   let easing: Easing | null = null;
+  let awaiting: Gaze | null = null;
   const marks = new Map<string, Mark>();
 
   /**
@@ -130,7 +151,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   }
 
   /** Turn the manual view to `to`: with an ease, or at once when motion is to be kept down or there is nothing to turn. */
-  function easeTo(to: Aim, action: Easing['action']): Promise<ActionOutcome> {
+  function easeTo(to: Aim, gaze: Gaze | null): Promise<ActionOutcome> {
     // A new action takes over from an ease still under way, from where it has got to.
     endEase({ ok: true });
     const ease = easeAim(currentAim(), to);
@@ -139,8 +160,18 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       return Promise.resolve({ ok: true });
     }
     return new Promise((resolve) => {
-      easing = { ease, action, resolve, elapsedMs: 0, seen: deps.look.getState() };
+      easing = { ease, gaze, resolve, elapsedMs: 0, seen: deps.look.getState() };
     });
+  }
+
+  /** The field of view, keeping the aim: set at once in a pose, eased in a drag. */
+  function setFov(fovDeg: number): Promise<ActionOutcome> {
+    if (aimMode() === 'pose') {
+      const state = deps.look.getState();
+      deps.look.setAim(state.yawRad, state.pitchRad, Math.max(fovDeg, POSE_MIN_FOV_DEG));
+      return Promise.resolve({ ok: true });
+    }
+    return easeTo({ ...currentAim(), fovDeg }, null);
   }
 
   // The switches flip before the first await, so they have flipped by the
@@ -174,9 +205,20 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (badFov) return badFov;
         const located = locate(action.target);
         if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
+        const gaze: Gaze = {
+          target: action.target,
+          name: targetName(action.target),
+          direction: located.direction.clone(),
+          fovDeg: action.fovDeg,
+          withinMs: 0,
+        };
         // The guide cannot turn someone holding the phone: the pointer shows them the way.
-        if (aimMode() === 'pose') return { ok: true, awaitingGaze: true };
-        return easeTo({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: action.fovDeg ?? deps.look.getState().fovDeg }, 'look');
+        if (aimMode() === 'pose') {
+          awaiting = gaze;
+          return { ok: true, awaitingGaze: true };
+        }
+        awaiting = null;
+        return easeTo({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: action.fovDeg ?? deps.look.getState().fovDeg }, gaze);
       }
       case 'fov': {
         const badFov = fovOutOfRange(action.fovDeg);
@@ -184,12 +226,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (action.fovDeg < FOV_NEEDS_TARGET_BELOW_DEG) {
           return { ok: false, code: 'bad-value', message: `a field of view under ${FOV_NEEDS_TARGET_BELOW_DEG} needs a target: use look` };
         }
-        if (aimMode() === 'pose') {
-          const state = deps.look.getState();
-          deps.look.setAim(state.yawRad, state.pitchRad, action.fovDeg);
-          return { ok: true };
-        }
-        return easeTo({ ...currentAim(), fovDeg: action.fovDeg }, 'fov');
+        return setFov(action.fovDeg);
       }
       case 'mark': {
         const key = targetKey(action.target);
@@ -225,6 +262,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   function update(deltaMs: number): void {
     followMarks();
     stepEase(deltaMs);
+    followGaze(deltaMs);
   }
 
   /**
@@ -245,14 +283,47 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     // The user wins: a drag, pinch, key or reset since the last frame stops the ease where they left it.
     // LookState is replaced, never changed in place, so a different object means something moved the view.
     // A compass that has just come on aims the view from now, so the ease stops for it too.
+    // A look then waits for the user to turn to its target, as one in a pose does.
     if (deps.look.getState() !== easing.seen || aimMode() === 'pose') {
-      endEase(easing.action === 'look' ? { ok: true, awaitingGaze: true } : { ok: true });
+      const { gaze } = easing;
+      if (gaze) awaiting = gaze;
+      endEase(gaze ? { ok: true, awaitingGaze: true } : { ok: true });
       return;
     }
     easing.elapsedMs += deltaMs;
     setAim(easing.ease.at(easing.elapsedMs));
     if (easing.elapsedMs >= easing.ease.durationMs) endEase({ ok: true });
     else easing.seen = deps.look.getState();
+  }
+
+  /**
+   * Whether the user has turned to the look that waits: its target has to
+   * stay within ARRIVE_DEG of the view's centre for ARRIVE_MS. The camera is
+   * as the last frame aimed it, since update comes first; a frame late is
+   * nothing at this size and time. A target lost for now (no position)
+   * leaves the wait as it stands.
+   */
+  function followGaze(deltaMs: number): void {
+    if (!awaiting) return;
+    const located = locate(awaiting.target);
+    if (!located.ok) return;
+    awaiting.direction.copy(located.direction);
+    awaiting.withinMs = located.offCentreDeg <= ARRIVE_DEG ? awaiting.withinMs + deltaMs : 0;
+    if (awaiting.withinMs < ARRIVE_MS) return;
+    const { fovDeg } = awaiting;
+    awaiting = null;
+    // Nothing to wait for or report: the value was checked when the look was performed, and setFov never refuses.
+    if (fovDeg !== undefined) void setFov(fovDeg);
+  }
+
+  function awaitedGaze(): AwaitedGaze | null {
+    if (!awaiting) return null;
+    const { target, name, direction, withinMs } = awaiting;
+    return { target, name, direction, arriving: Math.min(1, withinMs / ARRIVE_MS) };
+  }
+
+  function stopAwaitingGaze(): void {
+    awaiting = null;
   }
 
   const forward = new THREE.Vector3();
@@ -270,5 +341,5 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return { ok: true, direction: found.direction, ...horizonOf(found.direction, position), offCentreDeg };
   }
 
-  return { perform, locate, update };
+  return { perform, locate, awaitedGaze, stopAwaitingGaze, update };
 }

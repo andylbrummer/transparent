@@ -98,6 +98,21 @@ export function targetKey(target: Target): string {
   }
 }
 
+/** What to call a target beside a pointer; null when it is a bare direction or was given no name. */
+export function targetName(target: Target): string | null {
+  switch (target.kind) {
+    case 'body':
+      return target.body[0].toUpperCase() + target.body.slice(1);
+    case 'sky':
+    case 'ground':
+      return target.name ?? null;
+    case 'label':
+      return target.name;
+    case 'horizon':
+      return null;
+  }
+}
+
 /** A vector toward the target, any length. */
 function towardTarget(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): THREE.Vector3 | TargetUnresolved {
   switch (target.kind) {

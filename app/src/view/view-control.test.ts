@@ -9,8 +9,8 @@ import { LAYERS_STORAGE_KEY, LayersPanel, loadLayerVisibility, switchesWithLazyL
 import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets';
 import type { Located, Target, ViewControl } from './actions';
 import { EASE_MIN_MS } from './aim-ease';
-import { indexLabels, targetDirection, type LabelIndex } from './targets';
-import { createViewControl } from './view-control';
+import { indexLabels, targetDirection, targetName, type LabelIndex } from './targets';
+import { ARRIVE_DEG, ARRIVE_MS, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
 
 describe('createViewControl', () => {
   const lazy = (id: string, extra: Partial<LayerDefinition> = {}): LayerDefinition => ({
@@ -441,6 +441,7 @@ describe('createViewControl', () => {
       const dragged = t.look.getState();
       frame(t, 16);
       expect(await outcome).toEqual({ ok: true, awaitingGaze: true });
+      expect(t.viewControl.awaitedGaze()?.target).toBe(east);
       frame(t, EASE_MIN_MS);
       expect(t.look.getState()).toBe(dragged);
     });
@@ -691,6 +692,178 @@ describe('createViewControl', () => {
       t.viewControl.update(EASE_MIN_MS * 10);
       expect(await lookingAgain).toEqual({ ok: true });
       expect(markTexts(t)).toEqual(['Moho']);
+    });
+  });
+
+  describe('waiting for the gaze', () => {
+    const east = { kind: 'horizon', azDeg: 90, altDeg: 0 } as const;
+    const north = { kind: 'horizon', azDeg: 0, altDeg: 0 } as const;
+    const pose: DeviceAttitude = { alpha: 0, beta: 0, gamma: 0 };
+
+    /** A view control in a pose: the device aims the view, so a look waits on the user. */
+    function posed() {
+      const t = setup();
+      t.view.attitude = pose;
+      return t;
+    }
+
+    function locatedDirection(viewControl: ViewControl, target: Target): THREE.Vector3 {
+      const result = viewControl.locate(target);
+      if (!result.ok) throw new Error(result.message);
+      return result.direction;
+    }
+
+    /** Turn the camera, as the user turning the phone would, to `offDeg` off `target`. */
+    function turnTo({ viewControl, camera }: ReturnType<typeof setup>, target: Target, offDeg = 0): void {
+      const direction = locatedDirection(viewControl, target);
+      const across = direction.clone().cross(camera.position).normalize();
+      camera.lookAt(camera.position.clone().add(direction.applyAxisAngle(across, THREE.MathUtils.degToRad(offDeg))));
+      camera.updateMatrixWorld();
+    }
+
+    it('in a pose, answers at once and keeps what it waits for', async () => {
+      const t = posed();
+      const target = { kind: 'body', body: 'mars' } as const;
+      expect(await t.viewControl.perform({ do: 'look', target })).toEqual({ ok: true, awaitingGaze: true });
+      const awaited = t.viewControl.awaitedGaze()!;
+      expect(awaited.target).toBe(target);
+      expect(awaited.name).toBe(targetName(target));
+      expect(awaited.direction.toArray()).toEqual(locatedDirection(t.viewControl, target).toArray());
+      expect(awaited.arriving).toBe(0);
+    });
+
+    it('arrives once the target has stayed at the centre long enough', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect(t.viewControl.awaitedGaze()?.arriving).toBe(0.5);
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+    });
+
+    it('starts the stay again when the view leaves the target before it is done', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east);
+      t.viewControl.update(500);
+      turnTo(t, north);
+      t.viewControl.update(16);
+      turnTo(t, east);
+      t.viewControl.update(500);
+      expect(t.viewControl.awaitedGaze()?.arriving).toBeCloseTo(500 / ARRIVE_MS, 9);
+    });
+
+    it(`counts the view as on the target within ${ARRIVE_DEG}° of it`, async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east, ARRIVE_DEG + 0.1);
+      t.viewControl.update(ARRIVE_MS);
+      expect(t.viewControl.awaitedGaze()?.arriving).toBe(0);
+      turnTo(t, east, ARRIVE_DEG - 0.1);
+      t.viewControl.update(ARRIVE_MS);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+    });
+
+    it('applies the field of view on arrival, no narrower than a hand holds still', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east, fovDeg: 40 });
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect(t.look.getState().fovDeg).toBe(40);
+      await t.viewControl.perform({ do: 'look', target: east, fovDeg: 2 });
+      t.viewControl.update(ARRIVE_MS);
+      expect(t.look.getState().fovDeg).toBe(POSE_MIN_FOV_DEG);
+    });
+
+    it('waits on a look whose ease the user took over, and eases its field of view in when they arrive', async () => {
+      const t = setup();
+      const outcome = t.viewControl.perform({ do: 'look', target: east, fovDeg: 40 });
+      t.viewControl.update(EASE_MIN_MS / 2);
+      t.look.onPointerDown(1, 100, 100);
+      t.look.onPointerMove(1, 150, 120, 800);
+      t.viewControl.update(16);
+      expect(await outcome).toEqual({ ok: true, awaitingGaze: true });
+      const fovWhenStopped = t.look.getState().fovDeg;
+      // The user drags the rest of the way.
+      t.look.setAim(-Math.PI / 2, 0);
+      t.look.updateCamera(t.camera, austin, null, 0);
+      t.viewControl.update(ARRIVE_MS);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+      expect(t.look.getState().fovDeg).toBe(fovWhenStopped);
+      t.viewControl.update(EASE_MIN_MS);
+      expect(t.look.getState().fovDeg).toBe(40);
+    });
+
+    it('waits on the latest look in a pose, and on none once a look turns the view', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS / 2);
+      await t.viewControl.perform({ do: 'look', target: north });
+      expect(t.viewControl.awaitedGaze()).toMatchObject({ target: north, arriving: 0 });
+      t.view.attitude = null;
+      void t.viewControl.perform({ do: 'look', target: east });
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+    });
+
+    it('keeps waiting through a look that is refused', async () => {
+      const t = posed();
+      t.view.labels = indexLabels([]);
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect((await t.viewControl.perform({ do: 'look', target: { kind: 'label', name: 'Atlantis' } })).ok).toBe(false);
+      expect((await t.viewControl.perform({ do: 'look', target: north, fovDeg: 200 })).ok).toBe(false);
+      expect(t.viewControl.awaitedGaze()).toMatchObject({ target: east, arriving: 0.5 });
+    });
+
+    it('stops waiting when told, without the field of view', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east, fovDeg: 40 });
+      t.viewControl.stopAwaitingGaze();
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS);
+      expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+      expect(() => t.viewControl.stopAwaitingGaze()).not.toThrow();
+    });
+
+    it('holds the stay while the target is lost, and arrives once it is found again', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS / 2);
+      t.view.position = null;
+      for (let i = 0; i < 3; i++) t.viewControl.update(16);
+      expect(t.viewControl.awaitedGaze()?.arriving).toBe(0.5);
+      t.view.position = austin;
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect(t.viewControl.awaitedGaze()).toBeNull();
+    });
+
+    it('follows a target across the sky, in the direction it handed out', async () => {
+      const t = posed();
+      const orion = { kind: 'sky', raDeg: 83.8, decDeg: -5.4, name: 'Orion Nebula' } as const;
+      await t.viewControl.perform({ do: 'look', target: orion });
+      const direction = t.viewControl.awaitedGaze()!.direction;
+      const before = direction.clone();
+      t.view.date = new Date(when.getTime() + 3_600_000);
+      t.viewControl.update(16);
+      expect(t.viewControl.awaitedGaze()!.direction).toBe(direction);
+      expect(THREE.MathUtils.radToDeg(direction.angleTo(before))).toBeCloseTo(15, 0);
+    });
+
+    it('keeps waiting through a field of view or a mark', async () => {
+      const t = posed();
+      await t.viewControl.perform({ do: 'look', target: east });
+      turnTo(t, east);
+      t.viewControl.update(ARRIVE_MS / 2);
+      expect(await t.viewControl.perform({ do: 'fov', fovDeg: 40 })).toEqual({ ok: true });
+      expect(await t.viewControl.perform({ do: 'mark', target: east, text: 'East' })).toEqual({ ok: true });
+      expect(t.viewControl.awaitedGaze()).toMatchObject({ target: east, arriving: 0.5 });
     });
   });
 });

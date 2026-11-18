@@ -8,7 +8,7 @@ import { earthPoint } from '../render/earth-point';
 import type { LabelData, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target } from './actions';
-import { horizonOf, indexLabels, targetDirection, targetKey, type LabelIndex } from './targets';
+import { horizonOf, indexLabels, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
 
 const austin: SurfacePosition = HORIZONS.site;
 const instants = HORIZONS.instants.map((iso, index) => ({ iso, index, date: new Date(iso) }));
@@ -207,5 +207,19 @@ describe('targetKey', () => {
       targetKey({ kind: 'label', name: '0' }),
     ];
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('targetName', () => {
+  it('names a body, a named place or label, and not a bare direction', () => {
+    expect(targetName({ kind: 'body', body: 'sun' })).toBe('Sun');
+    expect(targetName({ kind: 'body', body: 'moon' })).toBe('Moon');
+    expect(targetName({ kind: 'body', body: 'jupiter' })).toBe('Jupiter');
+    expect(targetName({ kind: 'sky', raDeg: 83.8, decDeg: -5.4, name: 'Orion Nebula' })).toBe('Orion Nebula');
+    expect(targetName({ kind: 'sky', raDeg: 83.8, decDeg: -5.4 })).toBeNull();
+    expect(targetName({ kind: 'ground', lat: 19.4, lon: -155.3, name: 'Kilauea' })).toBe('Kilauea');
+    expect(targetName({ kind: 'ground', lat: 19.4, lon: -155.3 })).toBeNull();
+    expect(targetName({ kind: 'label', name: 'Tuzo' })).toBe('Tuzo');
+    expect(targetName({ kind: 'horizon', azDeg: 90, altDeg: 0 })).toBeNull();
   });
 });

@@ -46,7 +46,7 @@ export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'layer-unavai
 /** What came of an action. A mistake in the action is an outcome, not a throw, so its caller can show it. */
 export type ActionOutcome =
   | { readonly ok: true }
-  /** `look` when the view is not the guide's to turn: the user has to turn to the target. */
+  /** `look` when the view is not the guide's to turn: the user has to turn to the target. `awaitedGaze()` says when they have. */
   | { readonly ok: true; readonly awaitingGaze: true }
   | { readonly ok: false; readonly code: ActionErrorCode; readonly message: string };
 
@@ -66,9 +66,27 @@ export interface Located {
   readonly offCentreDeg: number;
 }
 
+/** A look that waits on the user: what they have to turn to, and how nearly they are there. */
+export interface AwaitedGaze {
+  readonly target: Target;
+  /** What to call it beside the pointer; null for a bare direction. */
+  readonly name: string | null;
+  /** World unit vector toward it, found again every frame. */
+  readonly direction: THREE.Vector3;
+  /** How much of the stay at the view's centre is done, 0 to 1. */
+  readonly arriving: number;
+}
+
 export interface ViewControl {
-  /** Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded, the ease finished. */
+  /**
+   * Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded, the ease
+   * finished. A look that waits on the user resolves at once (`awaitingGaze`).
+   */
   perform(action: ViewAction): Promise<ActionOutcome>;
   /** Where a target is now and how far the view's centre is from it. */
   locate(target: Target): Located | TargetUnresolved;
+  /** The look still waiting on the user to turn; null once they have arrived, or when no look waits. */
+  awaitedGaze(): AwaitedGaze | null;
+  /** Give up on the look that waits: the user went on without turning. Its field of view is not applied. */
+  stopAwaitingGaze(): void;
 }
