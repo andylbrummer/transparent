@@ -25,13 +25,22 @@ export function foldAction(view: FoldedView, action: ViewAction): FoldedView {
   }
 }
 
-/** Off first, then on, as perform does. An id is never in both lists. */
+/**
+ * Off first, then on, as perform does. An id is never in both lists. What is
+ * on is kept in the order it was last turned on, so turning the switches on in
+ * that order again ends the same way, exclusive groups included; the fold
+ * itself knows no group.
+ */
 function foldSwitches(layers: FoldedView['layers'], on: readonly string[], off: readonly string[]): FoldedView['layers'] {
-  if ('only' in layers) return { only: union(layers.only.filter((id) => !off.includes(id)), on) };
+  if ('only' in layers) return { only: turnedOn(layers.only.filter((id) => !off.includes(id)), on) };
   const layersOn = layers.on.filter((id) => !off.includes(id));
+  // What is off has no order that matters: nothing turned off turns anything else on.
   const layersOff = union(layers.off, off).filter((id) => !on.includes(id));
-  return { preset: layers.preset, on: union(layersOn, on), off: layersOff };
+  return { preset: layers.preset, on: turnedOn(layersOn, on), off: layersOff };
 }
+
+/** `list` then `add`, each id once, an id turned on again moved to the end: the order they were last turned on, which is the order an exclusive group goes by. */
+const turnedOn = (list: readonly string[], add: readonly string[]): string[] => [...list.filter((id) => !add.includes(id)), ...new Set(add)];
 
 /** `list` with `add` after it, each id once, in the order it first came. */
 const union = (list: readonly string[], add: readonly string[]): string[] => [...new Set([...list, ...add])];

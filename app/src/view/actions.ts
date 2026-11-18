@@ -23,7 +23,8 @@ export type ViewAction = SchemaType<typeof VIEW_ACTION_SCHEMA>;
 export interface FoldedView {
   /**
    * The switches. Every one as a preset has it, then the ones turned on
-   * and off since; or only the ones listed on.
+   * and off since; or only the ones listed on. What is on is in the order it
+   * was last turned on: in an exclusive group, the last one shows.
    */
   readonly layers:
     | { readonly preset: string; readonly on: readonly string[]; readonly off: readonly string[] }

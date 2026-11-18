@@ -34,8 +34,33 @@ describe('foldAction', () => {
   });
 
   it('adds to a listed scene once and in order, and takes out what goes off', () => {
+    // globe-surface, listed already, is turned on again after shell-moho, so it moves after it.
     const view = fold(fromList, { do: 'layers', on: ['shell-moho', 'globe-surface'], off: ['political'] }, { do: 'layers', on: ['inner-core'] });
-    expect(view.layers).toEqual({ only: ['globe-surface', 'shell-moho', 'inner-core'] });
+    expect(view.layers).toEqual({ only: ['shell-moho', 'globe-surface', 'inner-core'] });
+  });
+
+  // Turning on one switch of an exclusive group turns the others off, so the last one turned on is the one that shows.
+  it('lists switches turned on after a preset in the order they were last turned on', () => {
+    const view = fold(fromPreset, { do: 'layers', on: ['a'] }, { do: 'layers', on: ['b'] }, { do: 'layers', on: ['a'] });
+    expect(view.layers).toEqual({ preset: 'sky', on: ['b', 'a'], off: [] });
+  });
+
+  it('lists a listed scene in the order its switches were last turned on', () => {
+    const view = fold({ ...fromList, layers: { only: ['p', 'a'] } }, { do: 'layers', on: ['b'] }, { do: 'layers', on: ['a'] });
+    expect(view.layers).toEqual({ only: ['p', 'b', 'a'] });
+  });
+
+  it('keeps the order one action names, each id once', () => {
+    expect(foldAction(fromPreset, { do: 'layers', on: ['a', 'b'] }).layers).toEqual({ preset: 'sky', on: ['a', 'b'], off: [] });
+    expect(foldAction(fromPreset, { do: 'layers', on: ['a', 'a'] }).layers).toEqual({ preset: 'sky', on: ['a'], off: [] });
+    expect(foldAction(fromList, { do: 'layers', on: ['a', 'a'] }).layers).toEqual({ only: ['globe-surface', 'political', 'a'] });
+  });
+
+  it('puts a switch turned off and on again at the end', () => {
+    const view = fold(fromPreset, { do: 'layers', on: ['a', 'b'] }, { do: 'layers', off: ['a'] }, { do: 'layers', on: ['a'] });
+    expect(view.layers).toEqual({ preset: 'sky', on: ['b', 'a'], off: [] });
+    const listed = fold(fromList, { do: 'layers', off: ['globe-surface'] }, { do: 'layers', on: ['globe-surface'] });
+    expect(listed.layers).toEqual({ only: ['political', 'globe-surface'] });
   });
 
   it('looks at a new target with or without a new width, and widens without moving', () => {
