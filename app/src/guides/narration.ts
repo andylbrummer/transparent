@@ -27,8 +27,8 @@ export type NarrationAudio = Pick<
 export interface NarrationDeps {
   /** The one audio element every narration plays through: the tap that starts a guide unlocks this one. */
   readonly audio: NarrationAudio;
-  /** As the browser's fetch. */
-  fetch(url: string): Promise<Response>;
+  /** As the browser's fetch. Aborting the signal rejects it, and errors a body still being read. */
+  fetch(url: string, init: { signal: AbortSignal }): Promise<Response>;
   /** The URL of a file in a guide's folder, e.g. `${BASE_URL}guides/${guide.id}/${path}`. */
   fileUrl(guide: Guide, path: string): string;
   /** As URL.createObjectURL and URL.revokeObjectURL. */
@@ -47,9 +47,12 @@ export interface NarrationPlayer {
   loadNarration(guide: Guide, narration: Narration): Promise<StepMedia>;
   /** Fetch a step's audio and captions ahead of need. Says nothing if it fails: loadNarration will fetch again and report. */
   preload(guide: Guide, narration: Narration): void;
-  /** Stop, let go of the element's listeners, every object URL and every fetch kept. */
+  /** Stop, let go of the element's listeners, every object URL and every fetch kept, and cut off every download. */
   dispose(): void;
 }
+
+/** How long a narration download may go without a byte before it is given up. */
+export const DOWNLOAD_STALL_MS = 10_000;
 
 /** HTMLMediaElement.HAVE_METADATA: from here the element takes a currentTime. */
 const HAVE_METADATA = 1;
@@ -57,6 +60,12 @@ const HAVE_METADATA = 1;
 /** The unlock's silence: as short and as small as a WAV a browser plays everywhere comes. */
 const SILENCE_SAMPLE_RATE = 8000;
 const SILENCE_S = 0.05;
+
+/** A file's bytes as they arrived, and the type the server gave them. */
+interface Downloaded {
+  readonly chunks: Uint8Array<ArrayBuffer>[];
+  readonly type: string;
+}
 
 /** A narration's audio and captions as fetched, before its audio is in the element. */
 interface Fetched {
@@ -89,6 +98,8 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
    */
   const fetches = new Map<string, Promise<Fetched>>();
   const kept: Record<'load' | 'preload', string | null> = { load: null, preload: null };
+  /** Every download on its way, so dispose can cut them all off: one evicted from fetches may still be running. */
+  const downloads = new Set<AbortController>();
 
   const onError = (): void => current?.mediaFailed();
   const onLoadedMetadata = (): void => current?.metadataLoaded();
@@ -142,28 +153,64 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
   async function fetchNarration(guide: Guide, narration: Narration): Promise<Fetched> {
     // Both at once, and both must arrive. The audio's failure is the one told when both fail, so the message is fixed.
     const [sound, captions] = await Promise.allSettled([
-      fetchFile(guide, narration.audio, (response) => response.blob()),
-      fetchFile(guide, narration.captions, async (response): Promise<CaptionCue[]> => parseVtt(await response.text())),
+      fetchFile(guide, narration.audio, ({ chunks, type }) => new Blob(chunks, { type })),
+      fetchFile(guide, narration.captions, ({ chunks }): CaptionCue[] => parseVtt(decodeText(chunks))),
     ]);
     if (sound.status === 'rejected') throw sound.reason;
     if (captions.status === 'rejected') throw captions.reason;
     return { sound: sound.value, captions: captions.value };
   }
 
-  /** A file of the guide, read by `read`. Every failure names the file. */
-  async function fetchFile<T>(guide: Guide, path: string, read: (response: Response) => Promise<T>): Promise<T> {
+  /**
+   * A file of the guide, downloaded whole and read by `read`. Every failure names the file. A download that brings
+   * nothing for DOWNLOAD_STALL_MS is aborted: a fetch on a dead connection would otherwise never settle.
+   */
+  async function fetchFile<T>(guide: Guide, path: string, read: (file: Downloaded) => T): Promise<T> {
     const url = deps.fileUrl(guide, path);
-    let response: Response;
+    const download = new AbortController();
+    downloads.add(download);
+    let stalled = false;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    // Restarted by the headers and by every chunk: a download is given up when it goes quiet, never for being slow.
+    const restartStallTimer = (): void => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        download.abort();
+      }, DOWNLOAD_STALL_MS);
+    };
+    // Whatever the abort broke off, the stall is what to tell.
+    const broken = (why: string): Error =>
+      new Error(stalled ? `${path}: no data for ${DOWNLOAD_STALL_MS / 1000} s` : `${path}: ${why}`);
     try {
-      response = await deps.fetch(url);
-    } catch (error) {
-      throw new Error(`${path}: could not be fetched: ${message(error)}`);
-    }
-    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-    try {
-      return await read(response);
-    } catch (error) {
-      throw new Error(`${path}: ${message(error)}`);
+      restartStallTimer();
+      let response: Response;
+      try {
+        response = await deps.fetch(url, { signal: download.signal });
+      } catch (error) {
+        throw broken(`could not be fetched: ${message(error)}`);
+      }
+      if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+      if (response.body === null) throw new Error(`${path}: the response has no body`);
+      restartStallTimer();
+      const reader = response.body.getReader();
+      const chunks: Uint8Array<ArrayBuffer>[] = [];
+      try {
+        for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+          chunks.push(chunk.value);
+          restartStallTimer();
+        }
+      } catch (error) {
+        throw broken(message(error));
+      }
+      try {
+        return read({ chunks, type: response.headers.get('Content-Type') ?? '' });
+      } catch (error) {
+        throw new Error(`${path}: ${message(error)}`);
+      }
+    } finally {
+      clearTimeout(stallTimer);
+      downloads.delete(download);
     }
   }
 
@@ -281,6 +328,8 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
     if (objectUrl !== null) deps.objectUrl.revoke(objectUrl);
     objectUrl = null;
     fetches.clear();
+    // Each rejects as it stops: a load that asked for it is told, and a preload says nothing as ever.
+    for (const download of downloads) download.abort();
   }
 
   return { unlock, loadNarration, preload, dispose };
@@ -311,6 +360,12 @@ function silentWav(): Uint8Array<ArrayBuffer> {
   // 8-bit PCM is unsigned: silence is the middle, 0x80, not 0.
   bytes.fill(0x80, 44);
   return bytes;
+}
+
+/** UTF-8 text from the chunks it arrived in: a character may be split across two. */
+function decodeText(chunks: readonly Uint8Array[]): string {
+  const decoder = new TextDecoder();
+  return chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join('') + decoder.decode();
 }
 
 /** The clock of a narration a later one beat to the element: it never had it, so it stands at its start and moves nothing. */

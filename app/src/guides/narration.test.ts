@@ -1,12 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EXAMPLE_GUIDE } from './example-guide.testdata';
 import type { Guide } from './format';
-import { createNarration, type NarrationDeps } from './narration';
+import { createNarration, DOWNLOAD_STALL_MS, type NarrationDeps } from './narration';
 import type { Narration, StepMedia } from './player';
 import { parseVtt } from './vtt';
 
 const FIRST: Narration = { audio: 'audio/01-look-down.m4a', captions: 'audio/01-look-down.vtt' };
 const SECOND: Narration = { audio: 'audio/02-shells.m4a', captions: 'audio/02-shells.vtt' };
+const THIRD: Narration = { audio: 'audio/03-sea.m4a', captions: 'audio/03-sea.vtt' };
 const VTT = 'WEBVTT\n\n00:00.000 --> 00:02.000\nLook down.\n';
 const url = (path: string): string => `/guides/${EXAMPLE_GUIDE.id}/${path}`;
 
@@ -75,21 +76,23 @@ const FILES: Files = {
 };
 
 /**
- * A narration over a fake audio element, serving `files` (or `fetch`), recording what was fetched, which object URLs
- * were made and let go, and each interruption.
+ * A narration over a fake audio element, serving `files` (or `fetch`), recording what was fetched with its signal,
+ * which object URLs were made and let go, and each interruption.
  */
 function setup(options: { files?: Files; fetch?: NarrationDeps['fetch']; fileUrl?: NarrationDeps['fileUrl'] } = {}) {
   const files = { ...FILES, ...options.files };
   const audio = new FakeAudio();
   const fetched: string[] = [];
+  const signals: AbortSignal[] = [];
   const created: Blob[] = [];
   const revoked: string[] = [];
   const counts = { interrupted: 0 };
   const narration = createNarration({
     audio,
-    fetch(requested) {
+    fetch(requested, init) {
       fetched.push(requested);
-      if (options.fetch) return options.fetch(requested);
+      signals.push(init.signal);
+      if (options.fetch) return options.fetch(requested, init);
       const file = files[requested]?.() ?? new Error(`no file ${requested}`);
       return file instanceof Error ? Promise.reject(file) : Promise.resolve(file);
     },
@@ -107,7 +110,7 @@ function setup(options: { files?: Files; fetch?: NarrationDeps['fetch']; fileUrl
       counts.interrupted++;
     },
   });
-  return { narration, audio, fetched, created, revoked, counts };
+  return { narration, audio, fetched, signals, created, revoked, counts };
 }
 
 /** Lets every pending callback run. */
@@ -129,6 +132,7 @@ describe('createNarration', () => {
   it.each<[string, Files, string]>([
     ['the audio is not found', { [url(FIRST.audio)]: () => new Response('', { status: 404 }) }, 'audio/01-look-down.m4a: HTTP 404'],
     ['the captions are not found', { [url(FIRST.captions)]: () => new Response('', { status: 404 }) }, 'audio/01-look-down.vtt: HTTP 404'],
+    ['the audio comes with no body', { [url(FIRST.audio)]: () => new Response(null) }, 'audio/01-look-down.m4a: the response has no body'],
     ['the audio cannot be fetched', { [url(FIRST.audio)]: () => new TypeError('Failed to fetch') }, 'audio/01-look-down.m4a: could not be fetched: Failed to fetch'],
     [
       'the captions are not WebVTT the overlay draws',
@@ -338,8 +342,6 @@ describe('createNarration', () => {
   });
 
   describe('preload', () => {
-    const THIRD: Narration = { audio: 'audio/03-sea.m4a', captions: 'audio/03-sea.vtt' };
-
     /** A file that answers each fetch with the next of `answers`, the last for every fetch after. */
     const answering =
       (...answers: (() => Response)[]): (() => Response) =>
@@ -418,6 +420,30 @@ describe('createNarration', () => {
       expect(t.fetched.slice(6)).toEqual([url(FIRST.audio), url(FIRST.captions)]);
     });
 
+    it('keeps a newer fetch of a narration when an older one it replaced fails', async () => {
+      const held: ReturnType<typeof deferred<Response>>[] = [];
+      const t = setup({
+        fetch() {
+          const answer = deferred<Response>();
+          held.push(answer);
+          return answer.promise;
+        },
+      });
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      // Dropped from the cache while still on its way.
+      t.narration.preload(EXAMPLE_GUIDE, SECOND);
+      const loading = t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(t.fetched.length).toBe(6);
+      held[4].resolve(new Response('first audio'));
+      held[5].resolve(new Response(VTT));
+      await loading;
+      held[0].reject(new TypeError('Failed to fetch'));
+      held[1].resolve(new Response(VTT));
+      await settle();
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(t.fetched.length).toBe(6);
+    });
+
     it('never touches the element', async () => {
       const t = setup();
       t.narration.preload(EXAMPLE_GUIDE, FIRST);
@@ -434,6 +460,140 @@ describe('createNarration', () => {
       t.narration.dispose();
       t.narration.preload(EXAMPLE_GUIDE, FIRST);
       expect(t.fetched).toEqual([url(FIRST.audio), url(FIRST.captions), url(FIRST.audio), url(FIRST.captions)]);
+    });
+  });
+
+  describe('stall', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** A fetch that never answers, and rejects as the browser's does when its signal aborts. */
+    const unanswered: NarrationDeps['fetch'] = (_, { signal }) =>
+      new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+
+    /** A response whose body the test sends chunk by chunk. Aborting its fetch errors the body, as in the browser. */
+    function trickle(signal: AbortSignal) {
+      let body!: ReadableStreamDefaultController<Uint8Array>;
+      const response = new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            body = controller;
+          },
+        })
+      );
+      signal.addEventListener('abort', () => body.error(signal.reason));
+      return {
+        response,
+        send: (chunk: string | Uint8Array) => body.enqueue(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk),
+        end: () => body.close(),
+      };
+    }
+
+    it('gives up on a fetch that never answers, after DOWNLOAD_STALL_MS', async () => {
+      const t = setup({ fetch: unanswered });
+      const failing = expect(t.narration.loadNarration(EXAMPLE_GUIDE, FIRST)).rejects.toThrow(
+        new Error('audio/01-look-down.m4a: no data for 10 s')
+      );
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS - 1);
+      expect(t.signals.some((signal) => signal.aborted)).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await failing;
+      expect(t.signals.every((signal) => signal.aborted)).toBe(true);
+    });
+
+    it('counts the stall from the headers and the last chunk: a slow download that keeps coming is left alone', async () => {
+      let audio!: ReturnType<typeof trickle>;
+      const headers = deferred<Response>();
+      const t = setup({
+        fetch(requested, { signal }) {
+          if (requested !== url(FIRST.audio)) return Promise.resolve(new Response(VTT));
+          audio = trickle(signal);
+          return headers.promise;
+        },
+      });
+      const failing = expect(t.narration.loadNarration(EXAMPLE_GUIDE, FIRST)).rejects.toThrow(
+        new Error('audio/01-look-down.m4a: no data for 10 s')
+      );
+      await vi.advanceTimersByTimeAsync(9_000);
+      headers.resolve(audio.response);
+      for (const part of ['first', ' audio', ' slowly']) {
+        await vi.advanceTimersByTimeAsync(9_000);
+        audio.send(part);
+      }
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS - 1);
+      expect(t.signals[0].aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await failing;
+      expect(t.signals[0].aborted).toBe(true);
+    });
+
+    it('reads captions whose characters are split across chunks', async () => {
+      let captions!: ReturnType<typeof trickle>;
+      const t = setup({
+        fetch(requested, { signal }) {
+          if (requested !== url(FIRST.captions)) return Promise.resolve(new Response('first audio'));
+          captions = trickle(signal);
+          return Promise.resolve(captions.response);
+        },
+      });
+      const loading = t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      const vtt = 'WEBVTT\n\n00:00.000 --> 00:02.000\nLook down, caf\u00e9.\n';
+      const bytes = new TextEncoder().encode(vtt);
+      // The e-acute is two bytes in UTF-8: one goes in each chunk.
+      const split = bytes.indexOf(0xc3) + 1;
+      captions.send(bytes.subarray(0, split));
+      captions.send(bytes.subarray(split));
+      captions.end();
+      expect((await loading).captions).toEqual(parseVtt(vtt));
+    });
+
+    it('leaves no timer behind, whether the download works or fails', async () => {
+      const t = setup({ files: { [url(SECOND.audio)]: () => new Response('', { status: 404 }) } });
+      await t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      expect(vi.getTimerCount()).toBe(0);
+      await expect(t.narration.loadNarration(EXAMPLE_GUIDE, SECOND)).rejects.toThrow(new Error('audio/02-shells.m4a: HTTP 404'));
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('names the captions when they are what stalls', async () => {
+      const t = setup({
+        fetch: (requested, init) =>
+          requested === url(FIRST.captions) ? unanswered(requested, init) : Promise.resolve(new Response('first audio')),
+      });
+      const failing = expect(t.narration.loadNarration(EXAMPLE_GUIDE, FIRST)).rejects.toThrow(
+        new Error('audio/01-look-down.vtt: no data for 10 s')
+      );
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS);
+      await failing;
+    });
+
+    it('cuts off every download on dispose, leaving no timer behind', async () => {
+      const t = setup({ fetch: unanswered });
+      const loading = t.narration.loadNarration(EXAMPLE_GUIDE, FIRST);
+      t.narration.preload(EXAMPLE_GUIDE, SECOND);
+      t.narration.dispose();
+      expect(t.signals.length).toBe(4);
+      expect(t.signals.every((signal) => signal.aborted)).toBe(true);
+      // The load is told; the preload says nothing, or the run would fail on an unhandled rejection.
+      await expect(loading).rejects.toThrow(/^audio\/01-look-down\.m4a: could not be fetched: /);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('cuts off on dispose a preload already dropped from the cache', async () => {
+      const t = setup({ fetch: unanswered });
+      t.narration.preload(EXAMPLE_GUIDE, FIRST);
+      t.narration.preload(EXAMPLE_GUIDE, SECOND);
+      t.narration.preload(EXAMPLE_GUIDE, THIRD);
+      t.narration.dispose();
+      expect(t.fetched.slice(0, 2)).toEqual([url(FIRST.audio), url(FIRST.captions)]);
+      expect(t.signals.every((signal) => signal.aborted)).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 
