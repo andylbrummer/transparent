@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { EARTH_RADIUS_M, PLANET_NAMES, enuBasis } from '@transparent-earth/core';
@@ -8,12 +8,15 @@ import { earthPoint } from '../render/earth-point';
 import type { LabelData, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target } from './actions';
-import { horizonOf, indexLabels, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
+import { horizonOf, indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
 
 const austin: SurfacePosition = HORIZONS.site;
 const instants = HORIZONS.instants.map((iso, index) => ({ iso, index, date: new Date(iso) }));
 const noLabels: LabelIndex = new Map();
 const when = new Date('2026-11-09T06:00:00Z');
+
+// The body targets wait on the ephemeris, loaded with the first of them in the app; body-positions.test.ts covers before.
+beforeAll(() => loadBodyPositions());
 
 /** The direction to `target`, failing the test if it does not resolve; checks it is a unit vector. */
 function direction(target: Target, position: SurfacePosition = austin, date: Date = when, labels: LabelIndex = noLabels): THREE.Vector3 {

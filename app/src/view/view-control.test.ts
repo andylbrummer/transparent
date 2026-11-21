@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeAll, describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { createLookController, DEFAULT_LOOK_STATE, MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
@@ -10,8 +10,11 @@ import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets
 import type { FoldedView, Located, Target, ViewAction, ViewControl } from './actions';
 import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
-import { indexLabels, targetDirection, targetName, type LabelIndex } from './targets';
+import { indexLabels, loadBodyPositions, targetDirection, targetName, type LabelIndex } from './targets';
 import { ARRIVE_DEG, ARRIVE_MS, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
+
+// Loaded up front, as by an earlier body target; body-positions.test.ts covers a view control before they are in.
+beforeAll(() => loadBodyPositions());
 
 describe('createViewControl', () => {
   const lazy = (id: string, extra: Partial<LayerDefinition> = {}): LayerDefinition => ({

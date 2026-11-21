@@ -10,20 +10,14 @@
  * turns into the world by icrsToEcefMatrix, as main.ts turns it. The Sun
  * and planets are drawn as seen from the Earth's centre, so they have no
  * parallax; the Moon is drawn at its distance, so it does.
+ *
+ * A body target needs the ephemeris (body-positions.ts), which is loaded
+ * with loadBodyPositions, not with the app: until then a body does not
+ * resolve, and says so.
  */
 
 import * as THREE from 'three';
-import {
-  applyMat3,
-  enuBasis,
-  icrsToEcefMatrix,
-  moonGeocentricKm,
-  planetEphemeris,
-  raDecToUnit,
-  sunGeocentricAu,
-  type PlanetName,
-  type Vec3,
-} from '@transparent-earth/core';
+import { applyMat3, enuBasis, icrsToEcefMatrix, raDecToUnit, type PlanetName, type Vec3 } from '@transparent-earth/core';
 import { earthPoint } from '../render/earth-point';
 import type { LabelData, LabelKind, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
@@ -52,6 +46,34 @@ export type TargetDirection =
   | TargetUnresolved;
 
 const unresolved = (message: string): TargetUnresolved => ({ ok: false, code: 'target-unresolved', message });
+
+type BodyPositions = typeof import('./body-positions');
+let bodyPositions: BodyPositions | null = null;
+let bodyPositionsLoading: Promise<void> | null = null;
+
+/**
+ * Load the Sun, Moon and planet positions a body target needs. They are the
+ * ephemeris and its VSOP87 tables, nearly as much code as the rest of the
+ * app's first load, so they come with the first body target, not with the
+ * app. Loads once; a load that fails can be asked for again.
+ */
+export function loadBodyPositions(): Promise<void> {
+  bodyPositionsLoading ??= import('./body-positions').then(
+    (module) => {
+      bodyPositions = module;
+    },
+    (error: unknown) => {
+      bodyPositionsLoading = null;
+      throw error;
+    }
+  );
+  return bodyPositionsLoading;
+}
+
+/** Whether resolving `target` waits on loadBodyPositions. */
+export function needsBodyPositions(target: Target): boolean {
+  return target.kind === 'body' && bodyPositions === null;
+}
 
 /** Where `target` is, seen from `position` at `date`: the direction to where the app draws it. */
 export function targetDirection(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): TargetDirection {
@@ -139,15 +161,17 @@ function towardTarget(target: Target, position: SurfacePosition, date: Date, lab
   }
 }
 
-function towardBody(body: 'sun' | 'moon' | PlanetName, position: SurfacePosition, date: Date): THREE.Vector3 {
+function towardBody(body: 'sun' | 'moon' | PlanetName, position: SurfacePosition, date: Date): THREE.Vector3 | TargetUnresolved {
+  // Not loaded yet is not "no such body": say which, as a label does before its files arrive.
+  if (!bodyPositions) return unresolved('the Sun, Moon and planet positions have not loaded');
   switch (body) {
     case 'sun':
-      return icrsToWorld(sunGeocentricAu(date), date);
+      return icrsToWorld(bodyPositions.sunGeocentricAu(date), date);
     case 'moon':
       // Drawn in metres from the Earth's centre, so seen from the stand it shifts by up to a degree.
-      return icrsToWorld(moonGeocentricKm(date), date).multiplyScalar(1000).sub(standPoint(position));
+      return icrsToWorld(bodyPositions.moonGeocentricKm(date), date).multiplyScalar(1000).sub(standPoint(position));
     default:
-      return icrsToWorld(planetEphemeris(body, date).positionAu, date);
+      return icrsToWorld(bodyPositions.planetEphemeris(body, date).positionAu, date);
   }
 }
 

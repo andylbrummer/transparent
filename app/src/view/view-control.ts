@@ -15,7 +15,7 @@ import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
-import { horizonOf, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
+import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
 
 export interface ViewControlDeps {
   /** Every preset an action may name. */
@@ -120,6 +120,19 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return { ok: true };
   }
 
+  /**
+   * Wait for the Sun, Moon and planet positions (targets.ts loadBodyPositions). Callers ask only when a target needs
+   * them, so an action on anything else, or on a body once they are in, keeps every change before its first await.
+   */
+  async function bodiesLoaded(): Promise<ActionOutcome> {
+    try {
+      await loadBodyPositions();
+      return { ok: true };
+    } catch {
+      return { ok: false, code: 'target-unresolved', message: 'the Sun, Moon and planet positions failed to load' };
+    }
+  }
+
   /** Same test as look.ts updateCamera: an attitude, when there is one, aims the camera. */
   function aimMode(): AimMode {
     return deps.getAttitude() === null ? 'manual' : 'pose';
@@ -204,6 +217,10 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       case 'look': {
         const badFov = fovOutOfRange(action.fovDeg);
         if (badFov) return badFov;
+        if (needsBodyPositions(action.target)) {
+          const loaded = await bodiesLoaded();
+          if (!loaded.ok) return loaded;
+        }
         const located = locate(action.target);
         if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
         const gaze = gazeOn(action.target, located, action.fovDeg);
@@ -233,6 +250,10 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
           return { ok: true };
         }
         if (action.text === '') return { ok: false, code: 'bad-value', message: 'mark text is empty' };
+        if (needsBodyPositions(action.target)) {
+          const loaded = await bodiesLoaded();
+          if (!loaded.ok) return loaded;
+        }
         const located = locate(action.target);
         if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
         putMark(action.target, action.text, located.direction);
@@ -241,7 +262,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     }
   }
 
-  // Like perform, every change is made before the first await, so it is all in place by the time restore returns.
+  // Like perform, every change is made before the first await, so it is all in place by the time restore returns. The
+  // one wait before a change is for the body positions, the first time a view needs them; preload asks for them ahead.
   async function restore(view: FoldedView): Promise<ActionOutcome> {
     const { look } = view;
     // Check everything before changing anything, so a mistake leaves the user where they were.
@@ -249,6 +271,10 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     if (!switches.ok) return switches;
     const badFov = fovOutOfRange(look.fovDeg);
     if (badFov) return badFov;
+    if (viewTargets(view).some(needsBodyPositions)) {
+      const loaded = await bodiesLoaded();
+      if (!loaded.ok) return loaded;
+    }
     const located = locate(look.target);
     if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
     const placed: { readonly target: Target; readonly text: string; readonly direction: THREE.Vector3 }[] = [];
@@ -277,10 +303,18 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   }
 
   async function preload(view: FoldedView): Promise<ActionOutcome> {
-    // The switches alone: the look and the marks load nothing, and may not resolve until the view gets there.
+    // The switches, and the body positions if the look or a mark is a body. The targets are not located: they may
+    // not resolve until the view gets there.
     const switches = switchesOn(view.layers);
     if (!switches.ok) return switches;
-    return lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!));
+    const bodies = viewTargets(view).some(needsBodyPositions) ? bodiesLoaded() : Promise.resolve<ActionOutcome>({ ok: true });
+    const [layers, positions] = await Promise.all([lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!)), bodies]);
+    return layers.ok ? positions : layers;
+  }
+
+  /** The targets a folded view locates: its look's and its marks'. */
+  function viewTargets(view: FoldedView): Target[] {
+    return [view.look.target, ...view.marks.map((mark) => mark.target)];
   }
 
   /**
