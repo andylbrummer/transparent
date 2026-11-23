@@ -13,11 +13,12 @@
 // tman's PATH shims give a nested `npm test`. Vitest runs one worker per core, so the suite's peak
 // follows the host's core count. `npm test` (both workspaces), measured on the runners with the
 // shims bypassed, tman 0.7.15, 2026-11-23:
-//   build3, 32 cores: 4093, 4365, 5335, 5474 MB (runs culled at 2048 had reached 4791-5012 MB)
-//   beagle-ab, 12 cores: 2352, 2414 MB
-// 7168 is the build3 peak plus 30%. A host with more cores needs a new measurement, not a guess.
+//   build3, 32 cores: 4093, 4365, 5335, 5474 MB (runs culled at 2048 had reached 4791-5012 MB);
+//     5710 MB through fleet-run after the cap was raised
+//   beagle-ab, 12 cores: 2352, 2377, 2414 MB
+// 7680 is the build3 peak plus 30%. A host with more cores needs a new measurement, not a guess.
 defaults {
-    max-mem 7168
+    max-mem 7680
     max-parallel 2
 }
 
