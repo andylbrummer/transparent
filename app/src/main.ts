@@ -418,6 +418,7 @@ export function init(): App | null {
     getPosition: () => sensorState.position,
     now: () => clock.now(),
     getLabels: () => labelIndex,
+    loadedLabels: labels,
     look,
     getAttitude: () => sensors.getAttitude(),
     // Read on every action: the user can change it while the app is open.

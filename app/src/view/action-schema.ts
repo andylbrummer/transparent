@@ -84,7 +84,7 @@ export const TARGET_SCHEMA = {
     {
       type: 'object',
       description:
-        'A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state.',
+        'A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state. A name no baked file has is looked for among the names of the layers loaded: "M31". A guide may use only baked names, which can be checked before it plays.',
       properties: {
         kind: { const: 'label' },
         name: NAME,

@@ -166,8 +166,23 @@ export interface LabelGroupSpec {
    * names over the default view of the Earth. Ignored for 'earth'.
    */
   readonly belowHorizon?: 'few' | 'zoomed';
+  /**
+   * Whether find() may answer with these labels (default true). False for a
+   * guide's own marks: a mark put on M31 is not a second M31 to choose from.
+   */
+  readonly findable?: boolean;
   readonly labels: readonly GroupLabel[];
 }
+
+/**
+ * What find() made of a name among the groups' labels. One place, given
+ * as the group gave it: the layer may go on moving it.
+ */
+export type FoundLabel =
+  | { readonly found: 'one'; readonly frame: LabelFrame; readonly position: THREE.Vector3 }
+  | { readonly found: 'none' }
+  /** More than one place answers to it: never guessed between. */
+  | { readonly found: 'many'; readonly count: number };
 
 export type LabelFrame = 'earth' | 'sky' | 'space';
 
@@ -180,6 +195,7 @@ export interface LabelGroup {
 interface GroupState {
   readonly frame: LabelFrame;
   readonly zoomedOnlyBelowHorizon: boolean;
+  readonly findable: boolean;
   visible: boolean;
 }
 
@@ -188,6 +204,8 @@ interface PlacedLabel {
   readonly label: PlaceLabel | null;
   readonly group: GroupState | null;
   readonly name: string;
+  /** What find() matches: a group label's text with any leading marker ("▲ ", "• ") taken off. Worked out once, not per lookup. */
+  readonly findName: string;
   readonly rank: number;
   readonly priority: number;
   readonly element: HTMLElement;
@@ -245,6 +263,22 @@ export function rankLabels(labels: readonly PlaceLabel[]): PlaceLabel[] {
   return [...labels].sort((a, b) => rank(a.kind) - rank(b.kind) || a.priority - b.priority);
 }
 
+/** A marker before a group label's name: a symbol and a space, as "▲ Etna" or "• Lima". */
+const LEADING_MARKER = /^[^\p{L}\p{N}]+\s+/u;
+const SPACE = 0x20;
+const NOT_FOUND: FoundLabel = { found: 'none' };
+/** Two answers to a name nearer than this are one thing: a hundredth of a degree on the sky, a kilometre on the Earth. */
+const SAME_SKY_COS = Math.cos(THREE.MathUtils.degToRad(0.01));
+const SAME_PLACE_M = 1000;
+
+/** Whether two group labels stand at one place: the same thing named twice, by two catalogues or two layers. */
+function samePlace(a: PlacedLabel, b: PlacedLabel): boolean {
+  const frame = a.group!.frame;
+  if (frame !== b.group!.frame) return false;
+  if (frame === 'sky') return a.position.dot(b.position) / (a.position.length() * b.position.length()) >= SAME_SKY_COS;
+  return a.position.distanceTo(b.position) <= SAME_PLACE_M;
+}
+
 /** Sky labels are projected from this far out along their direction: effectively infinity. */
 const SKY_LABEL_DISTANCE_M = 1e12;
 
@@ -294,6 +328,7 @@ export class LabelLayer {
         label,
         group: null,
         name: label.name,
+        findName: label.name,
         rank: LABEL_KIND_ORDER.indexOf(label.kind),
         priority: label.priority,
         element,
@@ -366,7 +401,12 @@ export class LabelLayer {
    * group's rank, and stay until the returned handle removes them.
    */
   addGroup(spec: LabelGroupSpec): LabelGroup {
-    const state: GroupState = { frame: spec.frame, zoomedOnlyBelowHorizon: spec.belowHorizon === 'zoomed', visible: true };
+    const state: GroupState = {
+      frame: spec.frame,
+      zoomedOnlyBelowHorizon: spec.belowHorizon === 'zoomed',
+      findable: spec.findable ?? true,
+      visible: true,
+    };
     const style = spec.style;
     const em = style.wide ? COUNTRY_GLYPH_WIDTH_EM : GLYPH_WIDTH_EM;
     const added: PlacedLabel[] = spec.labels.map((label) => {
@@ -392,6 +432,7 @@ export class LabelLayer {
         label: null,
         group: state,
         name: label.text,
+        findName: label.text.replace(LEADING_MARKER, ''),
         rank: spec.rank,
         priority: label.priority,
         element,
@@ -429,6 +470,43 @@ export class LabelLayer {
         this.placed = this.placed.filter((placed) => !mine.has(placed));
       },
     };
+  }
+
+  /**
+   * Where the thing called `name` is, among the names lazy layers have
+   * added: for a look or a mark at something no baked file has, "M31" or
+   * "Mars". Hidden groups count: a layer switched off still knows where its
+   * things are, and an answer that came and went with a switch would move a
+   * guide's pointer for no reason the user could see. The baked names are
+   * not looked at; targets.ts has them indexed, with their kinds.
+   *
+   * A label answers when its text, less a leading marker, is the name or
+   * starts with it and a space: "M31" finds "M31 Andromeda Galaxy". An exact
+   * answer beats a starting one. Two answers at one place (one galaxy in two
+   * catalogues) are one; at two places they are `many`.
+   */
+  find(name: string): FoundLabel {
+    if (name === '') return NOT_FOUND;
+    let exact: PlacedLabel | null = null;
+    let exactCount = 0;
+    let starts: PlacedLabel | null = null;
+    let startsCount = 0;
+    for (const placed of this.placed) {
+      const group = placed.group;
+      if (!group?.findable || !placed.findName.startsWith(name)) continue;
+      if (placed.findName.length === name.length) {
+        if (!exact || !samePlace(exact, placed)) exactCount++;
+        exact ??= placed;
+      } else if (placed.findName.charCodeAt(name.length) === SPACE) {
+        if (!starts || !samePlace(starts, placed)) startsCount++;
+        starts ??= placed;
+      }
+    }
+    const best = exact ?? starts;
+    const count = exact ? exactCount : startsCount;
+    if (!best) return NOT_FOUND;
+    if (count > 1) return { found: 'many', count };
+    return { found: 'one', frame: best.group!.frame, position: best.position };
   }
 
   /** Names currently shown, in placement order. Instrumentation for tests and the harness. */

@@ -16,7 +16,7 @@ import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
 import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
-import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
+import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex, type LoadedLabels } from './targets';
 
 export interface ViewControlDeps {
   /** Every preset an action may name. */
@@ -35,6 +35,8 @@ export interface ViewControlDeps {
   now(): Date;
   /** The baked labels by name; null until the label files have loaded. */
   getLabels(): LabelIndex | null;
+  /** The names the lazy layers have added, where a label the baked files lack is looked for: the label layer. */
+  readonly loadedLabels: LoadedLabels;
   /** The manual aim and field of view. */
   readonly look: Pick<LookController, 'getState' | 'setAim'>;
   /** The device's pose, or null when a drag aims the view: this decides the aim mode. */
@@ -403,7 +405,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     const key = targetKey(target);
     marks.get(key)?.group.remove();
     const position = markPosition(direction, new THREE.Vector3());
-    const group = deps.addLabels({ rank: MARK_RANK, style: MARK_STYLE, frame: 'earth', labels: [{ text, priority: 0, position }] });
+    // Not findable: a mark is a name put on a thing, not a second thing of that name for a label target to stumble on.
+    const group = deps.addLabels({ rank: MARK_RANK, style: MARK_STYLE, frame: 'earth', findable: false, labels: [{ text, priority: 0, position }] });
     marks.set(key, { target, position, group });
   }
 
@@ -524,7 +527,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     const labels = deps.getLabels();
     // Not yet loaded is not unknown: say which, rather than "no label named".
     if (target.kind === 'label' && !labels) return { ok: false, code: 'target-unresolved', message: 'the label files have not loaded' };
-    const found = targetDirection(target, position, deps.now(), labels ?? NO_LABELS);
+    const found = targetDirection(target, position, deps.now(), labels ?? NO_LABELS, deps.loadedLabels);
     if (!found.ok) return found;
     // The camera as it is now, so the answer holds in a pose as well as in a drag.
     const offCentreDeg = THREE.MathUtils.radToDeg(found.direction.angleTo(deps.camera.getWorldDirection(forward)));

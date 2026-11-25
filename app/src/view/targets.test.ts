@@ -1,11 +1,11 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { EARTH_RADIUS_M, PLANET_NAMES, enuBasis } from '@transparent-earth/core';
+import { EARTH_RADIUS_M, PLANET_NAMES, enuBasis, raDecToUnit } from '@transparent-earth/core';
 import { HORIZONS } from '@transparent-earth/core/astro/ephemeris.fixture';
 import { createLookController } from '../input/look';
 import { earthPoint } from '../render/earth-point';
-import type { LabelData, PlaceLabel } from '../render/labels';
+import { LabelLayer, type LabelData, type PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target } from './actions';
 import { horizonOf, indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
@@ -171,6 +171,57 @@ describe('targetDirection: label', () => {
     const geology = JSON.parse(new TextDecoder().decode(readFileSync('public/geo/geology.json'))) as LabelData;
     const tuzo = direction({ kind: 'label', name: 'Tuzo (African LLSVP)' }, austin, when, indexLabels([geology]));
     expect(tuzo.distanceTo(direction({ kind: 'ground', lat: -15, lon: 15, depthKm: 2600 }))).toBeLessThan(1e-12);
+  });
+});
+
+describe('targetDirection: a label a lazy layer added', () => {
+  const baked = indexLabels([{ labels: [{ kind: 'deep', name: 'Tuzo', lat: -15, lon: 15, depthKm: 2600, priority: 1 }] }]);
+  const style = { fontPx: 10, color: '#fff' };
+  /** A label layer with a sky name and Earth-fixed names, as a deep-sky and a landmark layer would add them. */
+  function loaded(): LabelLayer {
+    const layer = new LabelLayer(document.createElement('div'), []);
+    // M31's place, ICRS.
+    const m31 = new THREE.Vector3(...raDecToUnit(10.68, 41.27));
+    layer.addGroup({ rank: 1, style, frame: 'sky', labels: [{ text: 'M31 Andromeda Galaxy', priority: 0, position: m31 }] });
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: '△ Everest · 8,849 m', priority: 0, position: earthPoint(27.99, 86.93) }] });
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Tuzo', priority: 0, position: earthPoint(60, 60) }] });
+    return layer;
+  }
+
+  it('points along a sky name as the sky target at its place does, and at an Earth-fixed name as the ground there', () => {
+    const layer = loaded();
+    const m31 = direction({ kind: 'sky', raDeg: 10.68, decDeg: 41.27 });
+    const found = targetDirection({ kind: 'label', name: 'M31' }, austin, when, baked, layer);
+    expect(found.ok && found.direction.distanceTo(m31)).toBeLessThan(1e-12);
+    const everest = direction({ kind: 'ground', lat: 27.99, lon: 86.93 });
+    const peak = targetDirection({ kind: 'label', name: 'Everest' }, austin, when, baked, layer);
+    expect(peak.ok && peak.direction.distanceTo(everest)).toBeLessThan(1e-12);
+    layer.dispose();
+  });
+
+  it('keeps to the baked name where there is one, and to the baked labels for a target that gives a kind', () => {
+    const layer = loaded();
+    const tuzo = direction({ kind: 'ground', lat: -15, lon: 15, depthKm: 2600 });
+    const found = targetDirection({ kind: 'label', name: 'Tuzo' }, austin, when, baked, layer);
+    expect(found.ok && found.direction.distanceTo(tuzo)).toBeLessThan(1e-12);
+    expect(targetDirection({ kind: 'label', name: 'M31', labelKind: 'deep' }, austin, when, baked, layer)).toEqual({
+      ok: false,
+      code: 'target-unresolved',
+      message: 'no label named M31',
+    });
+    layer.dispose();
+  });
+
+  it('says so of a name no layer has, or one at two places', () => {
+    const layer = loaded();
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Everest', priority: 0, position: earthPoint(0, 0) }] });
+    const failed = (message: string) => ({ ok: false, code: 'target-unresolved', message });
+    expect(targetDirection({ kind: 'label', name: 'Atlantis' }, austin, when, baked, layer)).toEqual(failed('no label named Atlantis'));
+    // An exact "Everest" beats the one that only starts with it.
+    expect(targetDirection({ kind: 'label', name: 'Everest' }, austin, when, baked, layer).ok).toBe(true);
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: 'Everest', priority: 0, position: earthPoint(10, 10) }] });
+    expect(targetDirection({ kind: 'label', name: 'Everest' }, austin, when, baked, layer)).toEqual(failed('label Everest names 2 places'));
+    layer.dispose();
   });
 });
 

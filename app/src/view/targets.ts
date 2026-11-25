@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import { applyMat3, enuBasis, icrsToEcefMatrix, raDecToUnit, type PlanetName, type Vec3 } from '@transparent-earth/core';
 import { earthPoint } from '../render/earth-point';
-import type { LabelData, LabelKind, PlaceLabel } from '../render/labels';
+import type { LabelData, LabelKind, LabelLayer, PlaceLabel } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
 import type { Target, TargetUnresolved } from './actions';
 import { standingPoint } from './standing-place';
@@ -39,6 +39,12 @@ export function indexLabels(sources: readonly LabelData[]): LabelIndex {
   }
   return index;
 }
+
+/**
+ * The names lazy layers have added, for a label no baked file has: the
+ * label layer itself in the app (LabelLayer.find).
+ */
+export type LoadedLabels = Pick<LabelLayer, 'find'>;
 
 export type TargetDirection =
   /** World unit vector from where the view stands. */
@@ -75,9 +81,18 @@ export function needsBodyPositions(target: Target): boolean {
   return target.kind === 'body' && bodyPositions === null;
 }
 
-/** Where `target` is, seen from `position` at `date`: the direction to where the app draws it. */
-export function targetDirection(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): TargetDirection {
-  const toward = towardTarget(target, position, date, labels);
+/**
+ * Where `target` is, seen from `position` at `date`: the direction to where the app draws it. A label is looked for in
+ * the baked files, then among `loaded`, the names of the lazy layers loaded so far.
+ */
+export function targetDirection(
+  target: Target,
+  position: SurfacePosition,
+  date: Date,
+  labels: LabelIndex,
+  loaded: LoadedLabels | null = null
+): TargetDirection {
+  const toward = towardTarget(target, position, date, labels, loaded);
   if (!(toward instanceof THREE.Vector3)) return toward;
   // One check for every kind: a NaN or infinite input gives no direction to normalise.
   const length = toward.length();
@@ -136,7 +151,13 @@ export function targetName(target: Target): string | null {
 }
 
 /** A vector toward the target, any length. */
-function towardTarget(target: Target, position: SurfacePosition, date: Date, labels: LabelIndex): THREE.Vector3 | TargetUnresolved {
+function towardTarget(
+  target: Target,
+  position: SurfacePosition,
+  date: Date,
+  labels: LabelIndex,
+  loaded: LoadedLabels | null
+): THREE.Vector3 | TargetUnresolved {
   switch (target.kind) {
     case 'horizon': {
       const { e, n, u } = enuBasis({ lat: position.lat, lon: position.lon, alt: 0 });
@@ -154,9 +175,29 @@ function towardTarget(target: Target, position: SurfacePosition, date: Date, lab
     case 'ground':
       return earthPoint(target.lat, target.lon, target.depthKm).sub(standPoint(position));
     case 'label': {
+      // The baked files first, and alone when they have the name: a guide's name was checked against them, and must
+      // not come to mean something else because a layer with the same name in it was switched on. A kind is only
+      // known of the baked labels, so a target that gives one is never looked for further.
+      if (loaded && target.labelKind === undefined && !labels.has(target.name)) return towardLoadedLabel(target.name, position, date, loaded);
       const place = labelPlace(target.name, target.labelKind, labels);
       if ('code' in place) return place;
       return earthPoint(place.lat, place.lon, place.depthKm).sub(standPoint(position));
+    }
+  }
+}
+
+/** Toward a name a lazy layer added, drawn where the label layer draws it: on the sky turned as main.ts turns it, or at its ECEF point. */
+function towardLoadedLabel(name: string, position: SurfacePosition, date: Date, loaded: LoadedLabels): THREE.Vector3 | TargetUnresolved {
+  const found = loaded.find(name);
+  switch (found.found) {
+    case 'none':
+      return unresolved(`no label named ${name}`);
+    case 'many':
+      return unresolved(`label ${name} names ${found.count} places`);
+    case 'one': {
+      const { x, y, z } = found.position;
+      if (found.frame === 'sky') return icrsToWorld([x, y, z], date);
+      return new THREE.Vector3(x, y, z).sub(standPoint(position));
     }
   }
 }

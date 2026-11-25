@@ -1,5 +1,6 @@
 import { beforeAll, describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
+import { raDecToUnit } from '@transparent-earth/core';
 import { createLookController, DEFAULT_LOOK_STATE, MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
 import { SKY_RADIUS_M, type LayerDefinition, type LayerInstance } from '../layers/types';
@@ -94,6 +95,7 @@ describe('createViewControl', () => {
       getPosition: () => view.position,
       now: () => view.date,
       getLabels: () => view.labels,
+      loadedLabels: labelLayer,
       look,
       getAttitude: () => view.attitude,
       prefersReducedMotion: () => view.reducedMotion,
@@ -335,6 +337,22 @@ describe('createViewControl', () => {
         message: 'no label named Atlantis',
       });
       expect(viewControl.locate({ kind: 'label', name: 'Tuzo' }).ok).toBe(true);
+    });
+
+    it("finds a name a loaded layer added, and not a guide's own mark of the same name", async () => {
+      const { viewControl, view, labelLayer } = setup();
+      view.labels = indexLabels([]);
+      const vega: Target = { kind: 'label', name: 'Vega' };
+      expect(viewControl.locate(vega)).toEqual({ ok: false, code: 'target-unresolved', message: 'no label named Vega' });
+      expect(await viewControl.perform({ do: 'mark', target: { kind: 'horizon', azDeg: 0, altDeg: 90 }, text: 'Vega' })).toEqual({ ok: true });
+      expect(viewControl.locate(vega).ok).toBe(false);
+      // Vega's place, ICRS, as a star layer gives it.
+      const position = new THREE.Vector3(...raDecToUnit(279.23, 38.78));
+      labelLayer.addGroup({ rank: 1, style: { fontPx: 10, color: '#fff' }, frame: 'sky', labels: [{ text: 'Vega', priority: 0, position }] });
+      const found = located(viewControl, vega);
+      const sky = located(viewControl, { kind: 'sky', raDeg: 279.23, decDeg: 38.78 });
+      expect(found.direction.angleTo(sky.direction)).toBeLessThan(1e-12);
+      expect(found.altDeg).toBeCloseTo(sky.altDeg, 9);
     });
   });
 

@@ -577,3 +577,68 @@ describe('LabelLayer groups', () => {
     });
   });
 });
+
+describe('LabelLayer.find', () => {
+  const style = { fontPx: 10, color: '#fff' };
+  const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+  it('finds a name a group added, as the group gave its point, and not a baked one', () => {
+    const layer = new LabelLayer(document.createElement('div'), [{ labels: [label('California', -119.5, 37.0, 1)] }]);
+    const position = at(0, 0, 1);
+    const group = layer.addGroup({ rank: 1, style, frame: 'sky', labels: [{ text: 'Polaris', priority: 0, position }] });
+    const found = layer.find('Polaris');
+    expect(found).toEqual({ found: 'one', frame: 'sky', position });
+    // The very point the layer moves, not a copy of it.
+    expect(found.found === 'one' && found.position).toBe(position);
+    expect(layer.find('California')).toEqual({ found: 'none' });
+    // Hidden is still known; removed is gone.
+    group.setVisible(false);
+    expect(layer.find('Polaris').found).toBe('one');
+    group.remove();
+    expect(layer.find('Polaris')).toEqual({ found: 'none' });
+    layer.dispose();
+  });
+
+  it('reads past a marker and finds a name at the start of a longer text, an exact one first', () => {
+    const layer = new LabelLayer(document.createElement('div'), []);
+    const etna = at(1, 0, 0);
+    const m31 = at(0, 1, 0);
+    layer.addGroup({ rank: 1, style, frame: 'earth', labels: [{ text: '▲ Etna', priority: 0, position: etna }] });
+    layer.addGroup({
+      rank: 1,
+      style,
+      frame: 'sky',
+      labels: [
+        { text: 'M31 Andromeda Galaxy', priority: 0, position: m31 },
+        { text: 'M3', priority: 0, position: at(0, 0, 1) },
+      ],
+    });
+    expect(layer.find('Etna')).toEqual({ found: 'one', frame: 'earth', position: etna });
+    expect(layer.find('M31')).toEqual({ found: 'one', frame: 'sky', position: m31 });
+    // "M3" is a whole name, and not the start of "M31 ...".
+    expect(layer.find('M3')).toEqual({ found: 'one', frame: 'sky', position: at(0, 0, 1) });
+    expect(layer.find('M31 Andromeda')).toEqual({ found: 'one', frame: 'sky', position: m31 });
+    expect(layer.find('Andromeda')).toEqual({ found: 'none' });
+    expect(layer.find('')).toEqual({ found: 'none' });
+    layer.dispose();
+  });
+
+  it('takes one thing named twice as one, and refuses a name at two places', () => {
+    const layer = new LabelLayer(document.createElement('div'), []);
+    layer.addGroup({ rank: 1, style, frame: 'sky', labels: [{ text: 'M31 Andromeda Galaxy', priority: 0, position: at(0, 1, 0) }] });
+    layer.addGroup({ rank: 2, style, frame: 'sky', labels: [{ text: 'M31', priority: 0, position: at(0, 1, 1e-6) }] });
+    expect(layer.find('M31').found).toBe('one');
+    layer.addGroup({ rank: 1, style, frame: 'sky', labels: [{ text: 'Mira', priority: 0, position: at(1, 0, 0) }] });
+    layer.addGroup({ rank: 1, style, frame: 'sky', labels: [{ text: 'Mira', priority: 0, position: at(0, 0, 1) }] });
+    expect(layer.find('Mira')).toEqual({ found: 'many', count: 2 });
+    layer.dispose();
+  });
+
+  it('passes over a group that is not findable: a mark is not a second thing of its name', () => {
+    const layer = new LabelLayer(document.createElement('div'), []);
+    layer.addGroup({ rank: 1, style, frame: 'sky', labels: [{ text: 'Vega', priority: 0, position: at(1, 0, 0) }] });
+    layer.addGroup({ rank: -1, style, frame: 'earth', findable: false, labels: [{ text: 'Vega', priority: 0, position: at(5e6, 5e6, 0) }] });
+    expect(layer.find('Vega')).toEqual({ found: 'one', frame: 'sky', position: at(1, 0, 0) });
+    layer.dispose();
+  });
+});

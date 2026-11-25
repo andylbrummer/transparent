@@ -34,6 +34,7 @@ function viewControl() {
     getPosition: () => austin,
     now: () => when,
     getLabels: () => null,
+    loadedLabels: { find: () => ({ found: 'none' }) },
     look,
     getAttitude: () => null,
     prefersReducedMotion: () => true,

@@ -46,6 +46,7 @@ function app(
       getPosition: () => null,
       now: () => new Date(0),
       getLabels: () => null,
+      loadedLabels: { find: () => ({ found: 'none' }) },
       look: createLookController(),
       getAttitude: () => null,
       prefersReducedMotion: () => false,
