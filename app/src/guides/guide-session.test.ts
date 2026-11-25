@@ -741,4 +741,67 @@ describe('createGuideSession', () => {
     expect(t.session.getGuide()).toMatchObject({ state: 'idle', message: null });
     expect(parent.querySelector('.play-bar, .guide-card, .transcript')).toBeNull();
   });
+
+  describe('in Cardboard', () => {
+    /** AT_CONTINUE played to its gate. */
+    async function atContinue(): Promise<Setup> {
+      const t = setup({ guide: AT_CONTINUE });
+      await startPlaying(t);
+      t.audio.ended = true;
+      t.session.update(16);
+      expect(t.session.getGuide().state).toBe('waiting');
+      return t;
+    }
+
+    it('takes nothing with no guide playing', () => {
+      const t = setup();
+      expect(t.session.onViewerInput('tap')).toBe(false);
+      expect(t.session.onViewerInput('nod')).toBe(false);
+      expect(t.session.stereoNotice()).toBe('');
+    });
+
+    it('pauses and resumes at a tap, and says how to resume', async () => {
+      const t = setup();
+      await startPlaying(t);
+      expect(t.session.stereoNotice()).toBe('');
+      expect(t.session.onViewerInput('tap')).toBe(true);
+      expect(t.session.getGuide().paused).toBe(true);
+      expect(t.session.stereoNotice()).toBe('Paused · tap to resume');
+      expect(t.session.onViewerInput('tap')).toBe(true);
+      expect(t.session.getGuide().paused).toBe(false);
+    });
+
+    it('lets a nod pass while the narration plays: a head nods without meaning to', async () => {
+      const t = setup();
+      await startPlaying(t);
+      expect(t.session.onViewerInput('nod')).toBe(false);
+      expect(t.session.getGuide()).toMatchObject({ state: 'playing', paused: false });
+    });
+
+    it.each(['tap', 'nod'] as const)('goes on at a continue step at a %s', async (input) => {
+      const t = await atContinue();
+      expect(t.session.stereoNotice()).toBe('Tap or nod to go on');
+      expect(t.session.onViewerInput(input)).toBe(true);
+      expect(t.session.getGuide()).toMatchObject({ state: 'loading', stepIndex: 1 });
+    });
+
+    it('retries a step that failed at a tap', async () => {
+      const t = setup();
+      await halt(t);
+      t.session.update(16);
+      expect(t.session.stereoNotice()).toBe('This step could not be played · tap to try again');
+      t.files[LOOK_DOWN_AUDIO] = filesOf(EXAMPLE_GUIDE)[LOOK_DOWN_AUDIO];
+      expect(t.session.onViewerInput('tap')).toBe(true);
+      expect(t.session.getGuide().state).toBe('loading');
+    });
+
+    it('plays again from the end at a tap', async () => {
+      const t = setup();
+      await end(t);
+      t.session.update(16);
+      expect(t.session.stereoNotice()).toBe('The end · tap to play again');
+      expect(t.session.onViewerInput('tap')).toBe(true);
+      expect(t.session.getGuide()).toMatchObject({ state: 'loading', chapterIndex: 0, stepIndex: 0 });
+    });
+  });
 });

@@ -67,8 +67,17 @@ export interface GuideSession {
   /** Pause if the guide is playing on: for the page being hidden, and for the browser stopping the sound. */
   pause(): void;
   getGuide(): GuideStatus;
-  /** What the play bar says now, '' for nothing: for Cardboard, where the bar is hidden. */
-  notice(): string;
+  /**
+   * What the guide says in Cardboard, where the play bar is hidden: what it is doing and what the viewer's button or
+   * a nod would do there; '' for nothing.
+   */
+  stereoNotice(): string;
+  /**
+   * The viewer's button or a nod, in Cardboard, once the spyglass has passed on it (spec/guides.md §11): true when the
+   * guide took it. A tap resumes, goes on at a gate, retries, plays again, or else pauses; a nod goes on at a
+   * `continue` step and nothing else, since a head nods without meaning to.
+   */
+  onViewerInput(input: 'tap' | 'nod'): boolean;
   /** A key pressed on the page: true when the guide took it. Space pauses or resumes, N and B step, Escape leaves. */
   onKey(key: string): boolean;
   /** Leave the guide if one is open, then let go of the narration and the page. */
@@ -297,6 +306,32 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     return true;
   }
 
+  function stereoNotice(): string {
+    const state = player.state();
+    if (state.kind === 'idle') return '';
+    if (isPaused(state)) return 'Paused · tap to resume';
+    if (state.kind === 'waiting' && state.gate === 'continue') return 'Tap or nod to go on';
+    if (state.kind === 'waiting' && state.offerContinue) return 'Can’t find it? Tap to go on';
+    if (state.kind === 'error') return 'This step could not be played · tap to try again';
+    if (state.kind === 'ended') return 'The end · tap to play again';
+    // Loading…, once it has been long enough to say so.
+    return bar.noticeText();
+  }
+
+  function onViewerInput(input: 'tap' | 'nod'): boolean {
+    const state = player.state();
+    if (state.kind === 'idle') return false;
+    const paused = isPaused(state);
+    const atGate = !paused && state.kind === 'waiting' && (state.gate === 'continue' || (input === 'tap' && state.offerContinue));
+    if (atGate) player.goOn();
+    else if (input === 'nod') return false;
+    else if (paused) player.resume();
+    else if (state.kind === 'error') controls.retry();
+    else if (state.kind === 'ended') controls.playAgain();
+    else pause();
+    return true;
+  }
+
   function getGuide(): GuideStatus {
     const state = player.state();
     const at = state.kind === 'idle' ? null : state;
@@ -326,7 +361,7 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     guideCard.dispose();
   }
 
-  return { open, update, pause, getGuide, notice: () => bar.noticeText(), onKey, dispose };
+  return { open, update, pause, getGuide, stereoNotice, onViewerInput, onKey, dispose };
 }
 
 /** The play bar's control each key presses. Escape is not here: it closes the card as well as leaving. */

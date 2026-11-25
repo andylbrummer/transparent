@@ -221,6 +221,14 @@ export class Spyglass {
   }
 
   /**
+   * Whether the viewer's button or a nod is the spyglass's: it is open, a stare is under way, or a name is under the
+   * view or was held still on just now (what deeper() would open on). Otherwise a guide may take it.
+   */
+  claims(candidate: SpyglassTarget | null): boolean {
+    return this.state.kind !== 'idle' || candidate !== null || this.recent !== null;
+  }
+
+  /**
    * Open the window on `target` now, whatever it was doing: a guide's look in Cardboard, once the wearer has turned
    * to it (spec/guides.md §6.3). Open on it already, it is left as it is; open or fusing on something else, it moves.
    */

@@ -559,7 +559,11 @@ export function init(): App | null {
     // Always let the button go: a hold that left the viewer ends here, outside it.
     const tapped = viewerButton.up(e.pointerId);
     if (cardboard.isActive()) {
-      if (tapped && !cardboard.isCalibrating()) spyglass.deeper(labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG)));
+      if (tapped && !cardboard.isCalibrating()) {
+        // The spyglass has first call on the button; with nothing for it under the gaze, the guide takes it.
+        const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
+        if (spyglass.claims(candidate) || !guideSession.onViewerInput('tap')) spyglass.deeper(candidate);
+      }
       return;
     }
     look.onPointerUp(e.pointerId);
@@ -696,7 +700,7 @@ export function init(): App | null {
     gazePointer.setVisible(position !== null && !ar);
     captions.setVisible(position !== null && !ar);
     captions.place(stereo, width, height, cardboardCalibration.spacingPx());
-    stereoNotice.show(stereo ? guideSession.notice() : '');
+    stereoNotice.show(stereo ? guideSession.stereoNotice() : '');
     if (stereo) stereoNotice.place(width, height, cardboardCalibration.spacingPx());
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
@@ -728,8 +732,10 @@ export function init(): App | null {
         const gesture = headGestures.update(headOrientation, deltaMs);
         if (gesture) {
           lastHeadGesture = gesture;
-          if (gesture === 'nod') spyglass.deeper(candidate);
-          else spyglass.back();
+          // The spyglass's first, as the button is; a nod it passes on may go on at a guide's continue step.
+          if (gesture === 'nod') {
+            if (spyglass.claims(candidate) || !guideSession.onViewerInput('nod')) spyglass.deeper(candidate);
+          } else spyglass.back();
         }
         const view = spyglass.view();
         if (view) {

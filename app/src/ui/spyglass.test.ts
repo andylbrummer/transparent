@@ -51,6 +51,24 @@ describe('Spyglass', () => {
     expect(spyglass.getState().kind).toBe('open');
   });
 
+  describe('claims, ahead of a guide', () => {
+    it('passes the button on at bare sky with nothing looked at lately', () => {
+      const spyglass = new Spyglass();
+      hold(spyglass, RECENT_MS + 100, null);
+      expect(spyglass.claims(null)).toBe(false);
+    });
+
+    it('claims it for a name under the view, one held still on just now, a stare, or an open window', () => {
+      const spyglass = new Spyglass();
+      expect(spyglass.claims(m31)).toBe(true);
+      hold(spyglass, 100, m31);
+      expect(spyglass.claims(null)).toBe(true);
+      spyglass.openOn(m31);
+      hold(spyglass, RECENT_MS + 100, null);
+      expect(spyglass.claims(null)).toBe(true);
+    });
+  });
+
   describe('openOn, for a guide in Cardboard', () => {
     it('opens at once on the target, framed as its extent says, with no stare', () => {
       const spyglass = new Spyglass();
