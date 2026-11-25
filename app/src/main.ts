@@ -17,6 +17,7 @@ import { PlumeLayer, type Plume } from './render/interior';
 import { QuakeLayer, type QuakeData } from './render/quakes';
 import { StereoRig } from './render/stereo';
 import { Dip } from './render/dip';
+import { ViewChips } from './ui/view-chips';
 import { icrsToEcefMatrix } from '@transparent-earth/core';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, FALLBACK_PLACE, type SensorState } from './sensors';
@@ -456,6 +457,8 @@ export function init(): App | null {
   });
   const closeGuideList = (): void => guideList.setOpen(false);
   document.getElementById('layers-toggle')?.addEventListener('click', closeGuideList);
+  // The play bar marks the page while a guide is open; read from there, as it costs nothing each frame.
+  const viewChips = new ViewChips(container, { standing, clock, guideOpen: () => document.body.classList.contains('guide-open') });
   // A link opens the guide's card; one that cannot be read opens it too, to say why.
   const link = guideLink(window.location.search);
   if (link) guideSession.open(link);
@@ -733,6 +736,8 @@ export function init(): App | null {
     stereoNotice.show(stereo ? guideSession.stereoNotice() : '');
     if (!stereo && pauseCard.isOpen()) pauseCard.close();
     if (stereo) stereoNotice.place(width, height, cardboardCalibration.spacingPx());
+    // The chips are not drawn per eye yet: the spec's place chip in the viewer is still to come.
+    viewChips.setVisible(position !== null && !ar && !stereo);
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
@@ -748,6 +753,7 @@ export function init(): App | null {
       if (!ar) look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
       // Turn the sky to where the Earth's rotation has it now.
       const date = clock.now();
+      viewChips.update(date.getTime());
       const m = icrsToEcefMatrix(date);
       skyRotation.set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1);
       inertialRoot.quaternion.setFromRotationMatrix(skyRotation);
@@ -904,6 +910,7 @@ export function init(): App | null {
       lazyLayers.dispose();
       labels.dispose();
       dip.dispose();
+      viewChips.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       hud.remove();
