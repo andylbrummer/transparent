@@ -10,8 +10,9 @@ import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets
 import type { FoldedView, Located, Target, ViewAction, ViewControl } from './actions';
 import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
-import { indexLabels, loadBodyPositions, targetDirection, targetName, type LabelIndex } from './targets';
+import { indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
 import { ARRIVE_DEG, ARRIVE_MS, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
+import { CAPTURE_DEG, framingDeg, type SpyglassTarget } from '../ui/spyglass';
 
 // Loaded up front, as by an earlier body target; body-positions.test.ts covers a view control before they are in.
 beforeAll(() => loadBodyPositions());
@@ -78,7 +79,9 @@ describe('createViewControl', () => {
       labels: LabelIndex | null;
       attitude: DeviceAttitude | null;
       reducedMotion: boolean;
-    } = { position: austin, date: when, labels: null, attitude: null, reducedMotion: false };
+      stereo: boolean;
+    } = { position: austin, date: when, labels: null, attitude: null, reducedMotion: false, stereo: false };
+    const spyglassOpened: SpyglassTarget[] = [];
     const labelParent = document.createElement('div');
     const labelLayer = new LabelLayer(labelParent, []);
     const markSpecs: LabelGroupSpec[] = [];
@@ -98,9 +101,10 @@ describe('createViewControl', () => {
         markSpecs.push(spec);
         return labelLayer.addGroup(spec);
       },
+      spyglass: { inStereo: () => view.stereo, openOn: (target) => spyglassOpened.push(target) },
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs };
+    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs, spyglassOpened };
   }
 
   const instance = (): LayerInstance => ({ setVisible() {}, dispose() {} });
@@ -780,6 +784,64 @@ describe('createViewControl', () => {
       await t.viewControl.perform({ do: 'look', target: east, fovDeg: 2 });
       t.viewControl.update(ARRIVE_MS);
       expect(t.look.getState().fovDeg).toBe(POSE_MIN_FOV_DEG);
+    });
+
+    describe('in Cardboard', () => {
+      function inCardboard() {
+        const t = posed();
+        t.view.stereo = true;
+        return t;
+      }
+
+      it(`opens the spyglass on a narrow look's target once it is within ${CAPTURE_DEG}°, framed at the look's width`, async () => {
+        const t = inCardboard();
+        await t.viewControl.perform({ do: 'look', target: east, fovDeg: 6 });
+        turnTo(t, east, CAPTURE_DEG + 1);
+        t.viewControl.update(ARRIVE_MS);
+        // Arrived: the guide moves on, the view's own width is left alone, and the spyglass waits for the capture.
+        expect(t.viewControl.awaitedGaze()).toBeNull();
+        expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+        expect(t.spyglassOpened).toHaveLength(0);
+        turnTo(t, east, CAPTURE_DEG - 0.5);
+        t.viewControl.update(16);
+        expect(t.spyglassOpened).toHaveLength(1);
+        const [opened] = t.spyglassOpened;
+        expect(framingDeg(opened)).toBeCloseTo(6, 9);
+        expect(opened.key).toBe(targetKey(east));
+        expect(opened.directionInto(new THREE.Vector3()).toArray()).toEqual(locatedDirection(t.viewControl, east).toArray());
+        t.viewControl.update(16);
+        expect(t.spyglassOpened).toHaveLength(1);
+      });
+
+      it('narrows nothing for a wide look, and opens no spyglass', async () => {
+        const t = inCardboard();
+        await t.viewControl.perform({ do: 'look', target: east, fovDeg: 40 });
+        turnTo(t, east);
+        t.viewControl.update(ARRIVE_MS);
+        t.viewControl.update(16);
+        expect(t.spyglassOpened).toHaveLength(0);
+      });
+
+      it('forgets the spyglass when the viewer is left before the target is captured, or a new look comes', async () => {
+        const t = inCardboard();
+        await t.viewControl.perform({ do: 'look', target: east, fovDeg: 6 });
+        turnTo(t, east, 5);
+        t.viewControl.update(ARRIVE_MS);
+        t.view.stereo = false;
+        t.viewControl.update(16);
+        t.view.stereo = true;
+        turnTo(t, east);
+        t.viewControl.update(16);
+        expect(t.spyglassOpened).toHaveLength(0);
+
+        await t.viewControl.perform({ do: 'look', target: east, fovDeg: 6 });
+        turnTo(t, east, 5);
+        t.viewControl.update(ARRIVE_MS);
+        await t.viewControl.perform({ do: 'look', target: north });
+        turnTo(t, east);
+        t.viewControl.update(16);
+        expect(t.spyglassOpened).toHaveLength(0);
+      });
     });
 
     it('waits on a look whose ease the user took over, and eases its field of view in when they arrive', async () => {

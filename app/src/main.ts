@@ -421,6 +421,8 @@ export function init(): App | null {
     // Read on every action: the user can change it while the app is open.
     prefersReducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
     addLabels: (spec) => labels.addGroup(spec),
+    // Read at frame time, by when both exist.
+    spyglass: { inStereo: () => cardboard.isActive() && !arRunner.isActive(), openOn: (target) => spyglass.openOn(target) },
   });
   const guideSession = createGuideSession({
     parent: container,

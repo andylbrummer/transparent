@@ -221,6 +221,20 @@ export class Spyglass {
   }
 
   /**
+   * Open the window on `target` now, whatever it was doing: a guide's look in Cardboard, once the wearer has turned
+   * to it (spec/guides.md §6.3). Open on it already, it is left as it is; open or fusing on something else, it moves.
+   */
+  openOn(target: SpyglassTarget): void {
+    const state = this.state;
+    if ((state.kind === 'open' || state.kind === 'closing') && state.target.key === target.key) {
+      if (state.kind === 'closing') this.state = { ...state, kind: 'open', progress: 1 - state.progress };
+      return;
+    }
+    this.dismissed = null;
+    this.state = opening(target);
+  }
+
+  /**
    * Out of the spyglass: back a level, and from the first close it. Shut,
    * refuse the name just looked at - a shake's own motion has broken the
    * stare by the time it is seen - until the view leaves it. A shake.

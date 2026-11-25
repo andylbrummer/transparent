@@ -51,6 +51,34 @@ describe('Spyglass', () => {
     expect(spyglass.getState().kind).toBe('open');
   });
 
+  describe('openOn, for a guide in Cardboard', () => {
+    it('opens at once on the target, framed as its extent says, with no stare', () => {
+      const spyglass = new Spyglass();
+      spyglass.openOn(m31);
+      expect(spyglass.getState()).toMatchObject({ kind: 'open', target: m31, progress: 0, framedDeg: framingDeg(m31) });
+    });
+
+    it('leaves a window open on the same target as it is, and reopens one closing on it', () => {
+      const spyglass = new Spyglass();
+      spyglass.openOn(m31);
+      hold(spyglass, 400, null);
+      const progress = (spyglass.getState() as { progress: number }).progress;
+      spyglass.openOn(m31);
+      expect((spyglass.getState() as { progress: number }).progress).toBe(progress);
+      hold(spyglass, FRAME_MS, null, turned(90));
+      expect(spyglass.getState().kind).toBe('closing');
+      spyglass.openOn(m31);
+      expect(spyglass.getState().kind).toBe('open');
+    });
+
+    it('moves a window open on something else to the target', () => {
+      const spyglass = new Spyglass();
+      spyglass.openOn(target('Mars', null));
+      spyglass.openOn(m31);
+      expect(spyglass.getState()).toMatchObject({ kind: 'open', target: m31, progress: 0 });
+    });
+  });
+
   it('does nothing at bare sky', () => {
     const spyglass = new Spyglass();
     hold(spyglass, 3 * DWELL_MS, null);

@@ -13,6 +13,7 @@ import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
+import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
 import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
 import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
@@ -42,6 +43,14 @@ export interface ViewControlDeps {
   prefersReducedMotion(): boolean;
   /** Add a group of names to the view: a mark is one. */
   addLabels(spec: LabelGroupSpec): LabelGroup;
+  /**
+   * Cardboard's spyglass, where a look narrower than FOV_NEEDS_TARGET_BELOW_DEG opens: the viewer cannot narrow its
+   * own field of view. Absent, or not in stereo, such a look narrows the view as anywhere else.
+   */
+  readonly spyglass?: {
+    inStereo(): boolean;
+    openOn(target: SpyglassTarget): void;
+  };
 }
 
 /** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
@@ -99,6 +108,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   const switchesById = new Map(deps.switches.map((s) => [s.id, s]));
   let easing: Easing | null = null;
   let awaiting: Gaze | null = null;
+  /** In Cardboard, a narrow look that has arrived and waits for its target within CAPTURE_DEG to open the spyglass. */
+  let spyglassWait: { readonly target: Target; readonly spyglass: SpyglassTarget } | null = null;
   const marks = new Map<string, Mark>();
   let borrowed = false;
 
@@ -227,9 +238,11 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         // The guide cannot turn someone holding the phone: the pointer shows them the way.
         if (aimMode() === 'pose') {
           awaiting = gaze;
+          spyglassWait = null;
           return { ok: true, awaitingGaze: true };
         }
         awaiting = null;
+        spyglassWait = null;
         return easeTo({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: action.fovDeg ?? deps.look.getState().fovDeg }, gaze);
       }
       case 'fov': {
@@ -289,6 +302,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     endEase({ ok: true });
     const posed = aimMode() === 'pose';
     // The guide cannot turn someone holding the phone, at a cut any more than in an ease: the pointer shows the way.
+    spyglassWait = null;
     if (posed) awaiting = gazeOn(look.target, located, look.fovDeg);
     else {
       awaiting = null;
@@ -348,6 +362,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         ended = true;
         endEase({ ok: true });
         awaiting = null;
+        spyglassWait = null;
         takeMarksDown();
         // The width goes back at once and exactly, not through setFov: it is the user's own, neither eased nor held
         // to a pose's limit. The aim is left alone: the user is looking there now.
@@ -406,6 +421,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     followMarks();
     stepEase(deltaMs);
     followGaze(deltaMs);
+    followSpyglass();
   }
 
   /**
@@ -453,10 +469,40 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     awaiting.direction.copy(located.direction);
     awaiting.withinMs = located.offCentreDeg <= ARRIVE_DEG ? awaiting.withinMs + deltaMs : 0;
     if (awaiting.withinMs < ARRIVE_MS) return;
-    const { fovDeg } = awaiting;
+    const { fovDeg, target, name } = awaiting;
     awaiting = null;
+    // Cardboard cannot narrow its view: a narrow look opens the spyglass, by the spyglass's own rule, once the target
+    // is within its capture (spec/guides.md §6.3). Framed at the look's width: framingDeg is extent × FRAME_MARGIN.
+    if (fovDeg !== undefined && fovDeg < FOV_NEEDS_TARGET_BELOW_DEG && deps.spyglass?.inStereo()) {
+      spyglassWait = {
+        target,
+        spyglass: {
+          key: targetKey(target),
+          name: name ?? 'target',
+          extentDeg: fovDeg / FRAME_MARGIN,
+          directionInto: (out) => {
+            const found = locate(target);
+            return found.ok ? out.copy(found.direction) : out;
+          },
+        },
+      };
+      return;
+    }
     // Nothing to wait for or report: the value was checked when the look was performed, and setFov never refuses.
     if (fovDeg !== undefined) void setFov(fovDeg);
+  }
+
+  /** Open the spyglass on a narrow look's target once it is within CAPTURE_DEG; left Cardboard, forget it. */
+  function followSpyglass(): void {
+    if (!spyglassWait) return;
+    if (!deps.spyglass?.inStereo()) {
+      spyglassWait = null;
+      return;
+    }
+    const located = locate(spyglassWait.target);
+    if (!located.ok || located.offCentreDeg > CAPTURE_DEG) return;
+    deps.spyglass.openOn(spyglassWait.spyglass);
+    spyglassWait = null;
   }
 
   function awaitedGaze(): AwaitedGaze | null {
@@ -467,6 +513,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
 
   function stopAwaitingGaze(): void {
     awaiting = null;
+    spyglassWait = null;
   }
 
   const forward = new THREE.Vector3();
