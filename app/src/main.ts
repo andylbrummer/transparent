@@ -61,6 +61,7 @@ import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
 import { GazePointer, type StereoEyes } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
+import { StereoNotice } from './guides/stereo-notice';
 import { fetchGuides, guideLink } from './guides/guide-files';
 import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
@@ -320,6 +321,7 @@ export function init(): App | null {
   const compassBar = new CompassBar(container);
   const gazePointer = new GazePointer(container);
   const captions = new CaptionOverlay(container);
+  const stereoNotice = new StereoNotice(container);
 
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
@@ -692,6 +694,8 @@ export function init(): App | null {
     gazePointer.setVisible(position !== null && !ar);
     captions.setVisible(position !== null && !ar);
     captions.place(stereo, width, height, cardboardCalibration.spacingPx());
+    stereoNotice.show(stereo ? guideSession.notice() : '');
+    if (stereo) stereoNotice.place(width, height, cardboardCalibration.spacingPx());
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
@@ -862,6 +866,7 @@ export function init(): App | null {
       document.getElementById('layers-toggle')?.removeEventListener('click', closeGuideList);
       guideList.dispose();
       captions.dispose();
+      stereoNotice.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();
     },

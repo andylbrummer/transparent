@@ -173,6 +173,14 @@ describe('PlayBar', () => {
     expect(status().textContent).toBe(notice + (offer ?? ''));
   });
 
+  it('gives its notice alone, for Cardboard to say per eye', () => {
+    expect(bar.noticeText()).toBe('');
+    bar.update(ERROR, 16, SWITCHES);
+    expect(bar.noticeText()).toBe('This step could not be played.');
+    bar.update({ ...PLAYING, paused: true }, 16, SWITCHES);
+    expect(bar.noticeText()).toBe('Paused');
+  });
+
   it('opens a halt with a plain sentence and puts the full message beneath it, in the status', () => {
     bar.update(ERROR, 16, SWITCHES);
     expect(status().querySelector('span')!.textContent).toBe('This step could not be played.');

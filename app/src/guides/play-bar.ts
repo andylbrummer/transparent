@@ -156,6 +156,11 @@ export class PlayBar {
     this.show(state.kind === 'idle' ? null : this.shownFor(state, switches));
   }
 
+  /** What the bar says now ('Paused', an error…), '' for nothing: Cardboard, which hides the bar, says it per eye. */
+  noticeText(): string {
+    return this.shown?.notice ?? '';
+  }
+
   /** Give a control the focus: where it goes back to when what the control opened closes. */
   focus(control: Control): void {
     this.controls[control].focus();

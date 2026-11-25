@@ -67,6 +67,8 @@ export interface GuideSession {
   /** Pause if the guide is playing on: for the page being hidden, and for the browser stopping the sound. */
   pause(): void;
   getGuide(): GuideStatus;
+  /** What the play bar says now, '' for nothing: for Cardboard, where the bar is hidden. */
+  notice(): string;
   /** A key pressed on the page: true when the guide took it. Space pauses or resumes, N and B step, Escape leaves. */
   onKey(key: string): boolean;
   /** Leave the guide if one is open, then let go of the narration and the page. */
@@ -324,7 +326,7 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     guideCard.dispose();
   }
 
-  return { open, update, pause, getGuide, onKey, dispose };
+  return { open, update, pause, getGuide, notice: () => bar.noticeText(), onKey, dispose };
 }
 
 /** The play bar's control each key presses. Escape is not here: it closes the card as well as leaving. */

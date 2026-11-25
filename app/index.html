@@ -947,6 +947,27 @@
         color: #9fdcff;
       }
       /* Cardboard: one plate per eye (CaptionOverlay.place sets left, bottom and width), smaller, as the voice readout. */
+      /* Cardboard: what the hidden play bar says, one copy per eye (StereoNotice.place sets left, top and width). */
+      .stereo-notice {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+        font: 600 13px/1.3 system-ui, -apple-system, sans-serif;
+        color: #ffd27a;
+      }
+      .stereo-notice[hidden] {
+        display: none;
+      }
+      .stereo-notice__readout {
+        position: absolute;
+        transform: translateX(-50%);
+        width: max-content;
+        padding: 6px 10px;
+        text-align: center;
+        background: rgba(5, 5, 16, 0.82);
+        border-radius: 8px;
+      }
       .captions--stereo {
         inset: 0;
         padding: 0;
