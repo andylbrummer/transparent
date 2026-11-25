@@ -107,8 +107,38 @@ export interface LayerContext {
   setStatus(text: string | null, tone?: StatusTone): void;
 }
 
+/**
+ * One setting a layer takes from outside its own control: which earthquake
+ * plays, how far back in time. A small schema, so that a guide's cue is
+ * checked against it before it plays (layers/params.ts).
+ */
+export type LayerParam =
+  | {
+      readonly type: 'number';
+      readonly description: string;
+      readonly minimum?: number;
+      readonly maximum?: number;
+      /** Only these: a control that offers a few choices takes no other. */
+      readonly values?: readonly number[];
+    }
+  | { readonly type: 'string'; readonly description: string; readonly values: readonly string[] }
+  | { readonly type: 'boolean'; readonly description: string };
+
+/** A layer's settings by name. */
+export type LayerParams = Readonly<Record<string, LayerParam>>;
+
+export type LayerParamValue = number | string | boolean;
+
+/** Settings to change, by name; a setting left out stays as it is. */
+export type LayerParamValues = Readonly<Record<string, LayerParamValue>>;
+
 export interface LayerInstance {
   setVisible(visible: boolean): void;
+  /**
+   * Change the settings `values` names, checked already against the definition's `params`. A layer with params has
+   * it. It may throw for a value the data turn out not to have, which reaches the caller as an error.
+   */
+  setParams?(values: LayerParamValues): void;
   /** Called every frame while visible. */
   update?(frame: FrameState): void;
   /** CSS-pixel size of the viewport (one eye's in stereo). */
@@ -131,6 +161,8 @@ export interface LayerDefinition {
   /** Switches sharing a group are exclusive: turning one on turns the rest off. */
   readonly exclusiveGroup?: string;
   readonly credits: readonly Credit[];
+  /** The settings a guide, a link or the voice may give it beside its own control; its instance then has setParams. */
+  readonly params?: LayerParams;
   /** Fetch code and data and build the layer. Runs once, on first switch-on. */
   load(context: LayerContext): Promise<LayerInstance>;
 }

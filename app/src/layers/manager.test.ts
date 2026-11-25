@@ -300,6 +300,64 @@ describe('LayerManager', () => {
     expect(early.disposed).toBe(true);
     expect(late.disposed).toBe(true);
   });
+
+  describe('setParams', () => {
+    const params = { speed: { type: 'number', description: 'how fast' }, playing: { type: 'boolean', description: 'whether it plays' } } as const;
+    /** A layer that records what it is given, and whether it was showing then. */
+    function paramLayer() {
+      const given: { values: Record<string, unknown>; visible: boolean | null }[] = [];
+      const instance = {
+        ...fakeInstance(),
+        setParams(values: Record<string, unknown>) {
+          given.push({ values, visible: this.visible });
+        },
+      };
+      return { instance, given };
+    }
+
+    it('gives a loaded layer its settings at once', async () => {
+      const { instance, given } = paramLayer();
+      const manager = new LayerManager([definition('waves', async () => instance, { params })], shared, () => {}, () => {});
+      await manager.setVisible('waves', true);
+      manager.setParams('waves', { speed: 120 });
+      expect(given).toEqual([{ values: { speed: 120 }, visible: true }]);
+    });
+
+    it('holds settings for a layer still loading, the last of each, and gives them before it first shows', async () => {
+      const { instance, given } = paramLayer();
+      let finish!: (value: LayerInstance) => void;
+      const load = () => new Promise<LayerInstance>((r) => (finish = r));
+      const manager = new LayerManager([definition('waves', load, { params })], shared, () => {}, () => {});
+      manager.setParams('waves', { speed: 60, playing: true });
+      const shown = manager.setVisible('waves', true);
+      manager.setParams('waves', { speed: 120 });
+      finish(instance);
+      await shown;
+      expect(given).toEqual([{ values: { speed: 120, playing: true }, visible: null }]);
+      expect(instance.visible).toBe(true);
+    });
+
+    it('fails the load of a layer that refuses the settings it was given, and keeps nothing of it', async () => {
+      const instance = {
+        ...fakeInstance(),
+        setParams() {
+          throw new Error('no such earthquake');
+        },
+      };
+      const status: (string | null)[] = [];
+      const manager = new LayerManager([definition('waves', async () => instance, { params })], shared, (_, text) => status.push(text), () => {});
+      manager.setParams('waves', { speed: 120 });
+      await expect(manager.setVisible('waves', true)).rejects.toThrow('layer "waves" failed to load');
+      expect(instance.disposed).toBe(true);
+      expect(status.at(-1)).toBe('unavailable');
+    });
+
+    it('throws for a layer that takes no settings, or one it was not built with', () => {
+      const manager = new LayerManager([definition('stars', async () => fakeInstance())], shared, () => {}, () => {});
+      expect(() => manager.setParams('stars', { speed: 1 })).toThrow('lazy layer stars takes no settings');
+      expect(() => manager.setParams('no-such-layer', { speed: 1 })).toThrow('no lazy layer no-such-layer');
+    });
+  });
 });
 
 describe('collectDefinitions', () => {

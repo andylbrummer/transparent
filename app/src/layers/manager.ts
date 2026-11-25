@@ -5,7 +5,7 @@
  * loaded ahead of need, and a load can be waited on.
  */
 
-import type { FrameState, LayerContext, LayerDefinition, LayerInstance, StatusTone } from './types';
+import type { FrameState, LayerContext, LayerDefinition, LayerInstance, LayerParamValues, StatusTone } from './types';
 
 export type SharedLayerContext = Omit<LayerContext, 'setStatus'>;
 
@@ -17,6 +17,8 @@ interface Slot {
   instance: LayerInstance | null;
   /** The load in flight, shared by everyone waiting on it; null when none is. */
   loading: Promise<void> | null;
+  /** Settings given before the layer had loaded, the last value of each, for it to take as it arrives; null when none are. */
+  params: LayerParamValues | null;
 }
 
 export class LayerManager {
@@ -33,7 +35,7 @@ export class LayerManager {
     private readonly onLoadFailed: (id: string) => void
   ) {
     for (const definition of definitions) {
-      this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: null });
+      this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: null, params: null });
     }
   }
 
@@ -61,6 +63,23 @@ export class LayerManager {
   preload(id: string): Promise<void> {
     const slot = this.slot(id);
     return slot.instance ? Promise.resolve() : this.loaded(slot);
+  }
+
+  /**
+   * Give a layer settings (LayerDefinition.params), checked already. A loaded layer takes them at once; one not yet
+   * loaded takes them as it loads, before it is first shown, so it never shows its defaults first. A layer that takes
+   * no settings is a wiring fault and throws, as an unknown id does; so does a value the layer refuses.
+   */
+  setParams(id: string, values: LayerParamValues): void {
+    const slot = this.slot(id);
+    if (!slot.definition.params) throw new Error(`lazy layer ${id} takes no settings`);
+    if (slot.instance) this.applyParams(slot.instance, id, values);
+    else slot.params = { ...slot.params, ...values };
+  }
+
+  private applyParams(instance: LayerInstance, id: string, values: LayerParamValues): void {
+    if (!instance.setParams) throw new Error(`lazy layer ${id} has params but no setParams`);
+    instance.setParams(values);
   }
 
   /** Not async on purpose: a wiring fault throws at once, where a failed load is a rejection. */
@@ -94,6 +113,17 @@ export class LayerManager {
       if (this.disposed) {
         instance.dispose();
         return;
+      }
+      // Before the layer is kept: one that refuses its settings has failed to load as asked, and says so as a failed load does.
+      if (slot.params) {
+        const params = slot.params;
+        slot.params = null;
+        try {
+          this.applyParams(instance, id, params);
+        } catch (error) {
+          instance.dispose();
+          throw error;
+        }
       }
       slot.instance = instance;
       if (this.resolution) instance.setResolution?.(this.resolution.width, this.resolution.height);
