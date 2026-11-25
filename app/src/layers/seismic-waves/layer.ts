@@ -1,4 +1,28 @@
-import type { LayerDefinition } from '../types';
+import { PLAYBACK_SPANS_S, PLAYBACK_SPEEDS } from '../../ui/timeline';
+import type { LayerDefinition, LayerParams } from '../types';
+import { DEEP_PRESETS, PRESETS } from './events';
+
+/**
+ * What a guide or a link may set (waves.ts setParams). The earthquakes are the fixed ones: the latest large one comes
+ * from a live feed, so it is a different earthquake on a different day, and a guide that names it would say
+ * something untrue a week later. A link can still ask for it (?quake=latest).
+ */
+export const SEISMIC_WAVE_PARAMS = {
+  quake: {
+    type: 'string',
+    description: 'The earthquake, by key. Choosing one goes back to its origin and plays, unless `t` or `playing` says otherwise.',
+    values: [...PRESETS, ...DEEP_PRESETS].map((preset) => preset.key),
+  },
+  t: {
+    type: 'number',
+    description: 'Seconds since the origin. The scrubber widens to hold it.',
+    minimum: 0,
+    maximum: PLAYBACK_SPANS_S[PLAYBACK_SPANS_S.length - 1],
+  },
+  speed: { type: 'number', description: 'Seconds of wave travel per second watched.', values: [...PLAYBACK_SPEEDS] },
+  playing: { type: 'boolean', description: 'Play or pause.' },
+  shadows: { type: 'boolean', description: 'Tint the P and S shadow zones.' },
+} as const satisfies LayerParams;
 
 /**
  * Seismic wave playback. Off by default: it is something to do, with a
@@ -41,6 +65,7 @@ const seismicWaves: LayerDefinition = {
       url: 'https://doi.org/10.31905/D808B825',
     },
   ],
+  params: SEISMIC_WAVE_PARAMS,
   load: async (context) => (await import('./waves')).createSeismicWavesLayer(context),
 };
 

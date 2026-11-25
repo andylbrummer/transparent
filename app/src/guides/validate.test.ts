@@ -124,6 +124,10 @@ describe('guideProblems', () => {
     ['a shared label name told apart by its kind', (g) => (cues(g, 2)[1] = { at: 2, do: 'look', target: { kind: 'label', name: shared![0], labelKind: shared![1][0].kind } })],
     ['two cues at the same time', (g) => (cues(g, 1)[3].at = 3)],
     ['a gaze step with a look', (g) => (steps(g)[1].advance = 'gaze', cues(g, 1).push({ at: 30, do: 'look', target: DOWN }))],
+    [
+      'the Tōhoku earthquake played',
+      (g) => (cues(g, 1)[2] = { at: 3, do: 'layers', on: ['seismic-waves'], params: { 'seismic-waves': { quake: 'tohoku2011', speed: 120, playing: true } } }),
+    ],
   ])('allows %s', (_, change) => {
     const g = copy();
     change(g);

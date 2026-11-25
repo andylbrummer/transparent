@@ -7,8 +7,9 @@
  * and its wording (readout.ts). This file joins them to the layer system.
  *
  * Playback runs on its own clock - seconds since the earthquake - and does
- * not touch the app clock. For screenshots and links the state can be set
- * from the page's URL:
+ * not touch the app clock. A guide sets it through setParams (the layer's
+ * params, layer.ts), and so does the page's URL, read once, for
+ * screenshots and links:
  *
  *   ?quake=tohoku2011   the earthquake, by key (events.ts: tohoku2011,
  *                       sumatra2004, valdivia1960, sanfrancisco1906,
@@ -41,7 +42,7 @@ import {
 } from '../../ui/timeline';
 import { CACHE_KEY, REFRESH_INTERVAL_MS, browserIo, loadRecent } from '../quakes-recent/recent';
 import type { NotableQuakeData } from '../quakes-notable/notable';
-import type { LayerContext, LayerInstance } from '../types';
+import type { LayerContext, LayerInstance, LayerParamValue, LayerParamValues } from '../types';
 import { PlaybackControl, type PlaybackView } from './control';
 import {
   angularDistanceDeg,
@@ -91,6 +92,24 @@ export function parseUrlPlayback(search: string): UrlPlayback {
   };
 }
 
+/**
+ * The URL's asks as settings (setParams), so a link and a guide set the playback one way. A time asks to look at that
+ * instant, so it pauses there. An earthquake the URL names that is not in `keys` (the ones to hand) is ignored, as
+ * anything malformed is; with none, `fallback` plays. ?quake=latest waits for the feed, so it is not one of these.
+ */
+export function urlParams(url: UrlPlayback, keys: readonly string[], fallback: string): LayerParamValues {
+  const values: Record<string, LayerParamValue> = {
+    quake: url.quake !== null && keys.includes(url.quake) ? url.quake : fallback,
+    shadows: url.shadows,
+  };
+  if (url.speed !== null) values.speed = url.speed;
+  if (url.timeS !== null) {
+    values.t = url.timeS;
+    values.playing = false;
+  }
+  return values;
+}
+
 /** The scrubber span that holds a time: the default if it fits, else the shortest that does. */
 export function spanFor(timeS: number, current: number): number {
   if (timeS <= current) return current;
@@ -133,7 +152,8 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
 
   const url = parseUrlPlayback(window.location.search);
   const renderer = new WaveRenderer(data);
-  renderer.setShadowsVisible(url.shadows);
+  let shadows = true;
+  renderer.setShadowsVisible(shadows);
   const motion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   const onMotion = (): void => renderer.setReducedMotion(motion?.matches ?? false);
   onMotion();
@@ -242,7 +262,7 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
           position: new THREE.Vector3().copy(frame.axis).multiplyScalar(EARTH_RADIUS_M - Math.max(0, selected.depthKm) * 1000),
         },
         { text: 'antipode', priority: 1, position: new THREE.Vector3().copy(frame.axis).multiplyScalar(-EARTH_RADIUS_M) },
-        ...(url.shadows
+        ...(shadows
           ? [
               {
                 text: `P shadow ${Math.round(edges.pEndDeg)}°–${Math.round(edges.pkpCausticDeg)}°`,
@@ -268,6 +288,35 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
     if (atS > 0) state = seekElapsed(setSpan(state, spanFor(atS, state.spanS)), atS);
     control.setEvents(events, selected.key);
     place();
+    refreshReadout(true);
+  }
+
+  /**
+   * The layer's settings (layer.ts SEISMIC_WAVE_PARAMS), checked already. A setting left out stays as it is, but
+   * choosing an earthquake goes back to its origin and plays, as the picker does, unless `t` or `playing` says
+   * otherwise. An earthquake the data lack throws: the guide that asked for it has to say so.
+   */
+  function setParams(values: LayerParamValues): void {
+    const t = typeof values.t === 'number' ? values.t : null;
+    const playing = typeof values.playing === 'boolean' ? values.playing : null;
+    let replace = false;
+    if (typeof values.shadows === 'boolean' && values.shadows !== shadows) {
+      shadows = values.shadows;
+      renderer.setShadowsVisible(shadows);
+      replace = true;
+    }
+    if (typeof values.speed === 'number') state = setSpeed(state, values.speed);
+    if (typeof values.quake === 'string') {
+      const event = events.find((candidate) => candidate.key === values.quake);
+      if (!event) throw new Error(`seismic waves: no earthquake ${values.quake} in the data`);
+      // A time asks to look at that instant: paused there, unless playing is asked for too.
+      choose(event, playing ?? t === null, t ?? 0);
+      return;
+    }
+    // The shadow labels are placed with the rest.
+    if (replace) place();
+    if (t !== null) state = seekElapsed(setSpan(state, spanFor(t, state.spanS)), t);
+    if (playing !== null && playing !== isPlaying(state)) state = togglePlayback(state);
     refreshReadout(true);
   }
 
@@ -314,10 +363,8 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
     }
   }
 
-  const initial = events.find((event) => event.key === url.quake) ?? events[0];
-  if (url.speed !== null) state = setSpeed(state, url.speed);
-  // A time in the URL is a request to look at that instant: start paused there.
-  choose(initial, url.timeS === null, url.timeS ?? 0);
+  // The URL is one caller of setParams; a guide's cue is another, after it.
+  setParams(urlParams(url, events.map((event) => event.key), events[0].key));
 
   // The live entry arrives when the feed does; the presets do not wait for it.
   void (async () => {
@@ -334,6 +381,7 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
   })();
 
   return {
+    setParams,
     setVisible(next) {
       visible = next;
       renderer.object.visible = next;
