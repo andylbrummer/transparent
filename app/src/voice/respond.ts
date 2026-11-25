@@ -23,6 +23,19 @@ export interface VoiceActions {
   /** Zoom a step (VoiceCommand zoom); what came of it. */
   zoom(inward: boolean): VoiceZoom;
   readonly guide: VoiceGuide;
+  readonly clips: VoiceClips;
+}
+
+/** The hotspots' side of the voice grammar (spec/guides.md §8.3). */
+export interface VoiceClips {
+  isOpen(): boolean;
+  /** Whether a recording or a film is being heard now: then, as under narration, only guide and clip commands count. */
+  isSounding(): boolean;
+  /** Open the marker at the middle of the view; its title, or null when none is there. */
+  openHere(): string | null;
+  /** Open the shown marker whose title holds these words; its title, or null when none does. */
+  openTitled(words: string): string | null;
+  close(): void;
 }
 
 /** The guide's side of the voice grammar (spec/guides.md §11). */
@@ -61,14 +74,16 @@ const wakeName = WAKE_WORD[0].toUpperCase() + WAKE_WORD.slice(1);
 export function helpText(inCardboard: boolean): string {
   const lead = inCardboard ? `Start with "${wakeName}". ` : '';
   const viewer = inCardboard ? ' "calibrate", "keep", "exit",' : ' "calibrate",';
-  return `${lead}Say a view, like "tectonics" or "deep space"; a layer on or off, like "show stars" or "hide plates"; or "what's that", "zoom in", "zoom out",${viewer} "reset". In a guide: "pause", "resume", "next", "back", "stop guide"; or "play guide" and its title.`;
+  return `${lead}Say a view, like "tectonics" or "deep space"; a layer on or off, like "show stars" or "hide plates"; or "what's that", "zoom in", "zoom out",${viewer} "reset". In a guide: "pause", "resume", "next", "back", "stop guide"; or "play guide" and its title. At a ▶ marker: "play that", or "play" and its title; "stop" closes it.`;
 }
 
 /** Act on a phrase, the recognizer's guesses best first; the reply to say, or to show only. */
 export function respondToSpeech(alternatives: readonly string[], actions: VoiceActions): string | QuietReply {
-  const command = bestCommand(alternatives, actions.vocabulary, actions.guide.isOpen());
+  const command = bestCommand(alternatives, actions.vocabulary, { guideOpen: actions.guide.isOpen(), clipOpen: actions.clips.isOpen() });
   const forGuide = command.kind === 'guide' || command.kind === 'play-guide';
-  if (actions.guide.isNarrating() && !forGuide) return '';
+  const forClip = command.kind === 'clip-here' || command.kind === 'play-clip' || command.kind === 'clip-stop';
+  // Anything else heard over narration or a clip's sound is most likely that sound, picked up: no reply at all.
+  if ((actions.guide.isNarrating() || actions.clips.isSounding()) && !forGuide && !forClip) return '';
   return perform(command, actions);
 }
 
@@ -82,6 +97,18 @@ function perform(command: VoiceCommand, actions: VoiceActions): string | QuietRe
     }
     case 'play-guide':
       return { text: actions.guide.play(command.title), quiet: true };
+    // Quiet: a clip about to play, or a guide going on once it closes, would be talked over.
+    case 'clip-here': {
+      const title = actions.clips.openHere();
+      return title === null ? 'No clip there. Look at a ▶ marker.' : { text: `${title}.`, quiet: true };
+    }
+    case 'play-clip': {
+      const title = actions.clips.openTitled(command.title);
+      return title === null ? `No clip called "${command.title}" in view.` : { text: `${title}.`, quiet: true };
+    }
+    case 'clip-stop':
+      actions.clips.close();
+      return { text: 'Closed.', quiet: true };
     case 'preset':
       performFromVocabulary(actions.viewControl, { do: 'preset', id: command.preset.id });
       return `${command.preset.label}.`;

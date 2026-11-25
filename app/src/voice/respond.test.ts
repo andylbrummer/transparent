@@ -27,6 +27,10 @@ function app(
     lazyLayers?: Pick<LayerManager, 'preload'>;
     /** A guide open, and whether its narration is heard now. */
     guide?: { narrating: boolean };
+    /** A clip open, and whether its sound is heard now. */
+    clip?: { sounding: boolean };
+    /** The titles of the markers shown, the first at the middle of the view. */
+    markers?: readonly string[];
   } = {}
 ) {
   const done: string[] = [];
@@ -82,6 +86,21 @@ function app(
         done.push(`play:${title}`);
         return `finding ${title}`;
       },
+    },
+    clips: {
+      isOpen: () => state.clip !== undefined,
+      isSounding: () => state.clip?.sounding ?? false,
+      openHere: () => {
+        const title = state.markers?.[0] ?? null;
+        if (title !== null) done.push(`clip:${title}`);
+        return title;
+      },
+      openTitled: (words) => {
+        const title = state.markers?.find((t) => t.toLowerCase().includes(words)) ?? null;
+        if (title !== null) done.push(`clip:${title}`);
+        return title;
+      },
+      close: () => done.push('clip:close'),
     },
   };
   return { actions, done };
@@ -215,6 +234,56 @@ describe('respondToSpeech', () => {
       const { actions, done } = app({ guide: { narrating: true } });
       expect(respondToSpeech(['play guide down through the earth'], actions)).toEqual({ text: 'finding down through the earth', quiet: true });
       expect(done).toEqual(['play:down through the earth']);
+    });
+  });
+
+  describe('clips', () => {
+    const WAVES = 'How we know: earthquake waves';
+
+    it('open the marker at the middle of the view for “play that”, quietly, as the clip will speak', () => {
+      const { actions, done } = app({ markers: [WAVES] });
+      expect(respondToSpeech(['play that'], actions)).toEqual({ text: `${WAVES}.`, quiet: true });
+      expect(done).toEqual([`clip:${WAVES}`]);
+    });
+
+    it('say where to look when no marker is there', () => {
+      const { actions, done } = app();
+      expect(respondToSpeech(['play that'], actions)).toBe('No clip there. Look at a ▶ marker.');
+      expect(done).toEqual([]);
+    });
+
+    it('open a shown marker by its title, and say when none has it', () => {
+      const { actions, done } = app({ markers: ['Somewhere else', WAVES] });
+      expect(respondToSpeech(['play earthquake waves'], actions)).toEqual({ text: `${WAVES}.`, quiet: true });
+      expect(respondToSpeech(['play the moon'], actions)).toBe('No clip called "moon" in view.');
+      expect(done).toEqual([`clip:${WAVES}`]);
+    });
+
+    it('close an open clip on “stop”, which leaves the viewer only when no clip is open', () => {
+      const open = app({ inCardboard: true, clip: { sounding: true } });
+      expect(respondToSpeech(['stop'], open.actions)).toEqual({ text: 'Closed.', quiet: true });
+      expect(open.done).toEqual(['clip:close']);
+      const shut = app({ inCardboard: true });
+      expect(respondToSpeech(['stop'], shut.actions)).toBe('Leaving Cardboard.');
+    });
+
+    it('drop anything else heard while a recording or a film plays, as under narration', () => {
+      const { actions, done } = app({ clip: { sounding: true } });
+      expect(respondToSpeech(['earth is the third planet'], actions)).toBe('');
+      expect(respondToSpeech(['hide stars'], actions)).toBe('');
+      expect(done).toEqual([]);
+    });
+
+    it('take any command while a picture shows, which makes no sound', () => {
+      const { actions } = app({ clip: { sounding: false } });
+      expect(respondToSpeech(['hide stars'], actions)).toBe('Stars off.');
+    });
+
+    it('leave “play” alone in a guide, where it is resume, and “play guide” to the guides', () => {
+      const { actions, done } = app({ guide: { narrating: false }, markers: [WAVES] });
+      respondToSpeech(['play'], actions);
+      respondToSpeech(['play guide earthquake waves'], actions);
+      expect(done).toEqual(['guide:resume', 'play:earthquake waves']);
     });
   });
 });

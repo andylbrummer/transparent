@@ -102,6 +102,16 @@ describe('the hotspot field', () => {
     expect(hotspots.nearest(toward(0), 1)?.hotspot.id).toBe('prem');
   });
 
+  it('lists only the markers shown, for a spoken title', () => {
+    const { hotspots, layersOn } = field();
+    hotspots.set('media', source(hotspot('prem', 0, 'shell-core'), hotspot('waves', 90)));
+    hotspots.update(16);
+    expect(hotspots.shown().map((hit) => hit.hotspot.id)).toEqual(['waves']);
+    layersOn.add('shell-core');
+    hotspots.update(16);
+    expect(hotspots.shown().map((hit) => hit.hotspot.id)).toEqual(['prem', 'waves']);
+  });
+
   it('replaces what a source showed, and takes it down with null', () => {
     const { hotspots, groups } = field();
     hotspots.set('guide', source(hotspot('a', 0)));

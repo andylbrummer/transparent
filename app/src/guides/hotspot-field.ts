@@ -89,6 +89,8 @@ export interface HotspotField {
   update(deltaMs: number): void;
   /** A hotspot in the view by id, the first source's first; null if none has it. */
   find(id: string): FieldHotspot | null;
+  /** The markers shown now. A new array: for a spoken title, not for a frame. */
+  shown(): FieldHotspot[];
   /** The shown marker nearest `direction`, within `maxDeg`; null if none is. */
   nearest(direction: THREE.Vector3, maxDeg: number): FieldHotspot | null;
   /** A tap toward `direction`: opens the marker there, and says whether one was. */
@@ -217,6 +219,7 @@ export function createHotspotField(deps: HotspotFieldDeps): HotspotField {
     set,
     update,
     find,
+    shown: () => markers.filter((marker) => marker.shown),
     nearest: (direction, maxDeg) => nearestMarker(direction, cosOf(maxDeg)),
     tap(direction) {
       const marker = nearestMarker(direction, cosOf(TAP_DEG));

@@ -145,3 +145,19 @@ describe('findTitle', () => {
     ['the', -1],
   ])('finds "%s" at %i', (heard, index) => expect(findTitle(heard, titles)).toBe(index));
 });
+
+describe('the clip phrases', () => {
+  it.each([
+    ['play that', {}, { kind: 'clip-here' }],
+    ['open this', {}, { kind: 'clip-here' }],
+    ['play the earthquake waves', {}, { kind: 'play-clip', title: 'earthquake waves' }],
+    ['play guide the north pole', {}, { kind: 'play-guide', title: 'the north pole' }],
+    ['play', { guideOpen: true }, { kind: 'guide', action: 'resume' }],
+    ['stop', { clipOpen: true }, { kind: 'clip-stop' }],
+    ['close the picture', { clipOpen: true }, { kind: 'clip-stop' }],
+    ['stop', {}, { kind: 'exit' }],
+    ['stop guide', { guideOpen: true, clipOpen: true }, { kind: 'guide', action: 'stop' }],
+  ])('reads "%s" with %o as %o', (heard, context, command) => {
+    expect(parseCommand(heard, vocabulary, context)).toEqual(command);
+  });
+});

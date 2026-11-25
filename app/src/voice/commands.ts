@@ -37,6 +37,12 @@ export type VoiceCommand =
   | { readonly kind: 'guide'; readonly action: GuideVoiceAction }
   /** Start the guide whose title holds these words. */
   | { readonly kind: 'play-guide'; readonly title: string }
+  /** Open the hotspot marker at the middle of the view ("play that"). */
+  | { readonly kind: 'clip-here' }
+  /** Open the shown hotspot whose title holds these words ("play <title>"). */
+  | { readonly kind: 'play-clip'; readonly title: string }
+  /** Close the clip that is open ("stop", while one is). */
+  | { readonly kind: 'clip-stop' }
   | { readonly kind: 'unknown'; readonly heard: string };
 
 export type GuideVoiceAction = 'pause' | 'resume' | 'next' | 'back' | 'stop';
@@ -172,17 +178,32 @@ const GUIDE_ACTIONS: readonly [GuideVoiceAction, RegExp][] = [
   ['back', /^(?:back|go back|previous|previous step|step back|back a step)$/],
 ];
 
-/**
- * The command in one phrase; WAKE_WORD already stripped if it was there. With `guideOpen`, the guide's own commands
- * are tried first.
- */
-export function parseCommand(heard: string, vocabulary: Vocabulary, guideOpen = false): VoiceCommand {
+/** Closes an open clip: tried only while one is, before "stop" can mean leaving the viewer. */
+const CLIP_STOP = /^(?:stop|close|enough|thats enough|(?:stop|close) (?:that|it|this|the clip|the picture|the film|the video))$/;
+const CLIP_HERE = /^(?:play|open|show me) (?:that|this|it)$/;
+/** After the guide's own: a bare "play" there is resume, and "play guide …" is a guide. */
+const PLAY_CLIP = /^(?:play|open)(?: the)? (.+)$/;
+
+/** What the app has open, which changes what a phrase means. */
+export interface SpeechContext {
+  /** A guide is open: its commands are tried first. */
+  readonly guideOpen?: boolean;
+  /** A clip is open: "stop" closes it. */
+  readonly clipOpen?: boolean;
+}
+
+/** The command in one phrase; WAKE_WORD already stripped if it was there. */
+export function parseCommand(heard: string, vocabulary: Vocabulary, context: SpeechContext = {}): VoiceCommand {
   const phrase = normalizeSpeech(heard).replace(/^please /, '').replace(/ please$/, '');
   const playGuide = PLAY_GUIDE.exec(phrase);
   if (playGuide) return { kind: 'play-guide', title: playGuide[1] };
-  if (guideOpen) {
+  if (context.clipOpen && CLIP_STOP.test(phrase)) return { kind: 'clip-stop' };
+  if (context.guideOpen) {
     for (const [action, pattern] of GUIDE_ACTIONS) if (pattern.test(phrase)) return { kind: 'guide', action };
   }
+  if (CLIP_HERE.test(phrase)) return { kind: 'clip-here' };
+  const playClip = PLAY_CLIP.exec(phrase);
+  if (playClip) return { kind: 'play-clip', title: playClip[1] };
   if (/^(?:exit|leave|quit|close|stop)(?: cardboard| vr| headset| the headset)?$/.test(phrase)) return { kind: 'exit' };
   if (/^(?:calibrate|calibration|start calibrating|calibrate the headset)$/.test(phrase)) return { kind: 'calibrate' };
   if (/^(?:keep|keep it|keep that|save|save it|done|thats it|thats good|lock it)$/.test(phrase)) return { kind: 'keep' };
@@ -215,9 +236,9 @@ export function parseCommand(heard: string, vocabulary: Vocabulary, guideOpen = 
 }
 
 /** The first of the recognizer's guesses that is a command; else the top guess, unknown. */
-export function bestCommand(alternatives: readonly string[], vocabulary: Vocabulary, guideOpen = false): VoiceCommand {
+export function bestCommand(alternatives: readonly string[], vocabulary: Vocabulary, context: SpeechContext = {}): VoiceCommand {
   for (const heard of alternatives) {
-    const command = parseCommand(heard, vocabulary, guideOpen);
+    const command = parseCommand(heard, vocabulary, context);
     if (command.kind !== 'unknown') return command;
   }
   return { kind: 'unknown', heard: normalizeSpeech(alternatives[0] ?? '') };

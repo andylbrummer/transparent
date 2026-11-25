@@ -719,6 +719,7 @@ export function init(): App | null {
   let lastHeadGesture: HeadGesture | null = null;
   const spyglassLens = new SpyglassLens(background);
   const headForward = new THREE.Vector3();
+  const voiceForward = new THREE.Vector3();
   const spyglassDirection = new THREE.Vector3();
   const cardboardCalibration = new CardboardCalibration(container, localStorage);
   const cardboard = new CardboardToggle(container, (stereo) => {
@@ -784,6 +785,30 @@ export function init(): App | null {
             );
             return `Finding the guide "${title}".`;
           },
+        },
+        clips: {
+          isOpen: () => clipPlayer.isOpen(),
+          isSounding: () => {
+            const clip = clipPlayer.getClip();
+            return clip.state === 'playing' && clip.kind !== 'image';
+          },
+          openHere: () => {
+            // The middle of the view, which in the viewer is where the head points.
+            const hit = hotspotField.nearest(camera.getWorldDirection(voiceForward), CAPTURE_DEG);
+            if (!hit) return null;
+            hotspotField.resetDwell();
+            void clipPlayer.open(hit);
+            return hit.hotspot.title;
+          },
+          openTitled: (words) => {
+            const shown = hotspotField.shown();
+            const index = findTitle(words, shown.map((hit) => hit.hotspot.title));
+            if (index < 0) return null;
+            hotspotField.resetDwell();
+            void clipPlayer.open(shown[index]);
+            return shown[index].hotspot.title;
+          },
+          close: () => clipPlayer.close(),
         },
         zoom: (inward) => {
           if (!cardboard.isActive()) {
