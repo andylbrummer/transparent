@@ -164,7 +164,9 @@ The guide plays wherever the user is, so write for any place: "straight down", n
 ### Hotspots and clips
 
 A hotspot hangs a clip on something in the view: a marker, "▶ How we know: wave paths", that opens a short
-recording, a picture or a film when it is tapped, stared at in Cardboard, or chosen with Enter. Add them to a step:
+recording, a picture or a film when it is tapped, stared at in Cardboard, chosen with Enter, or asked for by voice
+("Earth, play that", or "play" and words from its title). A title that is easy to say is easy to ask for. Add them
+to a step:
 
 ```json
 "hotspots": [
@@ -191,7 +193,7 @@ recording, a picture or a film when it is tapped, stared at in Cardboard, or cho
 - A step's hotspots show from that step to the end of its chapter.
 
 Opening a clip pauses the guide; closing it, or the clip ending, lets the guide go on where it stopped. One thing
-speaks at a time. A clip closes with its × button, Esc, a shake in Cardboard, or a `clip` cue with `hotspot: null`;
+speaks at a time. A clip closes with its × button, Esc, a shake in Cardboard, "stop" by voice, or a `clip` cue with `hotspot: null`;
 looking 40° away from it for 3 s in Cardboard pauses a recording or a film and puts a picture away.
 
 | `kind` | Fields | Shows |
