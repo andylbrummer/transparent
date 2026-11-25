@@ -102,4 +102,38 @@ describe('CaptionOverlay', () => {
     overlay.dispose();
     expect(parent.querySelector('.captions')).toBeNull();
   });
+
+  describe('in Cardboard', () => {
+    const plates = (): HTMLElement[] => [...parent.querySelectorAll<HTMLElement>('.captions__plate')];
+
+    it('shows one plate on one screen, and the same caption on two, one per eye, in stereo', () => {
+      overlay.setCues({ cues: CUES, lang: 'en' });
+      overlay.update(7);
+      overlay.place(false, 800, 400, 300);
+      expect(plates().map((p) => p.hidden)).toEqual([false, true]);
+      overlay.place(true, 800, 400, 300);
+      expect(plates().map((p) => p.hidden)).toEqual([false, false]);
+      expect(plates().map((p) => p.textContent)).toEqual(['The far side\nof the Earth.', 'The far side\nof the Earth.']);
+      expect(plates().map((p) => p.style.left)).toEqual(['250px', '550px']);
+      expect(root().classList.contains('captions--stereo')).toBe(true);
+    });
+
+    it("reads once: the right eye's copy is hidden from a screen reader", () => {
+      expect(plates()[1].getAttribute('aria-hidden')).toBe('true');
+      expect(plates()[0].hasAttribute('aria-hidden')).toBe(false);
+    });
+
+    it('stands clear of the voice readout, which hangs from 70% of the height', () => {
+      overlay.place(true, 800, 400, 300);
+      expect(parseFloat(plates()[0].style.bottom)).toBeGreaterThanOrEqual(400 * 0.3);
+    });
+
+    it('goes back to one plate along the foot when the viewer is left', () => {
+      overlay.place(true, 800, 400, 300);
+      overlay.place(false, 800, 400, 300);
+      expect(plates().map((p) => p.hidden)).toEqual([false, true]);
+      expect(plates()[0].style.left).toBe('');
+      expect(root().classList.contains('captions--stereo')).toBe(false);
+    });
+  });
 });

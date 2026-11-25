@@ -686,9 +686,10 @@ export function init(): App | null {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const stereo = !ar && position !== null && cardboard.isActive();
-    // Cardboard and AR draw no pointer and no captions yet (phase 3); arrival is still counted there.
+    // Cardboard and AR draw no pointer yet (phase 3); arrival is still counted there. AR shows no captions.
     gazePointer.setVisible(position !== null && !ar && !stereo);
-    captions.setVisible(position !== null && !ar && !stereo);
+    captions.setVisible(position !== null && !ar);
+    captions.place(stereo, width, height, cardboardCalibration.spacingPx());
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();

@@ -941,6 +941,20 @@
         font-size: 20px;
         color: #9fdcff;
       }
+      /* Cardboard: one plate per eye (CaptionOverlay.place sets left, bottom and width), smaller, as the voice readout. */
+      .captions--stereo {
+        inset: 0;
+        padding: 0;
+      }
+      .captions--stereo .captions__plate {
+        position: absolute;
+        transform: translateX(-50%);
+        width: max-content;
+        font-size: 12px;
+      }
+      .captions__plate[hidden] {
+        display: none !important;
+      }
       /* Voice: what was heard and the reply; in Cardboard one copy per eye (VoiceOverlay.place).
          On one screen it stands on its foot above a two-line caption, so the two never cover each other. */
       #voice-status {
