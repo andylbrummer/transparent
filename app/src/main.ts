@@ -59,7 +59,7 @@ import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './vo
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
-import { GazePointer } from './view/gaze-pointer';
+import { GazePointer, type StereoEyes } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
 import { fetchGuides, guideLink } from './guides/guide-files';
 import { GuideList, type GuideListing } from './guides/guide-list';
@@ -596,6 +596,8 @@ export function init(): App | null {
   window.addEventListener('keydown', onKeyDown);
 
   const stereoRig = new StereoRig();
+  /** The eyes the gaze pointer draws through in Cardboard: one object for every frame. */
+  const pointerEyes: StereoEyes = { left: stereoRig.left, right: stereoRig.right, eyeWidth: 0 };
   // Hands-free zoom in the viewer: a stare at a name in the sky opens a magnified window over it; nods and shakes steer it.
   const spyglass = new Spyglass();
   const headGestures = new HeadGestures();
@@ -686,8 +688,8 @@ export function init(): App | null {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const stereo = !ar && position !== null && cardboard.isActive();
-    // Cardboard and AR draw no pointer yet (phase 3); arrival is still counted there. AR shows no captions.
-    gazePointer.setVisible(position !== null && !ar && !stereo);
+    // AR draws no pointer and no captions; arrival is still counted there.
+    gazePointer.setVisible(position !== null && !ar);
     captions.setVisible(position !== null && !ar);
     captions.place(stereo, width, height, cardboardCalibration.spacingPx());
     const nowMs = performance.now();
@@ -754,6 +756,8 @@ export function init(): App | null {
       else if (fuse) fuse.target.directionInto(spyglassDirection);
       labels.setSpyglassHole(view ? spyglassDirection : null, THREE.MathUtils.degToRad(SPYGLASS_DEG / 2));
       labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
+      pointerEyes.eyeWidth = eyeWidth;
+      gazePointer.update(viewControl.awaitedGaze(), camera, width, height, pointerEyes);
       stereoRig.render(
         renderer,
         scene,

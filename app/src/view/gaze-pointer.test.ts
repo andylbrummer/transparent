@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import type { AwaitedGaze, Target } from './actions';
-import { EDGE_INSET_PX, GazePointer, RING_CLEAR_PX, placePointer, type ClearArea, type PointerPlacement } from './gaze-pointer';
+import { EDGE_INSET_PX, GazePointer, RING_CLEAR_PX, STEREO_ARROW_DEG, placePointer, placeStereoPointer, type ClearArea, type PointerPlacement } from './gaze-pointer';
+import { StereoRig } from '../render/stereo';
 import { ARRIVE_DEG } from './view-control';
 
 const WIDTH = 400;
@@ -93,6 +94,51 @@ describe('placePointer', () => {
       }
     }
     expect(rings).toBeGreaterThan(0);
+  });
+});
+
+describe('placeStereoPointer', () => {
+  const EYE_W = 422;
+  const EYE_H = 390;
+  /** A Cardboard rig on a head at the origin looking down -z, its convergence spots 300 px apart. */
+  function rig(): StereoRig {
+    const head = new THREE.PerspectiveCamera(60, (2 * EYE_W) / EYE_H, 0.1, 1e9);
+    head.updateMatrixWorld();
+    const stereo = new StereoRig();
+    stereo.update(head, EYE_W, EYE_H, 300);
+    return stereo;
+  }
+
+  it('rings a target near the centre, at the same height in both eyes', () => {
+    const { left, right } = rig();
+    const l = placeStereoPointer(left, toward(5, 3), EYE_W, EYE_H);
+    const r = placeStereoPointer(right, toward(5, 3), EYE_W, EYE_H);
+    expect(l.kind).toBe('ring');
+    expect(r.kind).toBe('ring');
+    expect(l.yPx).toBeCloseTo(r.yPx, 3);
+  });
+
+  it(`puts the arrow ${STEREO_ARROW_DEG}° from the centre, not at the edge, for a target behind`, () => {
+    const { left } = rig();
+    const ahead = placeStereoPointer(left, toward(0), EYE_W, EYE_H);
+    const placed = arrow(placeStereoPointer(left, toward(120), EYE_W, EYE_H));
+    expect(placed.way).toBe('right');
+    expect(placed.edge).toBe('right');
+    expect(Math.round(placed.offCentreDeg)).toBe(120);
+    expect(placed.xPx).toBeGreaterThan(ahead.xPx);
+    expect(placed.xPx).toBeLessThan(EYE_W - EDGE_INSET_PX);
+    expect(placed.yPx).toBeCloseTo(EYE_H / 2, 3);
+  });
+
+  it('places the arrow where both eyes fuse: as far from each eye’s convergence spot', () => {
+    const { left, right } = rig();
+    const spotL = placeStereoPointer(left, toward(0), EYE_W, EYE_H);
+    const spotR = placeStereoPointer(right, toward(0), EYE_W, EYE_H);
+    const l = arrow(placeStereoPointer(left, toward(0, -90), EYE_W, EYE_H));
+    const r = arrow(placeStereoPointer(right, toward(0, -90), EYE_W, EYE_H));
+    expect(l.way).toBe('down');
+    expect(l.xPx - spotL.xPx).toBeCloseTo(r.xPx - spotR.xPx, 1);
+    expect(l.yPx).toBeCloseTo(r.yPx, 3);
   });
 });
 
@@ -305,6 +351,31 @@ describe('GazePointer', () => {
       t.pointer.setVisible(true);
       t.pointer.update(null, t.camera, WIDTH, HEIGHT);
       expect(t.said()).toEqual(['Look for Mars, 74° right', '', 'Look for Mars, 74° right', '']);
+    });
+  });
+
+  describe('in Cardboard', () => {
+    it('draws the arrow once per eye, the right eye’s in the right half, and still says it once', () => {
+      const parent = document.createElement('div');
+      document.body.appendChild(parent);
+      const pointer = new GazePointer(parent);
+      const head = new THREE.PerspectiveCamera(60, 844 / 390, 0.1, 1e9);
+      head.updateMatrixWorld();
+      const stereo = new StereoRig();
+      stereo.update(head, 422, 390, 300);
+      const gaze: AwaitedGaze = { target: { kind: 'horizon', azDeg: 90, altDeg: 0 }, direction: toward(90), name: 'Mars', arriving: 0 };
+      pointer.update(gaze, head, 844, 390, { left: stereo.left, right: stereo.right, eyeWidth: 422 });
+      const arrows = [...parent.querySelectorAll<HTMLElement>('.gaze-pointer__arrow')];
+      expect(arrows.map((a) => a.style.display)).toEqual(['', '']);
+      expect(arrows.map((a) => a.textContent)).toEqual(['Mars · 90° right▲', 'Mars · 90° right▲']);
+      const x = (a: HTMLElement): number => parseFloat(/translate\(([-\d.]+)px/.exec(a.style.transform)![1]);
+      expect(x(arrows[0])).toBeLessThan(422);
+      expect(x(arrows[1])).toBeGreaterThan(422);
+      expect(parent.querySelectorAll('[role="status"]')).toHaveLength(1);
+      pointer.update(gaze, head, 844, 390, null);
+      expect(arrows[1].style.display).toBe('none');
+      pointer.dispose();
+      parent.remove();
     });
   });
 });

@@ -252,6 +252,11 @@
       body.guide-open .gaze-pointer {
         bottom: calc(env(safe-area-inset-bottom) + var(--captions-top));
       }
+      /* Cardboard: the whole screen, each eye's marks placed in its half (GazePointer.update), and smaller. */
+      body .gaze-pointer--stereo {
+        inset: 0;
+        font-size: 12px;
+      }
       .gaze-pointer__arrow,
       .gaze-pointer__ring,
       .gaze-pointer__name {
