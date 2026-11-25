@@ -80,8 +80,10 @@ interface FatLineLayer {
   dispose(): void;
 }
 
-/** What keeps its keys while it has the focus: a guide's key pressed there is the control's, not the guide's. */
-const FOCUS_KEEPS_KEYS = 'button, input, select, textarea, a';
+/** A field keeps every key while it has the focus: a guide's key typed there is the field's. */
+const FIELDS = 'input, select, textarea';
+/** A button or a link keeps only the keys that press it: Space on a button already clicks it. */
+const PRESSABLE = 'button, a';
 
 export interface App {
   readonly scene: THREE.Scene;
@@ -416,6 +418,7 @@ export function init(): App | null {
     objectUrl: { create: (blob) => URL.createObjectURL(blob), revoke: (url) => URL.revokeObjectURL(url) },
     captions,
     labels: () => geoStatus,
+    storage: localStorage,
   });
   // A link opens the guide's card; one that cannot be read opens it too, to say why.
   const link = guideLink(window.location.search);
@@ -550,9 +553,12 @@ export function init(): App | null {
       }
     }
     // A guide's key is one press, not one held down, and with Ctrl, Cmd or Alt it is the browser's shortcut, not the
-    // guide's. A focused control keeps its keys: Space on a button already clicks it, so taking it here too would do
-    // two things at once. Taken, Space does not scroll the page.
-    const guideKey = !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof Element && e.target.matches(FOCUS_KEEPS_KEYS));
+    // guide's. A focused field keeps every key, and a focused button the keys that press it: taking Space here too
+    // would do two things at once. Escape is no button's, so it still closes the transcript and then leaves with the
+    // focus on the Text button. Taken, Space does not scroll the page.
+    const focused = e.target instanceof Element ? e.target : null;
+    const focusKeeps = focused !== null && (focused.matches(FIELDS) || (focused.matches(PRESSABLE) && (e.key === ' ' || e.key === 'Enter')));
+    const guideKey = !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !focusKeeps;
     if (guideKey && guideSession.onKey(e.key)) {
       e.preventDefault();
       return;

@@ -4,7 +4,7 @@ import type { ActionOutcome, AwaitedGaze } from '../view/actions';
 import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
 import { deferred, FakeAudio } from './fake-audio.testdata';
 import type { Guide } from './format';
-import { createGuideSession, type GuideSessionDeps } from './guide-session';
+import { CAPTIONS_STORAGE_KEY, createGuideSession, type GuideSessionDeps } from './guide-session';
 import { parseVtt } from './vtt';
 
 const ID = EXAMPLE_GUIDE.id;
@@ -22,6 +22,34 @@ const AT_CONTINUE: Guide = {
   ...EXAMPLE_GUIDE,
   chapters: [{ ...EXAMPLE_GUIDE.chapters[0], steps: EXAMPLE_GUIDE.chapters[0].steps.map((step, i) => (i === 0 ? { ...step, advance: 'continue' } : step)) }],
 };
+
+/** EXAMPLE_GUIDE with its second step a silence: no narration, so no captions and nothing to fetch for it. */
+const SILENT_SECOND: Guide = {
+  ...EXAMPLE_GUIDE,
+  chapters: [
+    {
+      ...EXAMPLE_GUIDE.chapters[0],
+      steps: EXAMPLE_GUIDE.chapters[0].steps.map((step, i) =>
+        i === 1 ? { id: step.id, silenceS: 2, cues: step.cues, advance: step.advance } : step
+      ),
+    },
+  ],
+};
+/** The first step's captions for the transcript: two cues, one of two lines, one with an escape that reads as markup. */
+const LOOK_DOWN_VTT = 'WEBVTT\n\n00:00.000 --> 00:01.000\nStraight down,\nthrough the Earth.\n\n00:01.000 --> 00:02.000\n&lt;b&gt;Not&lt;/b&gt; markup.\n';
+const SHELLS_VTT = 'WEBVTT\n\n00:00.000 --> 00:02.000\nThe shells.\n';
+
+/** localStorage's two calls, over a Map. */
+function memoryStorage() {
+  const items = new Map<string, string>();
+  return {
+    items,
+    getItem: (key: string): string | null => items.get(key) ?? null,
+    setItem(key: string, value: string): void {
+      items.set(key, value);
+    },
+  };
+}
 
 /** Each file a function of the fetch's signal, since a Response is read once: an Error is a fetch that rejects. */
 type Files = Record<string, (signal: AbortSignal | undefined) => Response | Error | Promise<Response>>;
@@ -55,7 +83,7 @@ afterEach(() => {
  * every action at once and counts its borrows, restores and stops; `world.awaited` is what awaitedGaze answers and
  * `world.labels` what labels() does. `events` has the borrow's end and each download's abort, in order.
  */
-function setup(options: { guide?: Guide; files?: Partial<Files> } = {}) {
+function setup(options: { guide?: Guide; files?: Partial<Files>; storage?: GuideSessionDeps['storage'] } = {}) {
   const files: Files = { ...filesOf(options.guide ?? EXAMPLE_GUIDE), ...(options.files as Files) };
   const audio = new FakeAudio();
   const fetched: string[] = [];
@@ -64,6 +92,7 @@ function setup(options: { guide?: Guide; files?: Partial<Files> } = {}) {
   const world = { borrows: 0, ends: 0, restores: 0, stops: 0, awaited: null as AwaitedGaze | null, labels: 'ready' as ReturnType<GuideSessionDeps['labels']> };
   const ok = (): Promise<ActionOutcome> => Promise.resolve({ ok: true });
   let blobs = 0;
+  const storage = options.storage ?? memoryStorage();
   const session = createGuideSession({
     parent,
     view: {
@@ -107,9 +136,10 @@ function setup(options: { guide?: Guide; files?: Partial<Files> } = {}) {
       },
     },
     labels: () => world.labels,
+    storage,
   });
   disposals.push(() => session.dispose());
-  return { session, audio, files, fetched, events, captionCalls, world };
+  return { session, audio, files, fetched, events, captionCalls, world, storage };
 }
 type Setup = ReturnType<typeof setup>;
 
@@ -127,6 +157,9 @@ const cardButtons = (): string[] => [...card().querySelectorAll('button')].filte
 const cardText = (): string[] =>
   [...card().querySelectorAll<HTMLElement>('h2, p')].filter((element) => visible(element)).map((element) => element.textContent!);
 const note = (): HTMLElement => card().querySelector<HTMLElement>('[role="status"]')!;
+const transcript = (): HTMLElement => parent.querySelector<HTMLElement>('.transcript')!;
+/** What the transcript shows, a paragraph at a time, with each paragraph's language. */
+const transcriptText = (): [string, string][] => [...transcript().querySelectorAll('p')].map((p) => [p.lang, p.textContent!]);
 
 /** Open the guide at `at` and tap Start once its card is ready: the first step is then loading. */
 async function start(t: Setup, at: { chapterIndex: number; stepIndex: number } | null = null): Promise<void> {
@@ -280,6 +313,8 @@ describe('createGuideSession', () => {
       stepIndex: 0,
       tS: 0,
       message: null,
+      captionsShown: true,
+      transcriptOpen: false,
     });
     expect(visible(bar())).toBe(true);
     expect(t.world.borrows).toBe(1);
@@ -537,6 +572,160 @@ describe('createGuideSession', () => {
     expect(t.session.getGuide()).toMatchObject({ card: 'closed', state: 'idle' });
   });
 
+  it('shows captions at first, and turns them off and on again at Captions, remembering the switch', async () => {
+    const t = setup();
+    await startPlaying(t);
+    expect(t.session.getGuide().captionsShown).toBe(true);
+    expect(t.captionCalls.at(-2)).toEqual(['setCues', { cues: parseVtt(VTT), lang: 'en' }]);
+    button(bar, 'Captions')!.click();
+    expect(t.captionCalls.at(-1)).toEqual(['setCues', null]);
+    expect(t.storage.getItem(CAPTIONS_STORAGE_KEY)).toBe('off');
+    expect(t.session.getGuide().captionsShown).toBe(false);
+    const calls = t.captionCalls.length;
+    t.session.update(16);
+    expect(t.captionCalls.length).toBe(calls);
+    expect(button(bar, 'Captions')!.getAttribute('aria-pressed')).toBe('false');
+    button(bar, 'Captions')!.click();
+    expect(t.captionCalls.slice(calls)).toEqual([
+      ['setCues', { cues: parseVtt(VTT), lang: 'en' }],
+      ['update', 0],
+    ]);
+    expect(t.storage.getItem(CAPTIONS_STORAGE_KEY)).toBe('on');
+    t.session.update(16);
+    expect(button(bar, 'Captions')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('starts with captions off on a later visit, once they were turned off', async () => {
+    const storage = memoryStorage();
+    const first = setup({ storage });
+    await startPlaying(first);
+    button(bar, 'Captions')!.click();
+    first.session.dispose();
+    const later = setup({ storage });
+    expect(later.session.getGuide().captionsShown).toBe(false);
+    await startPlaying(later);
+    expect(later.captionCalls).toEqual([]);
+  });
+
+  it('keeps captions on, and the switch working, where storage cannot be read or written', async () => {
+    const denied = (): never => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    const t = setup({ storage: { getItem: denied, setItem: denied } });
+    await startPlaying(t);
+    expect(t.session.getGuide().captionsShown).toBe(true);
+    button(bar, 'Captions')!.click();
+    expect(t.session.getGuide().captionsShown).toBe(false);
+    expect(t.captionCalls.at(-1)).toEqual(['setCues', null]);
+  });
+
+  it('opens the step’s text at Text, a paragraph for each caption in the guide’s language, as text, and takes the focus there', async () => {
+    const t = setup({ files: { [file('audio/01-look-down.vtt')]: () => new Response(LOOK_DOWN_VTT) } });
+    await startPlaying(t);
+    button(bar, 'Text')!.click();
+    expect(visible(transcript())).toBe(true);
+    expect(transcript().tagName).toBe('SECTION');
+    expect(transcript().getAttribute('aria-label')).toBe('Transcript');
+    // Read when the user goes there, never over the narration.
+    expect(transcript().getAttribute('role')).toBeNull();
+    expect(transcript().getAttribute('aria-live')).toBeNull();
+    expect(transcriptText()).toEqual([
+      ['en', 'Straight down, through the Earth.'],
+      ['en', '<b>Not</b> markup.'],
+    ]);
+    expect(transcript().querySelector('b')).toBeNull();
+    expect(document.activeElement).toBe(transcript());
+    expect(t.session.getGuide().transcriptOpen).toBe(true);
+    t.session.update(16);
+    expect(button(bar, 'Text')!.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps the transcript on the current step: still there while the guide waits, then loading, then the next step’s text', async () => {
+    const t = setup({ guide: AT_CONTINUE, files: { [file('audio/02-shells.vtt')]: () => new Response(SHELLS_VTT) } });
+    await startPlaying(t);
+    button(bar, 'Text')!.click();
+    expect(transcriptText()).toEqual([['en', 'Look down.']]);
+    t.audio.ended = true;
+    t.session.update(16);
+    expect(t.session.getGuide().state).toBe('waiting');
+    expect(transcriptText()).toEqual([['en', 'Look down.']]);
+    t.audio.ended = false;
+    button(bar, 'Next')!.click();
+    t.session.update(16);
+    expect(t.session.getGuide()).toMatchObject({ state: 'loading', stepIndex: 1 });
+    expect(transcriptText()).toEqual([['', 'Loading…']]);
+    await settle();
+    t.session.update(16);
+    expect(t.session.getGuide()).toMatchObject({ state: 'playing', stepIndex: 1 });
+    expect(transcriptText()).toEqual([['en', 'The shells.']]);
+  });
+
+  it('says so in the transcript of a step with no narration', async () => {
+    const t = setup({ guide: SILENT_SECOND });
+    await startPlaying(t, { chapterIndex: 0, stepIndex: 1 });
+    button(bar, 'Text')!.click();
+    expect(transcriptText()).toEqual([['', 'This step has no narration.']]);
+  });
+
+  it('closes the transcript at Close, giving the focus back to Text', async () => {
+    const t = setup();
+    await startPlaying(t);
+    button(bar, 'Text')!.click();
+    button(transcript, 'Close')!.click();
+    expect(visible(transcript())).toBe(false);
+    expect(document.activeElement).toBe(button(bar, 'Text'));
+    expect(t.session.getGuide()).toMatchObject({ state: 'playing', transcriptOpen: false });
+  });
+
+  it('takes the captions down while the transcript is open, and puts them back as it closes', async () => {
+    const t = setup();
+    await startPlaying(t);
+    button(bar, 'Text')!.click();
+    expect(t.captionCalls.at(-1)).toEqual(['setCues', null]);
+    const calls = t.captionCalls.length;
+    t.session.update(16);
+    expect(t.captionCalls.length).toBe(calls);
+    // The switch is still on: the transcript only covers for the plate.
+    expect(t.session.getGuide().captionsShown).toBe(true);
+    button(transcript, 'Close')!.click();
+    expect(t.captionCalls.slice(calls)).toEqual([
+      ['setCues', { cues: parseVtt(VTT), lang: 'en' }],
+      ['update', 0],
+    ]);
+  });
+
+  it('leaves the captions down as the transcript closes while they are off', async () => {
+    const t = setup();
+    await startPlaying(t);
+    button(bar, 'Captions')!.click();
+    button(bar, 'Text')!.click();
+    const calls = t.captionCalls.length;
+    button(transcript, 'Close')!.click();
+    t.session.update(16);
+    expect(t.captionCalls.length).toBe(calls);
+  });
+
+  it('closes only the transcript at the first Escape, and leaves at the second', async () => {
+    const t = setup();
+    await startPlaying(t);
+    button(bar, 'Text')!.click();
+    expect(t.session.onKey('Escape')).toBe(true);
+    expect(visible(transcript())).toBe(false);
+    expect(document.activeElement).toBe(button(bar, 'Text'));
+    expect(t.session.getGuide().state).toBe('playing');
+    expect(t.session.onKey('Escape')).toBe(true);
+    expect(t.session.getGuide().state).toBe('idle');
+  });
+
+  it('closes the transcript at Leave', async () => {
+    const t = setup();
+    await startPlaying(t);
+    button(bar, 'Text')!.click();
+    button(bar, 'Leave')!.click();
+    expect(visible(transcript())).toBe(false);
+    expect(t.session.getGuide().transcriptOpen).toBe(false);
+  });
+
   it('leaves the guide before cutting off its downloads at dispose, so no abort shows as an error', async () => {
     // A download that waits until it is aborted, as a browser's does.
     const untilAborted = (signal: AbortSignal | undefined): Promise<Response> =>
@@ -550,6 +739,6 @@ describe('createGuideSession', () => {
     expect(t.events).toEqual(['borrow ended', `aborted ${LOOK_DOWN_AUDIO}`]);
     await settle();
     expect(t.session.getGuide()).toMatchObject({ state: 'idle', message: null });
-    expect(parent.querySelector('.play-bar, .guide-card')).toBeNull();
+    expect(parent.querySelector('.play-bar, .guide-card, .transcript')).toBeNull();
   });
 });

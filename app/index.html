@@ -12,8 +12,9 @@
         --compass-bar-height: calc(env(safe-area-inset-top) + 46px);
         /* Clear of the HUD at three lines, as a narrow phone wraps it; while a guide is open, clear of the play bar. */
         --captions-foot: 80px;
-        /* The play bar's height above the safe area: a heading of two lines, the controls and the status line. */
-        --play-bar-height: 154px;
+        /* The play bar's height above the safe area: its padding (8 + 8), the heading row (44, the switches' height,
+           over the title's two lines), the controls (44), the status line (44) and the two gaps between (6 + 6). */
+        --play-bar-height: 160px;
       }
       /* On body, not :root, so that it follows --captions-foot where body.guide-open raises it: a custom property's
          var() is worked out where it is declared. */
@@ -324,7 +325,8 @@
       }
       /* A guide's controls and status (play-bar.ts), along the foot while a guide is open. The captions stand on it,
          and it is over them; level with the gaze pointer. Its height is fixed, so the captions never jump: a message
-         too long for its place scrolls there, beside its button. Five buttons in one row down to a 360 px phone. */
+         too long for its place scrolls there, beside its button. Five buttons in one row down to a 360 px phone, and the
+         two switches in the heading row, so the bar is as tall at every width. */
       .play-bar {
         position: fixed;
         left: 0;
@@ -352,6 +354,21 @@
       .play-bar > * {
         width: min(100%, 560px);
       }
+      /* The guide and the step on the left, cut short with an ellipsis where they do not fit; the switches on the right. */
+      .play-bar__heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .play-bar__titles {
+        flex: 1;
+        min-width: 0;
+      }
+      .play-bar__switches {
+        flex: none;
+        display: flex;
+        gap: 6px;
+      }
       .play-bar__heading p {
         margin: 0;
         overflow: hidden;
@@ -371,7 +388,8 @@
         gap: 6px;
       }
       .play-bar button,
-      .guide-card button {
+      .guide-card button,
+      .transcript button {
         min-height: 44px;
         padding: 0 12px;
         font: 600 14px/1 system-ui, -apple-system, sans-serif;
@@ -454,6 +472,50 @@
       .play-bar__message > *,
       .play-bar__status > button {
         margin-block: auto;
+      }
+      /* A step's transcript (guide-session.ts): where the captions stand, since they are down while it is open, and
+         beneath the compass bar. It grows with its text up to that room and scrolls past it. */
+      .transcript {
+        position: fixed;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom) + var(--captions-foot));
+        transform: translateX(-50%);
+        z-index: 2;
+        box-sizing: border-box;
+        width: min(560px, calc(100vw - 24px));
+        max-height: calc(100% - var(--compass-bar-height) - var(--captions-foot) - env(safe-area-inset-bottom) - 16px);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        font: 16px/1.45 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        /* Nearly opaque: it is read at length, and the buttons and names behind would show through the text. */
+        background: rgba(12, 14, 32, 0.97);
+        border: 1px solid rgba(160, 180, 255, 0.35);
+        border-radius: 14px;
+        pointer-events: auto;
+        touch-action: pan-y;
+      }
+      .transcript[hidden] {
+        display: none;
+      }
+      .transcript__text {
+        min-height: 0;
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      .transcript__text p {
+        margin: 0 0 8px;
+      }
+      .transcript__text p:last-child {
+        margin-bottom: 0;
+      }
+      .transcript button {
+        align-self: flex-end;
+        flex: none;
       }
       .play-bar__detail {
         font-size: 12px;
@@ -767,7 +829,8 @@
       body.stereo #voice-talk,
       body.stereo #ar-toggle,
       body.stereo .play-bar,
-      body.stereo .guide-card {
+      body.stereo .guide-card,
+      body.stereo .transcript {
         display: none;
       }
       /* Calibrating: one readout per eye, under its convergence spot, so merged they read as one. */

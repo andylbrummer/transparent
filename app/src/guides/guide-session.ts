@@ -5,6 +5,10 @@
  * A guide never starts by itself. A browser plays no sound before a tap, so a link opens a card with the guide's
  * title, summary and Start, and the guide starts at the tap on Start. That tap, and Retry's and Play again's, unlock
  * the audio element before anything else happens in it.
+ *
+ * Captions are on until the user turns them off, and the switch is remembered for the next visit (spec/guides.md §11).
+ * The step's transcript is ordinary text, for a screen reader to read at its own pace: the caption overlay cannot be a
+ * live region without talking over the narration.
  */
 
 import type { CaptionOverlay } from './captions';
@@ -28,7 +32,12 @@ export interface GuideSessionDeps {
   readonly captions: Pick<CaptionOverlay, 'setCues' | 'update'>;
   /** The map's names. A guide points at them, so it does not start before they are in. */
   labels(): 'loading' | 'ready' | 'failed';
+  /** Where the captions switch is remembered: localStorage. */
+  readonly storage: Pick<Storage, 'getItem' | 'setItem'>;
 }
+
+/** The storage key of the captions switch: 'off' when the user turned captions off; anything else, or nothing, is on. */
+export const CAPTIONS_STORAGE_KEY = 'guide-captions';
 
 /** What the browser harness reads of the guide. */
 export interface GuideStatus {
@@ -42,6 +51,9 @@ export interface GuideStatus {
   readonly tS: number | null;
   /** The card's or the player's error. */
   readonly message: string | null;
+  /** The captions switch: on unless the user turned it off. */
+  readonly captionsShown: boolean;
+  readonly transcriptOpen: boolean;
 }
 
 export interface GuideSession {
@@ -90,6 +102,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   let opens = 0;
   /** The captions handed to the overlay, as the player's array for the step; null while none are. */
   let cuesSet: readonly CaptionCue[] | null = null;
+  let captionsOn = captionsOnIn(deps.storage);
+  let transcriptOpen = false;
+  /** The captions of the step last played, kept while the guide waits or is paused there: what the transcript shows. */
+  let heard: { readonly chapterIndex: number; readonly stepIndex: number; readonly cues: readonly CaptionCue[] } | null = null;
 
   /**
    * Inside a tap, before anything else: the browser allows the element's first play only there. A refusal is not
@@ -117,8 +133,15 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
       player.toChapter(0);
     },
     leave,
+    toggleCaptions: () => {
+      captionsOn = !captionsOn;
+      rememberCaptions(deps.storage, captionsOn);
+      showCaptions(player.state());
+    },
+    toggleTranscript: () => (transcriptOpen ? closeTranscript() : openTranscript()),
   };
   const bar = new PlayBar(deps.parent, controls);
+  const transcript = new Transcript(deps.parent, () => closeTranscript());
 
   const guideCard = new GuideCard(deps.parent, {
     start() {
@@ -146,6 +169,43 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   function leave(): void {
     player.exit();
     setCues(null);
+    transcriptOpen = false;
+    transcript.show(null);
+    heard = null;
+  }
+
+  /**
+   * The transcript takes the focus as it opens, so a screen reader reads on from its start. It takes the captions
+   * down too: the plate would say again what the transcript says.
+   */
+  function openTranscript(): void {
+    transcriptOpen = true;
+    const state = player.state();
+    showTranscript(state);
+    showCaptions(state);
+    transcript.focus();
+  }
+
+  /** The focus goes back to the button that opened the transcript, and the captions come back if they are on. */
+  function closeTranscript(): void {
+    transcriptOpen = false;
+    transcript.show(null);
+    showCaptions(player.state());
+    bar.focus('toggleTranscript');
+  }
+
+  function showTranscript(state: PlayerState): void {
+    transcript.show(transcriptOpen && state.kind !== 'idle' ? transcriptFor(state) : null);
+  }
+
+  /** The current step's text, from its captions; a note where there is none, or none yet. */
+  function transcriptFor(state: Exclude<PlayerState, { kind: 'idle' }>): TranscriptShown {
+    const step = state.guide.chapters[state.chapterIndex].steps[state.stepIndex];
+    if (!('narration' in step)) return { kind: 'note', note: 'This step has no narration.' };
+    if (heard?.chapterIndex === state.chapterIndex && heard.stepIndex === state.stepIndex) {
+      return { kind: 'text', cues: heard.cues, lang: state.guide.language };
+    }
+    return { kind: 'note', note: state.kind === 'loading' ? 'Loading…' : 'This step’s text did not load.' };
   }
 
   function setCues(next: { readonly cues: readonly CaptionCue[]; readonly lang: string } | null): void {
@@ -155,7 +215,7 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   }
 
   function showCaptions(state: PlayerState): void {
-    if (state.kind !== 'playing') return setCues(null);
+    if (!captionsOn || transcriptOpen || state.kind !== 'playing') return setCues(null);
     setCues({ cues: state.captions, lang: state.guide.language });
     captions.update(state.tS);
   }
@@ -211,16 +271,19 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   function update(deltaMs: number): void {
     player.update(deltaMs);
     const state = player.state();
-    bar.update(state, deltaMs);
+    if (state.kind === 'playing') heard = { chapterIndex: state.chapterIndex, stepIndex: state.stepIndex, cues: state.captions };
+    bar.update(state, deltaMs, { captions: captionsOn, transcript: transcriptOpen });
     showCaptions(state);
+    showTranscript(state);
     // The map's names may have come in, or failed, since the last frame.
     showCard();
   }
 
   function onKey(key: string): boolean {
-    // Escape leaves at once, without asking, or closes the card the link opened.
+    // Escape closes the transcript first; then it leaves at once, without asking, or closes the card the link opened.
     if (key === 'Escape') {
-      if (player.state().kind !== 'idle') leave();
+      if (transcriptOpen) closeTranscript();
+      else if (player.state().kind !== 'idle') leave();
       else if (card.kind !== 'closed') closeCard();
       else return false;
       return true;
@@ -244,6 +307,8 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
       stepIndex: at?.stepIndex ?? null,
       tS: state.kind === 'playing' ? state.tS : null,
       message: state.kind === 'error' ? state.message : card.kind === 'failed' ? card.message : null,
+      captionsShown: captionsOn,
+      transcriptOpen,
     };
   }
 
@@ -255,6 +320,7 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     if (player.state().kind !== 'idle') leave();
     narration.dispose();
     bar.dispose();
+    transcript.dispose();
     guideCard.dispose();
   }
 
@@ -278,6 +344,23 @@ const LABELS_NOTE: Readonly<Record<ReturnType<GuideSessionDeps['labels']>, strin
 };
 
 const isPaused = (state: PlayerState): boolean => 'paused' in state && state.paused;
+
+/** Whether captions are on, as the user left them. Storage that cannot be read, as in a private window, leaves them on. */
+function captionsOnIn(storage: GuideSessionDeps['storage']): boolean {
+  try {
+    return storage.getItem(CAPTIONS_STORAGE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+function rememberCaptions(storage: GuideSessionDeps['storage'], on: boolean): void {
+  try {
+    storage.setItem(CAPTIONS_STORAGE_KEY, on ? 'on' : 'off');
+  } catch {
+    // Storage that cannot be written, as in a private window: the switch holds for this visit only.
+  }
+}
 
 function cardId(card: Card): string | null {
   switch (card.kind) {
@@ -360,6 +443,74 @@ class GuideCard {
       this.startButton.hidden = next.start === 'none';
       this.startButton.disabled = next.start !== 'enabled';
     }
+  }
+
+  dispose(): void {
+    this.root.remove();
+  }
+}
+
+/** What the transcript shows: the step's text, a paragraph for each caption, or a note in its place. */
+type TranscriptShown =
+  | { readonly kind: 'text'; readonly cues: readonly CaptionCue[]; readonly lang: string }
+  | { readonly kind: 'note'; readonly note: string };
+
+const sameTranscript = (a: TranscriptShown, b: TranscriptShown): boolean =>
+  a.kind === 'text' ? b.kind === 'text' && a.cues === b.cues && a.lang === b.lang : b.kind === 'note' && a.note === b.note;
+
+/**
+ * The step's transcript: ordinary text, selectable, and not a live region, so a screen reader reads it when the user
+ * goes there and never over the narration. The text goes in as text, never as markup.
+ */
+class Transcript {
+  private readonly root: HTMLElement;
+  private readonly text: HTMLElement;
+  /** What it shows; null while closed. */
+  private shown: TranscriptShown | null = null;
+
+  constructor(parent: HTMLElement, close: () => void) {
+    const doc = parent.ownerDocument;
+    this.root = doc.createElement('section');
+    this.root.className = 'transcript';
+    this.root.setAttribute('aria-label', 'Transcript');
+    // Focusable, so opening it can take the focus there.
+    this.root.tabIndex = -1;
+    this.root.hidden = true;
+    this.text = doc.createElement('div');
+    this.text.className = 'transcript__text';
+    const closeButton = doc.createElement('button');
+    closeButton.type = 'button';
+    closeButton.textContent = 'Close';
+    closeButton.addEventListener('click', close);
+    this.root.append(this.text, closeButton);
+    parent.appendChild(this.root);
+  }
+
+  /** Write it again only when what it shows has changed. */
+  show(next: TranscriptShown | null): void {
+    const was = this.shown;
+    this.shown = next;
+    if (next === null) {
+      if (was !== null) this.root.hidden = true;
+      return;
+    }
+    if (was === null) this.root.hidden = false;
+    else if (sameTranscript(was, next)) return;
+    const doc = this.root.ownerDocument;
+    const paragraph = (text: string, lang: string | null): HTMLParagraphElement => {
+      const created = doc.createElement('p');
+      created.textContent = text;
+      if (lang !== null) created.lang = lang;
+      return created;
+    };
+    this.text.replaceChildren(
+      ...(next.kind === 'note' ? [paragraph(next.note, null)] : next.cues.map((cue) => paragraph(cue.lines.join(' '), next.lang)))
+    );
+    this.text.scrollTop = 0;
+  }
+
+  focus(): void {
+    this.root.focus();
   }
 
   dispose(): void {

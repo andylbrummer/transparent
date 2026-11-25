@@ -13,10 +13,18 @@ export interface PlayBarActions {
   retry(): void;
   playAgain(): void;
   leave(): void;
+  toggleCaptions(): void;
+  toggleTranscript(): void;
 }
 
-export type Control = 'back' | 'repeat' | 'pauseOrResume' | 'next' | 'leave';
-const CONTROLS: readonly Control[] = ['back', 'repeat', 'pauseOrResume', 'next', 'leave'];
+/** What the bar's switches show: whether captions are on, and whether the step's transcript is open. */
+export interface PlayBarSwitches {
+  readonly captions: boolean;
+  readonly transcript: boolean;
+}
+
+export type Control = 'back' | 'repeat' | 'pauseOrResume' | 'next' | 'toggleCaptions' | 'toggleTranscript' | 'leave';
+const CONTROLS: readonly Control[] = ['toggleCaptions', 'toggleTranscript', 'back', 'repeat', 'pauseOrResume', 'next', 'leave'];
 
 /** The button the status line offers, by its label: what pressing it does. */
 type Offer = 'Retry' | 'Play again' | 'Can’t find it? Continue';
@@ -27,19 +35,20 @@ interface Shown {
   readonly where: string;
   readonly enabled: Readonly<Record<Control, boolean>>;
   readonly pauseLabel: 'Pause' | 'Resume';
+  readonly switches: PlayBarSwitches;
   readonly notice: string;
   /** Beneath the notice, small: what exactly went wrong, for whoever reports it. */
   readonly detail: string;
   readonly offer: Offer | null;
 }
 
-/** Which controls do anything in each state: the player throws on the rest. */
+/** Which controls do anything in each state: the player throws on the rest. The switches are the page's, never the player's. */
 const ENABLED: Readonly<Record<Exclude<PlayerState['kind'], 'idle'>, Readonly<Record<Control, boolean>>>> = {
-  loading: { back: true, repeat: false, pauseOrResume: true, next: true, leave: true },
-  playing: { back: true, repeat: true, pauseOrResume: true, next: true, leave: true },
-  waiting: { back: true, repeat: true, pauseOrResume: true, next: true, leave: true },
-  error: { back: false, repeat: false, pauseOrResume: false, next: false, leave: true },
-  ended: { back: true, repeat: false, pauseOrResume: false, next: false, leave: true },
+  loading: { back: true, repeat: false, pauseOrResume: true, next: true, toggleCaptions: true, toggleTranscript: true, leave: true },
+  playing: { back: true, repeat: true, pauseOrResume: true, next: true, toggleCaptions: true, toggleTranscript: true, leave: true },
+  waiting: { back: true, repeat: true, pauseOrResume: true, next: true, toggleCaptions: true, toggleTranscript: true, leave: true },
+  error: { back: false, repeat: false, pauseOrResume: false, next: false, toggleCaptions: true, toggleTranscript: true, leave: true },
+  ended: { back: true, repeat: false, pauseOrResume: false, next: false, toggleCaptions: true, toggleTranscript: true, leave: true },
 };
 
 /** Whether a control does anything in `state`: its button is enabled, and its key, if it has one, is taken. */
@@ -78,31 +87,39 @@ export class PlayBar {
     this.root.className = 'play-bar';
     this.root.hidden = true;
 
+    // The heading row: the guide and the step on the left, the two switches on the right, so the controls keep one row.
     const heading = doc.createElement('div');
     heading.className = 'play-bar__heading';
+    const titles = doc.createElement('div');
+    titles.className = 'play-bar__titles';
     this.title = doc.createElement('p');
     this.title.className = 'play-bar__title';
     this.where = doc.createElement('p');
     this.where.className = 'play-bar__where';
-    heading.append(this.title, this.where);
+    titles.append(this.title, this.where);
+    const switches = doc.createElement('div');
+    switches.className = 'play-bar__switches';
+    heading.append(titles, switches);
 
     const row = doc.createElement('div');
     row.className = 'play-bar__controls';
-    const control = (name: Control, label: string, ariaLabel?: string): HTMLButtonElement => {
+    const control = (into: HTMLElement, name: Control, label: string, ariaLabel?: string): HTMLButtonElement => {
       const button = doc.createElement('button');
       button.type = 'button';
       button.textContent = label;
       if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
       button.addEventListener('click', () => this.actions[name]());
-      row.appendChild(button);
+      into.appendChild(button);
       return button;
     };
     this.controls = {
-      back: control('back', 'Back'),
-      repeat: control('repeat', '−10 s', 'Back 10 seconds'),
-      pauseOrResume: control('pauseOrResume', 'Pause'),
-      next: control('next', 'Next'),
-      leave: control('leave', 'Leave'),
+      toggleCaptions: control(switches, 'toggleCaptions', 'Captions'),
+      toggleTranscript: control(switches, 'toggleTranscript', 'Text', 'Transcript'),
+      back: control(row, 'back', 'Back'),
+      repeat: control(row, 'repeat', '−10 s', 'Back 10 seconds'),
+      pauseOrResume: control(row, 'pauseOrResume', 'Pause'),
+      next: control(row, 'next', 'Next'),
+      leave: control(row, 'leave', 'Leave'),
     };
 
     // A live region: what the guide waits for, and what went wrong, are said as they change. The message scrolls on
@@ -129,14 +146,19 @@ export class PlayBar {
   }
 
   /** Once a frame, with the player's state: hidden while idle. `deltaMs` times the loading notice; the bar keeps no timer. */
-  update(state: PlayerState, deltaMs: number): void {
+  update(state: PlayerState, deltaMs: number, switches: PlayBarSwitches): void {
     const loadingStep = state.kind === 'loading' ? `${state.chapterIndex}/${state.stepIndex}` : null;
     if (loadingStep !== this.loadingStep) {
       this.loadingStep = loadingStep;
       this.loadingMs = 0;
     }
     if (loadingStep !== null) this.loadingMs += deltaMs;
-    this.show(state.kind === 'idle' ? null : this.shownFor(state));
+    this.show(state.kind === 'idle' ? null : this.shownFor(state, switches));
+  }
+
+  /** Give a control the focus: where it goes back to when what the control opened closes. */
+  focus(control: Control): void {
+    this.controls[control].focus();
   }
 
   dispose(): void {
@@ -144,7 +166,7 @@ export class PlayBar {
     this.root.ownerDocument.body.classList.remove('guide-open');
   }
 
-  private shownFor(state: Exclude<PlayerState, { kind: 'idle' }>): Shown {
+  private shownFor(state: Exclude<PlayerState, { kind: 'idle' }>, switches: PlayBarSwitches): Shown {
     const chapter = state.guide.chapters[state.chapterIndex];
     const paused = 'paused' in state && state.paused;
     let notice = '';
@@ -169,6 +191,7 @@ export class PlayBar {
       where: `${chapter.title} · ${state.stepIndex + 1}/${chapter.steps.length}`,
       enabled: ENABLED[state.kind],
       pauseLabel: paused ? 'Resume' : 'Pause',
+      switches,
       notice,
       detail,
       offer,
@@ -195,6 +218,8 @@ export class PlayBar {
       if (next.enabled[name] !== was?.enabled[name]) this.controls[name].disabled = !next.enabled[name];
     }
     if (next.pauseLabel !== was?.pauseLabel) this.controls.pauseOrResume.textContent = next.pauseLabel;
+    if (next.switches.captions !== was?.switches.captions) this.controls.toggleCaptions.setAttribute('aria-pressed', String(next.switches.captions));
+    if (next.switches.transcript !== was?.switches.transcript) this.controls.toggleTranscript.setAttribute('aria-expanded', String(next.switches.transcript));
     if (next.notice !== was?.notice) {
       this.notice.textContent = next.notice;
       // Out of the row when there is nothing to say, so an offer alone stands in the middle.
