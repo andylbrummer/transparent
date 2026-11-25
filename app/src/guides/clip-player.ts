@@ -25,10 +25,12 @@ import { parseVtt } from './vtt';
 /** What the clip player uses of an HTMLAudioElement, so a test can stand in for one. */
 export type ClipAudio = Pick<HTMLAudioElement, 'src' | 'currentTime' | 'duration' | 'ended' | 'paused' | 'play' | 'pause' | 'addEventListener' | 'removeEventListener'>;
 
-/** Where an image is drawn in Cardboard: a flat panel in the scene. */
+/** Where an image or a film is drawn in Cardboard: a flat panel in the scene. */
 export interface ClipScenePanel {
   /** Show the image at `url` on a panel along `direction`, a world unit vector; taken as it is now. */
   showImage(url: string, direction: THREE.Vector3): void;
+  /** Draw `video`'s frames on the panel, `aspect` wide to its height, once it has one to draw. */
+  showVideo(video: HTMLVideoElement, aspect: number, direction: THREE.Vector3): void;
   hide(): void;
 }
 
@@ -267,8 +269,8 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
 
   function update(deltaMs: number, forward: THREE.Vector3 | null, stereo: boolean): void {
     if (state.kind === 'closed') return;
+    const { clip } = state.hit.hotspot;
     if (state.kind === 'playing' || state.kind === 'paused') {
-      const { clip } = state.hit.hotspot;
       if (clip.kind === 'video') {
         // The browser's controls pause and play it too: the player follows, so a toggle or the look-away is right.
         if (state.kind === 'playing' && video.paused && !video.ended) state = { ...state, kind: 'paused' };
@@ -285,12 +287,14 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
         }
       }
     }
-    // The scene panel follows the viewer in and out; the page's panel is hidden with the page in the viewer.
-    if (state.kind === 'showing' && stereo !== stereoShown) {
-      stereoShown = stereo;
-      const clip = state.hit.hotspot.clip;
-      if (stereo && clip.kind === 'image') deps.scenePanel.showImage(state.hit.source.fileUrl(clip.src), openedToward);
-      else deps.scenePanel.hide();
+    // The scene panel follows the viewer in and out; the page's panel is hidden with the page in the viewer. An image
+    // is hung once it has loaded; a film from its opening, its frames drawn from the same element, until it fails.
+    const wanted = stereo && (clip.kind === 'image' ? state.kind === 'showing' : clip.kind === 'video' && state.kind !== 'failed');
+    if (wanted !== stereoShown) {
+      stereoShown = wanted;
+      if (!wanted) deps.scenePanel.hide();
+      else if (clip.kind === 'image') deps.scenePanel.showImage(state.hit.source.fileUrl(clip.src), openedToward);
+      else if (clip.kind === 'video') deps.scenePanel.showVideo(video, clip.video.width / clip.video.height, openedToward);
     }
     if (!stereo || forward === null) {
       awayMs = 0;

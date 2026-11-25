@@ -1,10 +1,14 @@
 /**
- * A clip's image in Cardboard (spec/guides.md §8.4): a flat panel in the scene, CLIP_PANEL_DEG wide, along the
+ * A clip's image or film in Cardboard (spec/guides.md §8.4): a flat panel in the scene, CLIP_PANEL_DEG wide, along the
  * direction its marker had when the clip opened. It is held there in the local frame, beside the viewer, so it stays
  * put as the head turns, as the spyglass's window does, and a time-lapse does not carry it off with the sky.
  *
  * Both eyes draw it, being in the scene: one image, no per-eye copy. It is near, PANEL_DISTANCE_M, but the eyes'
  * separation is a few centimetres, so it sits as good as at infinity, where the markers and the names are.
+ *
+ * A film is the page's own <video>, drawn as a texture: one decode, and its sound and the browser's state are the
+ * element's. The texture is made once, for the one element, and kept; three.js marks it for upload on each frame the
+ * video presents.
  */
 
 import * as THREE from 'three';
@@ -21,6 +25,9 @@ export class ClipScenePanelMesh implements ClipScenePanel {
   private readonly loader = new THREE.TextureLoader();
   /** Every show is numbered: an image that arrives after a hide or another show is dropped. */
   private shows = 0;
+  private videoTexture: THREE.VideoTexture | null = null;
+  /** The film being shown, until its first frame is there: before it, the panel would be a black square. */
+  private waitingFor: HTMLVideoElement | null = null;
 
   constructor(parent: THREE.Object3D) {
     // Nothing in the scene depth-tests (render/order.ts): the order alone puts it over the view.
@@ -49,14 +56,32 @@ export class ClipScenePanelMesh implements ClipScenePanel {
     });
   }
 
+  showVideo(video: HTMLVideoElement, aspect: number, direction: THREE.Vector3): void {
+    this.shows++;
+    this.direction.copy(direction);
+    if (this.videoTexture?.image !== video) {
+      this.videoTexture?.dispose();
+      this.videoTexture = new THREE.VideoTexture(video);
+      this.videoTexture.colorSpace = THREE.SRGBColorSpace;
+    }
+    this.setTexture(this.videoTexture);
+    this.mesh.scale.set(PANEL_WIDTH_M, PANEL_WIDTH_M / aspect, 1);
+    this.waitingFor = video;
+  }
+
   hide(): void {
     this.shows++;
+    this.waitingFor = null;
     this.mesh.visible = false;
     this.setTexture(null);
   }
 
   /** Once a frame: hung from where the viewer stands now, facing them, its top toward their zenith. */
   update(camera: THREE.Camera): void {
+    if (this.waitingFor !== null && this.waitingFor.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.waitingFor = null;
+      this.mesh.visible = true;
+    }
     if (!this.mesh.visible) return;
     this.mesh.position.copy(camera.position).addScaledVector(this.direction, PANEL_DISTANCE_M);
     this.mesh.up.copy(camera.position).normalize();
@@ -65,13 +90,17 @@ export class ClipScenePanelMesh implements ClipScenePanel {
 
   dispose(): void {
     this.hide();
+    this.videoTexture?.dispose();
+    this.videoTexture = null;
     this.mesh.removeFromParent();
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
   }
 
   private setTexture(texture: THREE.Texture | null): void {
-    this.mesh.material.map?.dispose();
+    // The film's texture is kept for the next film: only an image's is let go.
+    const old = this.mesh.material.map;
+    if (old !== null && old !== this.videoTexture) old.dispose();
     this.mesh.material.map = texture;
     this.mesh.material.needsUpdate = true;
   }

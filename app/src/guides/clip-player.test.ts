@@ -57,7 +57,11 @@ function setup(options: { captions?: string | Error; captionsShown?: boolean } =
     },
     captions: { setCues: (next) => cues.push(next && { lang: next.lang, texts: next.cues.map((cue) => cue.lines.join(' ')) }), update() {} },
     captionsShown: () => options.captionsShown ?? true,
-    scenePanel: { showImage: (url, direction) => scene.push(`show ${url} ${direction.x}`), hide: () => scene.push('hide') },
+    scenePanel: {
+      showImage: (url, direction) => scene.push(`show ${url} ${direction.x}`),
+      showVideo: (element, aspect, direction) => scene.push(`film ${element === video} ${aspect.toFixed(3)} ${direction.x}`),
+      hide: () => scene.push('hide'),
+    },
     objectUrl: { create: () => 'blob:silence', revoke() {} },
     silence: silentWav,
   };
@@ -281,6 +285,41 @@ describe('the clip player, with a video', () => {
     await opening;
     t.video.dispatchEvent(new Event('ended'));
     expect(t.player.isOpen()).toBe(false);
+  });
+
+  it('draws the same element in the scene in the viewer, from its opening, and takes it down when it fails or closes', async () => {
+    const t = setup();
+    let opening = t.player.open(hit(VIDEO));
+    t.player.update(16, AHEAD, true);
+    // Loading: the film is shown already, so its first frame is in the viewer as soon as it is in the page.
+    expect(t.scene).toEqual(['film true 1.778 1']);
+    t.video.fake.plays[0].resolve();
+    await opening;
+    t.player.update(16, AHEAD, true);
+    t.player.update(16, AHEAD, false);
+    t.player.update(16, AHEAD, true);
+    expect(t.scene).toEqual(['film true 1.778 1', 'hide', 'film true 1.778 1']);
+    t.player.close();
+    expect(t.scene.at(-1)).toBe('hide');
+    t.scene.length = 0;
+    opening = t.player.open(hit(VIDEO));
+    t.player.update(16, AHEAD, true);
+    t.video.fake.plays[1].reject(new Error('refused'));
+    await opening;
+    t.player.update(16, AHEAD, true);
+    expect(t.scene).toEqual(['film true 1.778 1', 'hide']);
+  });
+
+  it('pauses a film looked away from in the viewer, and it goes on with a toggle', async () => {
+    const t = setup();
+    const opening = t.player.open(hit(VIDEO));
+    t.video.fake.plays[0].resolve();
+    await opening;
+    for (let elapsed = 0; elapsed <= LOOK_AWAY_MS; elapsed += 100) t.player.update(100, new THREE.Vector3(0, 1, 0), true);
+    expect(t.player.getClip().state).toBe('paused');
+    expect(t.video.fake.paused).toBe(true);
+    t.player.toggle();
+    expect(t.player.getClip().state).toBe('playing');
   });
 
   it('says so when the film does not play', async () => {
