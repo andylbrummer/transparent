@@ -55,6 +55,7 @@ function app(
       getAttitude: () => null,
       prefersReducedMotion: () => false,
       addLabels: () => ({ setVisible() {}, remove() {} }),
+      dip: (change) => Promise.resolve(change()),
     }),
     nameInView: () => state.inView ?? null,
     isInCardboard: () => state.inCardboard ?? false,

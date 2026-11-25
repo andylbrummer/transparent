@@ -96,6 +96,15 @@ describe('createViewControl', () => {
     const markSpecs: LabelGroupSpec[] = [];
     // Every opacity written to a shell, in order.
     const shellOpacities: [string, number][] = [];
+    // The dip to dark: at once, unless a test holds it, when the changes wait for dips.release().
+    const dips = {
+      count: 0,
+      held: false,
+      waiting: [] as (() => void)[],
+      release() {
+        for (const make of this.waiting.splice(0)) make();
+      },
+    };
     const viewControl = createViewControl({
       presets,
       switches,
@@ -115,9 +124,14 @@ describe('createViewControl', () => {
         return labelLayer.addGroup(spec);
       },
       spyglass: { inStereo: () => view.stereo, openOn: (target) => spyglassOpened.push(target) },
+      dip: <T,>(change: () => T | Promise<T>): Promise<T> => {
+        dips.count++;
+        if (!dips.held) return Promise.resolve(change());
+        return new Promise<T>((resolve, reject) => dips.waiting.push(() => void Promise.resolve().then(change).then(resolve, reject)));
+      },
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs, spyglassOpened, shellOpacities };
+    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs, spyglassOpened, shellOpacities, dips };
   }
 
   const instance = (): LayerInstance => ({ setVisible() {}, dispose() {} });
@@ -230,6 +244,25 @@ describe('createViewControl', () => {
     expect(flag.settled).toBe(false);
     aurora.finish();
     expect(await outcome).toEqual({ ok: true });
+  });
+
+  it('applies a preset in the dark, and flips named switches without one', async () => {
+    const t = setup();
+    t.dips.held = true;
+    const outcome = t.viewControl.perform({ do: 'preset', id: 'sky' });
+    await settle();
+    expect(t.input('x-ray').checked).toBe(false);
+    t.dips.release();
+    expect(await outcome).toEqual({ ok: true });
+    expect(t.input('x-ray').checked).toBe(true);
+    expect(await t.viewControl.perform({ do: 'layers', on: ['aurora'] })).toEqual({ ok: true });
+    expect(t.dips.count).toBe(1);
+  });
+
+  it('does not go dark for a preset it refuses', async () => {
+    const t = setup();
+    await t.viewControl.perform({ do: 'preset', id: 'no-such' });
+    expect(t.dips.count).toBe(0);
   });
 
   it('does not wait on a layer already loaded, nor on a switch-off', async () => {
@@ -1183,6 +1216,49 @@ describe('createViewControl', () => {
       const t = setup();
       await t.viewControl.restore(scene({ only: ['aurora', 'clouds'] }));
       expect(onIds(t)).toEqual(['aurora', 'clouds']);
+    });
+
+    it('puts the whole view in place in the dark, once, and is done only when the layers are in', async () => {
+      const cmb = heldLoad();
+      const t = setup(null, { cmb: cmb.load });
+      const before = onIds(t);
+      t.dips.held = true;
+      const outcome = t.viewControl.restore(scene({ only: ['cmb'] }, { look: { target: east, fovDeg: 40 }, marks: [{ target: north, text: 'North' }] }));
+      const flag = settledFlag(outcome);
+      await settle();
+      // Checked, but nothing changed until the view is dark.
+      expect(onIds(t)).toEqual(before);
+      expect(markTexts(t)).toEqual([]);
+      expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+      t.dips.release();
+      await settle();
+      expect(onIds(t)).toEqual(['cmb']);
+      expect(markTexts(t)).toEqual(['North']);
+      expect(t.look.getState().fovDeg).toBe(40);
+      expect(flag.settled).toBe(false);
+      cmb.finish();
+      expect(await outcome).toEqual({ ok: true });
+      expect(t.dips.count).toBe(1);
+    });
+
+    it('goes dark for nothing it refuses', async () => {
+      const t = setup();
+      await t.viewControl.restore(scene({ only: ['nope'] }));
+      expect(t.dips.count).toBe(0);
+    });
+
+    it('changes nothing once the borrow it was asked in has ended while the view went dark', async () => {
+      const t = setup();
+      const before = onIds(t);
+      const borrow = t.viewControl.borrow();
+      t.dips.held = true;
+      const outcome = t.viewControl.restore(scene({ only: ['aurora'] }, { marks: [{ target: north, text: 'North' }] }));
+      await settle();
+      borrow.end();
+      t.dips.release();
+      expect(await outcome).toEqual({ ok: true });
+      expect(onIds(t)).toEqual(before);
+      expect(markTexts(t)).toEqual([]);
     });
 
     it('lets the last of an exclusive group turned on win, as playing through does', async () => {

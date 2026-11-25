@@ -58,6 +58,11 @@ export interface ViewControlDeps {
     inStereo(): boolean;
     openOn(target: SpyglassTarget): void;
   };
+  /**
+   * Fade the view to dark, make `change` and wait for it, then fade back (render/dip.ts): every hard change to the
+   * whole view goes through it. Resolves with the change's result once it is made.
+   */
+  dip<T>(change: () => T | Promise<T>): Promise<T>;
 }
 
 /** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
@@ -138,6 +143,18 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   const marks = new Map<string, Mark>();
   const fades = new Map<string, Fade>();
   let borrowed = false;
+  // Counts borrows begun and ended. A change waiting for the dark belongs to the borrow it was asked for in: one that
+  // has ended since must not have its view put back after it.
+  let borrowEpoch = 0;
+
+  /**
+   * Make `change` in the dark, unless the borrow it was asked in has ended or begun while the view went dark: then
+   * the view is no longer the asker's, and nothing is done.
+   */
+  function inTheDark(change: () => Promise<ActionOutcome>): Promise<ActionOutcome> {
+    const epoch = borrowEpoch;
+    return deps.dip(() => (epoch === borrowEpoch ? change() : Promise.resolve<ActionOutcome>({ ok: true })));
+  }
 
   /**
    * Wait for the lazy layers among `switches` to load; the rest are drawn
@@ -234,9 +251,12 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         const preset = deps.presets.find((p) => p.id === action.id);
         if (!preset) return { ok: false, code: 'unknown-preset', message: `no preset ${action.id}` };
         dropAllFades();
-        deps.layersPanel.applyPreset(preset);
-        const on = new Set(preset.on);
-        return lazyLayersLoaded(deps.switches.filter((s) => on.has(s.id)));
+        // Every switch at once is a hard change: in the dark, which lasts until its layers are in.
+        return inTheDark(() => {
+          deps.layersPanel.applyPreset(preset);
+          const on = new Set(preset.on);
+          return lazyLayersLoaded(deps.switches.filter((s) => on.has(s.id)));
+        });
       }
       case 'layers': {
         const on = action.on ?? [];
@@ -312,8 +332,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     }
   }
 
-  // Like perform, every change is made before the first await, so it is all in place by the time restore returns. The
-  // one wait before a change is for the body positions, the first time a view needs them; preload asks for them ahead.
+  // Everything is checked first, then every change is made at once in the dark. The one wait before the dark is for
+  // the body positions, the first time a view needs them; preload asks for them ahead.
   async function restore(view: FoldedView): Promise<ActionOutcome> {
     const { look } = view;
     // Check everything before changing anything, so a mistake leaves the user where they were.
@@ -342,22 +362,32 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     const setting = giveParams(params);
     if (setting) return setting;
     dropAllFades();
-    deps.layersPanel.showOnly(switches.on);
+    // An ease under way stops now, not in the dark: it would go on turning the view toward the old look meanwhile.
     endEase({ ok: true });
-    const posed = aimMode() === 'pose';
-    // The guide cannot turn someone holding the phone, at a cut any more than in an ease: the pointer shows the way.
     spyglassWait = null;
-    if (posed) awaiting = gazeOn(look.target, located, look.fovDeg);
-    else {
-      awaiting = null;
-      setAim({ azDeg: located.azDeg, altDeg: located.altDeg, fovDeg: look.fovDeg });
-    }
-    takeMarksDown();
-    for (const mark of placed) putMark(mark.target, mark.text, mark.direction);
+    return inTheDark(async () => {
+      deps.layersPanel.showOnly(switches.on);
+      const posed = aimMode() === 'pose';
+      // Found again in the dark, where the view now stands and when; it resolved before, so it is not refused here.
+      const relocated = locate(look.target);
+      const lookAt = relocated.ok ? relocated : located;
+      // The guide cannot turn someone holding the phone, at a cut any more than in an ease: the pointer shows the way.
+      if (posed) awaiting = gazeOn(look.target, lookAt, look.fovDeg);
+      else {
+        awaiting = null;
+        setAim({ azDeg: lookAt.azDeg, altDeg: lookAt.altDeg, fovDeg: look.fovDeg });
+      }
+      // Found again: the view may have moved on while it went dark, and a mark's direction is where it is drawn.
+      takeMarksDown();
+      for (const mark of placed) {
+        const found = locate(mark.target);
+        putMark(mark.target, mark.text, found.ok ? found.direction : mark.direction);
+      }
 
-    const loaded = await lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!));
-    if (!loaded.ok) return loaded;
-    return posed ? { ok: true, awaitingGaze: true } : { ok: true };
+      const loaded = await lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!));
+      if (!loaded.ok) return loaded;
+      return posed ? { ok: true, awaitingGaze: true } : { ok: true };
+    });
   }
 
   async function preload(view: FoldedView): Promise<ActionOutcome> {
@@ -432,11 +462,13 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     const fovDeg = deps.look.getState().fovDeg;
     const panel = deps.layersPanel.borrow();
     borrowed = true;
+    borrowEpoch++;
     let ended = false;
     return {
       end: () => {
         if (ended) throw new Error('the view borrow has already ended');
         ended = true;
+        borrowEpoch++;
         endEase({ ok: true });
         dropAllFades();
         awaiting = null;

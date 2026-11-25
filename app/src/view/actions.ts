@@ -86,13 +86,15 @@ export interface AwaitedGaze {
 export interface ViewControl {
   /**
    * Do one action. Resolves when it has taken effect: the switches flipped, the layers they turn on loaded, the ease
-   * finished. A look that waits on the user resolves at once (`awaitingGaze`).
+   * finished. A look that waits on the user resolves at once (`awaitingGaze`). A preset changes every switch at once,
+   * so it is made in the dark of a dip, as restore is.
    */
   perform(action: ViewAction): Promise<ActionOutcome>;
   /**
    * Put the whole view as `view` has it, at once and with no ease: for a chapter's start and for a seek. Everything
-   * is checked before anything is changed. Resolves when the layers it turns on have loaded. Where the view is not
-   * the guide's to turn, its look waits on the user (`awaitingGaze`), as a performed look does.
+   * is checked before anything is changed, and the change is made in the dark of a dip, which lasts until the layers
+   * it turns on have loaded; it resolves then. Where the view is not the guide's to turn, its look waits on the user
+   * (`awaitingGaze`), as a performed look does.
    */
   restore(view: FoldedView): Promise<ActionOutcome>;
   /**

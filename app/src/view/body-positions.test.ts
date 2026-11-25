@@ -40,6 +40,7 @@ function viewControl() {
     getAttitude: () => null,
     prefersReducedMotion: () => true,
     addLabels: vi.fn(),
+    dip: (change) => Promise.resolve(change()),
   });
 }
 

@@ -434,6 +434,7 @@ export function init(): App | null {
     addLabels: (spec) => labels.addGroup(spec),
     // Read at frame time, by when both exist.
     spyglass: { inStereo: () => cardboard.isActive() && !arRunner.isActive(), openOn: (target) => spyglass.openOn(target) },
+    dip: (change) => dip.run(change),
   });
   const guideSession = createGuideSession({
     parent: container,
