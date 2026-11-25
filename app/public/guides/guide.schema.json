@@ -1628,6 +1628,102 @@
                                   "credit"
                                 ],
                                 "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "const": "video"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "pattern": "^https://media\\.transparent\\.sbdev\\.io/(guides/[a-z0-9-]+|media)/[a-z0-9-]+\\.[0-9a-f]{8}\\.mp4$",
+                                    "description": "An .mp4 on the media host, as npm run guides:put-video prints it."
+                                  },
+                                  "captions": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$",
+                                    "description": "A WebVTT file in the guide's folder."
+                                  },
+                                  "poster": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.(webp|jpg)$",
+                                    "description": "Shown before it plays: a .webp or .jpg file in the guide's folder."
+                                  },
+                                  "video": {
+                                    "type": "object",
+                                    "properties": {
+                                      "bytes": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 209715200
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$"
+                                      },
+                                      "durationS": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                      },
+                                      "width": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 1920
+                                      },
+                                      "height": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 1920
+                                      }
+                                    },
+                                    "required": [
+                                      "bytes",
+                                      "sha256",
+                                      "durationS",
+                                      "width",
+                                      "height"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "credit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "what": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "licence": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "url": {
+                                        "type": "string",
+                                        "pattern": "^https://"
+                                      }
+                                    },
+                                    "required": [
+                                      "what",
+                                      "source",
+                                      "licence",
+                                      "url"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "src",
+                                  "captions",
+                                  "poster",
+                                  "video",
+                                  "credit"
+                                ],
+                                "additionalProperties": false
                               }
                             ]
                           }
@@ -2611,6 +2707,102 @@
                                   "src",
                                   "alt",
                                   "caption",
+                                  "credit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "const": "video"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "pattern": "^https://media\\.transparent\\.sbdev\\.io/(guides/[a-z0-9-]+|media)/[a-z0-9-]+\\.[0-9a-f]{8}\\.mp4$",
+                                    "description": "An .mp4 on the media host, as npm run guides:put-video prints it."
+                                  },
+                                  "captions": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$",
+                                    "description": "A WebVTT file in the guide's folder."
+                                  },
+                                  "poster": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.(webp|jpg)$",
+                                    "description": "Shown before it plays: a .webp or .jpg file in the guide's folder."
+                                  },
+                                  "video": {
+                                    "type": "object",
+                                    "properties": {
+                                      "bytes": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 209715200
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$"
+                                      },
+                                      "durationS": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                      },
+                                      "width": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 1920
+                                      },
+                                      "height": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 1920
+                                      }
+                                    },
+                                    "required": [
+                                      "bytes",
+                                      "sha256",
+                                      "durationS",
+                                      "width",
+                                      "height"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "credit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "what": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "licence": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "url": {
+                                        "type": "string",
+                                        "pattern": "^https://"
+                                      }
+                                    },
+                                    "required": [
+                                      "what",
+                                      "source",
+                                      "licence",
+                                      "url"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "src",
+                                  "captions",
+                                  "poster",
+                                  "video",
                                   "credit"
                                 ],
                                 "additionalProperties": false

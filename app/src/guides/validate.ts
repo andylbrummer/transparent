@@ -16,6 +16,7 @@ import { foldAction } from '../view/fold';
 import { TIME_LAPSE_ABOVE_RATE } from '../view/view-control';
 import { targetDirection, type LabelIndex } from '../view/targets';
 import { sceneView, type Guide, type Hotspot } from './format';
+import { MEDIA_ORIGIN } from './media-origin';
 
 /** Something wrong with a guide: where, as a JSON pointer into guide.json, and why. */
 export interface GuideProblem {
@@ -142,7 +143,7 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     return now;
   };
 
-  const hotspots = hotspotChecker(world, problem);
+  const hotspots = hotspotChecker(world, `guides/${guide.id}/`, problem);
   const chapterIds = new Set<string>();
   guide.chapters.forEach((chapter, c) => {
     const chapterPath = `/chapters/${c}`;
@@ -214,16 +215,21 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
 /** Everything wrong with a file of hotspots that its schema cannot say: public/media/hotspots.json. */
 export function hotspotsProblems(list: readonly Hotspot[], world: GuideWorld): GuideProblem[] {
   const problems: GuideProblem[] = [];
-  const hotspots = hotspotChecker(world, (path, reason) => problems.push({ path, reason }));
+  const hotspots = hotspotChecker(world, 'media/', (path, reason) => problems.push({ path, reason }));
   list.forEach((hotspot, h) => hotspots.check(`/hotspots/${h}`, hotspot));
   return problems;
 }
 
 /**
  * A check of each hotspot of one file, in order: its id is the file's only one, since a clip cue names it; its
- * switch exists; its anchor's label is one name.
+ * switch exists; its anchor's label is one name; a video is in the file's folder on the media host, `videoFolder`,
+ * named by its declared hash, and at most 1080p either way up.
  */
-function hotspotChecker(world: GuideWorld, problem: (path: string, reason: string) => void): { check(path: string, hotspot: Hotspot): void } {
+function hotspotChecker(
+  world: GuideWorld,
+  videoFolder: string,
+  problem: (path: string, reason: string) => void
+): { check(path: string, hotspot: Hotspot): void } {
   const ids = new Set<string>();
   const switches = new Set(world.switches.map((layer) => layer.id));
   return {
@@ -235,6 +241,14 @@ function hotspotChecker(world: GuideWorld, problem: (path: string, reason: strin
         const resolved = targetDirection(hotspot.anchor, ANYWHERE, ANY_TIME, world.labels);
         if (!resolved.ok) problem(`${path}/anchor`, resolved.message);
       }
+      const { clip } = hotspot;
+      if (clip.kind !== 'video') return;
+      const folder = `${MEDIA_ORIGIN}/${videoFolder}`;
+      if (!clip.src.startsWith(folder)) problem(`${path}/clip/src`, `${clip.src} is not in ${folder}`);
+      // The schema has the name end in .<8 hex>.mp4.
+      const named = clip.src.slice(-12, -4);
+      if (named !== clip.video.sha256.slice(0, 8)) problem(`${path}/clip/src`, `${clip.src} is named for a hash that starts ${named}, not ${clip.video.sha256.slice(0, 8)}`);
+      if (Math.min(clip.video.width, clip.video.height) > 1080) problem(`${path}/clip/video`, `${clip.video.width} × ${clip.video.height} is over 1080p`);
     },
   };
 }

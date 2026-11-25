@@ -6,7 +6,8 @@
  * AAC-LC and long enough for its cues. Each captions file is read with the
  * app's own reader and held to its narration: in order, within its length,
  * short lines, and no long gaps. A hotspot's audio clip is held to the same
- * as a narration, and its image to a format and a size read from its header.
+ * as a narration, and its image to a format and a size read from its header; a video's poster and captions are
+ * held as an image's and a narration's, against the length the video declares.
  *
  * Node code (node:fs, node:path), used only by the validator's tests and
  * never bundled into the app. It lives in scripts/, the Node project, because
@@ -242,6 +243,15 @@ function checkClip(files: ClipFiles, path: string, clip: Clip): void {
   };
   if (clip.kind === 'image') {
     if (there('src', clip.src)) checkImage(dir, folder, clip.src, problem);
+    return;
+  }
+  if (clip.kind === 'video') {
+    // The film is on the media host, its length declared: npm run guides:check-media holds the file to it.
+    if (there('poster', clip.poster)) checkImage(dir, folder, clip.poster, problem);
+    if (there('captions', clip.captions) && !captioned.has(clip.captions)) {
+      captioned.add(clip.captions);
+      checkCaptions(dir, folder, clip.captions, clip.video.durationS, problem);
+    }
     return;
   }
   const audioThere = there('src', clip.src);

@@ -280,6 +280,32 @@ describe('guidesProblems on clips', () => {
     writeFileSync(at(ID, AUDIO.captions), CAPTIONS);
   });
   const CLIP = '/chapters/0/steps/0/hotspots';
+  const VIDEO = {
+    kind: 'video',
+    src: `https://media.transparent.sbdev.io/guides/${ID}/prem.a1b2c3d4.mp4`,
+    captions: 'video/prem.vtt',
+    poster: 'images/poster.webp',
+    video: { bytes: 1000, sha256: 'a1b2c3d4'.padEnd(64, '0'), durationS: 6, width: 1280, height: 720 },
+    credit: CREDIT,
+  };
+  /** The guide with a video hotspot added, its poster and captions written: captions that run to 9 s, past its 6. */
+  const addVideo = (): void => {
+    const guide = JSON.parse(readFileSync(at(ID, 'guide.json'), 'utf8')) as { chapters: { steps: { hotspots: unknown[] }[] }[] };
+    guide.chapters[0].steps[0].hotspots.push({ id: 'film', title: 'Watch', anchor: { kind: 'horizon', azDeg: 180, altDeg: 0 }, clip: VIDEO });
+    writeGuide(guide);
+    mkdirSync(at(ID, 'video'));
+    writeFileSync(at(ID, VIDEO.poster), image());
+    writeFileSync(at(ID, VIDEO.captions), CAPTIONS);
+  };
+
+  it('holds a video\'s poster and captions to its folder, and its captions to the length it declares', () => {
+    addVideo();
+    rmSync(at(ID, VIDEO.poster));
+    expect(problems()).toEqual([
+      { file: GUIDE_FILE, path: `${CLIP}/2/clip/poster`, reason: 'no file images/poster.webp' },
+      { file: `${ID}/${VIDEO.captions}`, path: '', reason: expect.stringContaining('past the end of the narration') as string },
+    ]);
+  });
 
   it('finds nothing wrong with good clips', () => {
     expect(problems()).toEqual([]);

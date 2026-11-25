@@ -16,6 +16,26 @@ export function deferred<T>() {
 }
 
 /**
+ * A video element that plays nothing: a real one, so that it can stand in the panel, its playing FakeAudio's. `fake`
+ * is that FakeAudio, for the test to set and read; `loads` counts load(), which a close calls to stop the fetch.
+ */
+export function fakeVideo(): HTMLVideoElement & { readonly fake: FakeAudio; loads: number } {
+  const fake = new FakeAudio();
+  const element = Object.assign(document.createElement('video'), { fake, loads: 0 });
+  Object.defineProperties(element, {
+    src: { get: () => fake.src, set: (value: string) => (fake.src = value) },
+    currentTime: { get: () => fake.currentTime, set: (value: number) => (fake.currentTime = value) },
+    duration: { get: () => fake.duration },
+    ended: { get: () => fake.ended },
+    paused: { get: () => fake.paused },
+  });
+  element.play = () => fake.play();
+  element.pause = () => fake.pause();
+  element.load = () => void element.loads++;
+  return element;
+}
+
+/**
  * An audio element that plays nothing. The test sets its time, whether it
  * has ended, how far it has loaded and its error; it records every src and
  * every currentTime set, and each play() hands back a promise the test

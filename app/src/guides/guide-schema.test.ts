@@ -30,6 +30,16 @@ const HOTSPOT = `${STEP}/hotspots/0`;
 const CREDIT = { what: 'Diagram', source: 'USGS', licence: 'public domain', url: 'https://www.usgs.gov/' };
 const IMAGE_CLIP: Json = { kind: 'image', src: 'images/prem.webp', alt: 'The layers', caption: 'Seismic waves bend.', credit: CREDIT };
 const AUDIO_CLIP: Json = { kind: 'audio', src: 'audio/prem.m4a', captions: 'audio/prem.vtt', credit: CREDIT };
+const SHA256 = 'a1b2c3d4'.padEnd(64, '5');
+const VIDEO_CLIP: Json = {
+  kind: 'video',
+  src: 'https://media.transparent.sbdev.io/guides/down-through-the-earth/prem.a1b2c3d4.mp4',
+  captions: 'video/prem.vtt',
+  poster: 'images/prem-poster.webp',
+  video: { bytes: 18234567, sha256: SHA256, durationS: 94, width: 1280, height: 720 },
+  credit: CREDIT,
+};
+const videoWith = (video: Json): Json => hotspot({ ...VIDEO_CLIP, video: { ...(VIDEO_CLIP.video as Json), ...video } });
 /** A hotspot straight down with `clip`; JSON drops a field set to undefined, as the cases use to take one out. */
 const hotspot = (clip: Json): Json => JSON.parse(JSON.stringify({ id: 'prem', title: 'How we know', anchor: DOWN, clip })) as Json;
 
@@ -74,9 +84,9 @@ describe('the guide schema', () => {
     expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
   });
 
-  it('takes hotspots with an image or an audio clip, on a switch or not, and cues that play and stop them', () => {
+  it('takes hotspots with an image, an audio or a video clip, on a switch or not, and cues that play and stop them', () => {
     const g = copy();
-    step(g).hotspots = [hotspot(IMAGE_CLIP), { ...hotspot(AUDIO_CLIP), id: 'listen', layer: 'shell-core' }];
+    step(g).hotspots = [hotspot(IMAGE_CLIP), { ...hotspot(AUDIO_CLIP), id: 'listen', layer: 'shell-core' }, { ...hotspot(VIDEO_CLIP), id: 'watch' }];
     (step(g).cues as Json[]).push({ at: 30, do: 'clip', hotspot: 'prem' }, { at: 40, do: 'clip', hotspot: null });
     expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
   });
@@ -137,7 +147,27 @@ describe('the guide schema', () => {
     ['an image that is a PNG', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...IMAGE_CLIP, src: 'images/x.png' })])],
     ['an audio clip with no captions', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...AUDIO_CLIP, captions: undefined })])],
     ['a clip with no credit', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...AUDIO_CLIP, credit: undefined })])],
-    ['a video, not yet played', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...AUDIO_CLIP, kind: 'video' })])],
+    ['a video with no poster', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...VIDEO_CLIP, poster: undefined })])],
+    ['a video with no captions', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...VIDEO_CLIP, captions: undefined })])],
+    ['a video with nothing declared', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...VIDEO_CLIP, video: undefined })])],
+    [
+      'a video in the guide folder',
+      `${HOTSPOT}/clip`,
+      (g) => (step(g).hotspots = [hotspot({ ...VIDEO_CLIP, src: 'video/prem.a1b2c3d4.mp4' })]),
+    ],
+    [
+      'a video on another host',
+      `${HOTSPOT}/clip`,
+      (g) => (step(g).hotspots = [hotspot({ ...VIDEO_CLIP, src: 'https://media.transparentXsbdev.io/media/prem.a1b2c3d4.mp4' })]),
+    ],
+    [
+      'a video not named by its hash',
+      `${HOTSPOT}/clip`,
+      (g) => (step(g).hotspots = [hotspot({ ...VIDEO_CLIP, src: 'https://media.transparent.sbdev.io/media/prem.mp4' })]),
+    ],
+    ['a video over 200 MiB', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [videoWith({ bytes: 200 * 1024 * 1024 + 1 })])],
+    ['a video wider than 1080p', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [videoWith({ width: 2560, height: 1440 })])],
+    ['a video hash that is not one', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [videoWith({ sha256: 'A1B2' })])],
     ['a hotspot title too long for a marker', `${HOTSPOT}/title`, (g) => (step(g).hotspots = [{ ...hotspot(IMAGE_CLIP), title: 'x'.repeat(61) }])],
   ])('refuses %s', (_, path, change) => {
     const g = copy();

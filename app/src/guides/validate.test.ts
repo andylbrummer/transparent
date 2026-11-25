@@ -47,7 +47,37 @@ const hotspot = (id: string): Json => ({
   clip: { kind: 'image', src: 'images/prem.webp', alt: 'The layers', caption: 'Seismic waves', credit: EXAMPLE_GUIDE.credits[0] },
 });
 
+/** A video hotspot on the media host: in `folder`, named for a hash starting `named`, `width` × `height`. */
+const video = (folder: string, named = 'a1b2c3d4', width = 1280, height = 720): Json => ({
+  id: 'film',
+  title: 'Watch',
+  anchor: DOWN,
+  clip: {
+    kind: 'video',
+    src: `https://media.transparent.sbdev.io/${folder}/prem.${named}.mp4`,
+    captions: 'video/prem.vtt',
+    poster: 'images/prem-poster.webp',
+    video: { bytes: 1000, sha256: 'a1b2c3d4'.padEnd(64, '0'), durationS: 30, width, height },
+    credit: EXAMPLE_GUIDE.credits[0],
+  },
+});
+
 describe('hotspotsProblems', () => {
+  it('takes a video under media/ on the media host, named by its hash', () => {
+    expect(hotspotsProblems([video('media')] as unknown as Hotspot[], world)).toEqual([]);
+  });
+
+  it.each<[string, Json, string, string]>([
+    ['in a guide folder', video('guides/down-through-the-earth'), '/hotspots/0/clip/src', 'is not in https://media.transparent.sbdev.io/media/'],
+    ['named for another hash', video('media', 'ffffffff'), '/hotspots/0/clip/src', 'is named for a hash that starts ffffffff, not a1b2c3d4'],
+    ['over 1080p, standing up', video('media', 'a1b2c3d4', 1440, 1920), '/hotspots/0/clip/video', '1440 × 1920 is over 1080p'],
+  ])('refuses a video %s', (_, hotspot, path, reason) => {
+    const found = hotspotsProblems([hotspot] as unknown as Hotspot[], world);
+    expect(found).toHaveLength(1);
+    expect(found[0].path).toBe(path);
+    expect(found[0].reason).toContain(reason);
+  });
+
   it('holds a file of hotspots to the rules of a step', () => {
     const list = [hotspot('a'), hotspot('a'), { ...hotspot('b'), layer: 'nothing', anchor: { kind: 'label', name: 'Atlantis' } }];
     expect(hotspotsProblems(list as unknown as Hotspot[], world)).toEqual([
@@ -141,6 +171,12 @@ describe('guideProblems', () => {
       (g) => (steps(g)[0].hotspots = [{ ...hotspot('prem'), anchor: { kind: 'label', name: 'Atlantis' } }]),
       `${STEP}/hotspots/0/anchor`,
       'no label named Atlantis',
+    ],
+    [
+      'a video in another guide\'s folder',
+      (g) => (steps(g)[0].hotspots = [video('guides/another-guide')]),
+      `${STEP}/hotspots/0/clip/src`,
+      `https://media.transparent.sbdev.io/guides/another-guide/prem.a1b2c3d4.mp4 is not in https://media.transparent.sbdev.io/guides/${EXAMPLE_GUIDE.id}/`,
     ],
     [
       'a clip of a hotspot the guide does not have',
@@ -241,6 +277,7 @@ describe('guideProblems', () => {
         cues(g, 1)[2] = { at: 3, do: 'layers', on: [live] };
       },
     ],
+    ['a video in its own folder on the media host', (g) => (steps(g)[0].hotspots = [video(`guides/${EXAMPLE_GUIDE.id}`)])],
     ['a clip of a hotspot shown since an earlier step, and a stop', (g) => ((steps(g)[0].hotspots = [hotspot('prem')]), cues(g, 1).push({ at: 30, do: 'clip', hotspot: 'prem' }, { at: 31, do: 'clip', hotspot: null }))],
     ['hotspots of different ids in two chapters', (g) => ((steps(g)[0].hotspots = [hotspot('a')]), (g.chapters = [...chapters(g), { ...chapters(g)[0], id: 'again', steps: [{ ...steps(g)[0], hotspots: [hotspot('b')] }] }]))],
   ])('allows %s', (_, change) => {

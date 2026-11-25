@@ -612,6 +612,13 @@
         object-fit: contain;
         border-radius: 6px;
       }
+      .clip__video {
+        min-height: 0;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000;
+        border-radius: 6px;
+      }
       .clip__caption,
       .clip__credit,
       .clip__message {
@@ -651,6 +658,11 @@
       /* An audio clip's captions sit over its strip, not under it. */
       .captions.captions--clip {
         bottom: calc(env(safe-area-inset-bottom) + var(--captions-foot) + 160px);
+      }
+      /* A video's go over its lower part, above the browser's controls and the credit, as a subtitled film's do. */
+      body:has(.clip[data-kind='video']:not([hidden])) .captions.captions--clip {
+        bottom: calc(env(safe-area-inset-bottom) + var(--captions-foot) + 100px);
+        z-index: 3;
       }
       .play-bar__detail {
         font-size: 12px;

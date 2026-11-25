@@ -442,6 +442,7 @@ export function init(): App | null {
   const clipPlayer = createClipPlayer({
     parent: container,
     audio: new Audio(),
+    video: document.createElement('video'),
     fetch: (url) => fetch(url),
     captions: clipCaptions,
     captionsShown: () => guideSession.getGuide().captionsShown,

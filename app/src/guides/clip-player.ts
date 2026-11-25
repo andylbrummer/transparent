@@ -1,16 +1,18 @@
 /**
- * The clip player (spec/guides.md §8.4): a hotspot's clip opened, played and closed, through one audio element kept
- * for clips alone. One thing speaks at a time: while a clip is open the guide waits (guide-session reads isOpen), and
- * a clip never plays under the narration.
+ * The clip player (spec/guides.md §8.4): a hotspot's clip opened, played and closed, through one audio element and
+ * one video element kept for clips alone. One thing speaks at a time: while a clip is open the guide waits
+ * (guide-session reads isOpen), and a clip never plays under the narration.
  *
  * On a phone and a desktop a clip opens in a panel: audio with its title, a progress bar and captions near the foot of
- * the screen; an image over the lower half, with its caption, its alt text on the image and its credit under it. In
- * Cardboard the page is hidden, so an image goes to the scene panel (clip-scene-panel.ts), hung where its marker was
- * when it opened; the captions per eye are phase 3's.
+ * the screen; an image over the lower half, with its caption, its alt text on the image and its credit under it; a
+ * video in the same place with the browser's own controls and the app's captions. In Cardboard the page is hidden, so
+ * an image goes to the scene panel (clip-scene-panel.ts), hung where its marker was when it opened; the captions per
+ * eye are phase 3's.
  *
- * Audio is not fetched as a blob, as narration is. The element is handed the file's URL and played in the same tap
- * that opened it: a fetch first would put the play outside the tap, and Safari would refuse it. Its captions are
- * fetched beside it; a clip whose captions do not come stops, as narration does not play without them.
+ * Audio and video are not fetched as a blob, as narration is. The element is handed the file's URL and played in the
+ * same tap that opened it: a fetch first would put the play outside the tap, and Safari would refuse it. Its captions
+ * are fetched beside it; a clip whose captions do not come stops, as narration does not play without them. A video is
+ * drawn with crossOrigin set, so the media host's CORS lets it be a texture in the viewer too (spec/guides.md §10.1).
  */
 
 import * as THREE from 'three';
@@ -34,6 +36,8 @@ export interface ClipPlayerDeps {
   readonly parent: HTMLElement;
   /** The one element every audio clip plays through: not the narration's, which keeps its place while a clip plays. */
   readonly audio: ClipAudio;
+  /** The one element every video clip plays through, put in the panel: two would decode twice. */
+  readonly video: HTMLVideoElement;
   /** As the browser's fetch: for a clip's captions. */
   fetch(url: string): Promise<Response>;
   /** A caption overlay of the clip's own: the narration's is the guide session's. */
@@ -64,7 +68,7 @@ export interface ClipPlayer {
   /** Open a hotspot's clip in place of any open; the same one paused goes on from where it was. */
   open(hit: FieldHotspot): Promise<ClipOutcome>;
   close(): void;
-  /** Pause or go on with an audio clip. False when no clip is open to take it. */
+  /** Pause or go on with an audio or video clip. False when no clip is open to take it. */
   toggle(): boolean;
   isOpen(): boolean;
   /**
@@ -99,8 +103,19 @@ type State =
 const CLOSED: State = { kind: 'closed' };
 const LOOK_AWAY_COS = Math.cos(THREE.MathUtils.degToRad(LOOK_AWAY_DEG));
 
+/** The element a clip plays through; null for an image. */
+type Played = ClipAudio | null;
+
 export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
-  const { audio } = deps;
+  const { audio, video } = deps;
+  // Each attribute for a reason: the browser's controls in the panel; inline, not full screen, on an iPhone; CORS,
+  // so the frame can be a texture; nothing fetched until a clip is opened.
+  video.className = 'clip__video';
+  video.controls = true;
+  video.playsInline = true;
+  video.crossOrigin = 'anonymous';
+  video.preload = 'none';
+  const played = (clip: Clip): Played => (clip.kind === 'video' ? video : clip.kind === 'audio' ? audio : null);
   let state: State = CLOSED;
   // Every open is numbered: an image or captions that arrive after another open, or a close, are dropped.
   let opens = 0;
@@ -112,30 +127,36 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
   let barPercent = -1;
   let stereoShown = false;
 
-  const panel = new ClipPanel(deps.parent, { close: () => close(), toggle: () => toggle() });
+  const panel = new ClipPanel(deps.parent, video, { close: () => close(), toggle: () => toggle() });
 
   const onEnded = (): void => {
-    // An audio clip over is a clip closed: the guide goes on.
+    // A clip over is a clip closed: the guide goes on.
     if (state.kind === 'playing') close();
   };
   audio.addEventListener('ended', onEnded);
+  video.addEventListener('ended', onEnded);
 
   function unlock(): void {
     if (unlocked || state.kind !== 'closed') return;
     const url = deps.objectUrl.create(new Blob([deps.silence()], { type: 'audio/wav' }));
-    // Set and played inside the tap itself: the browser allows the first play nowhere else.
-    audio.src = url;
-    audio
-      .play()
-      .then(
+    // Set and played inside the tap itself: the browser allows the first play nowhere else. Each element is allowed
+    // on its own, so both are played.
+    const plays = [audio, video].map((element) => {
+      element.src = url;
+      return element.play().then(
         () => {
-          unlocked = true;
-          if (audio.src === url) audio.pause();
+          if (element.src === url) element.pause();
         },
         // A refusal is not reported: the clip's own play will be refused too, and say so in its panel.
-        () => {}
-      )
-      .finally(() => deps.objectUrl.revoke(url));
+        () => Promise.reject(new Error('refused'))
+      );
+    });
+    void Promise.allSettled(plays).then((results) => {
+      unlocked = results.every((result) => result.status === 'fulfilled');
+      deps.objectUrl.revoke(url);
+      // Left holding the silence, the video would show its empty frame's controls on the next open's poster.
+      if (video.src === url) video.removeAttribute('src');
+    });
   }
 
   async function open(hit: FieldHotspot): Promise<ClipOutcome> {
@@ -152,7 +173,7 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
     panel.show(hit, clip);
     let outcome: ClipOutcome;
     try {
-      outcome = clip.kind === 'image' ? await openImage(hit, clip, thisOpen) : await openAudio(hit, clip, thisOpen);
+      outcome = clip.kind === 'image' ? await openImage(hit, clip, thisOpen) : await openPlayed(hit, clip, thisOpen);
     } catch (error) {
       outcome = { ok: false, message: error instanceof Error ? error.message : String(error) };
     }
@@ -171,10 +192,18 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
     return { ok: true };
   }
 
-  async function openAudio(hit: FieldHotspot, clip: Extract<Clip, { kind: 'audio' }>, thisOpen: number): Promise<ClipOutcome> {
-    // Both before anything is awaited: the play has to be inside the tap that opened the clip.
-    audio.src = hit.source.fileUrl(clip.src);
-    const playing = audio.play();
+  async function openPlayed(hit: FieldHotspot, clip: Extract<Clip, { kind: 'audio' | 'video' }>, thisOpen: number): Promise<ClipOutcome> {
+    // All before anything is awaited: the play has to be inside the tap that opened the clip.
+    let playing: Promise<void>;
+    if (clip.kind === 'video') {
+      video.poster = hit.source.fileUrl(clip.poster);
+      // On the media host, not in the clip's folder: the schema has it a whole URL.
+      video.src = clip.src;
+      playing = video.play();
+    } else {
+      audio.src = hit.source.fileUrl(clip.src);
+      playing = audio.play();
+    }
     const captions = fetchCaptions(hit.source.fileUrl(clip.captions));
     const [cues] = await Promise.all([captions, playing]);
     if (thisOpen !== opens) return { ok: true };
@@ -191,7 +220,7 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
   }
 
   function fail(hit: FieldHotspot, message: string): void {
-    audio.pause();
+    played(hit.hotspot.clip)?.pause();
     deps.captions.setCues(null);
     state = { kind: 'failed', hit, message };
     panel.showMessage(`This clip did not load: ${message}`);
@@ -200,7 +229,14 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
   function close(): void {
     if (state.kind === 'closed') return;
     opens++;
-    if (state.hit.hotspot.clip.kind === 'audio') audio.pause();
+    const { clip } = state.hit.hotspot;
+    played(clip)?.pause();
+    if (clip.kind === 'video') {
+      // Without its source the element stops fetching: a paused film would go on buffering what nobody will watch.
+      video.removeAttribute('src');
+      video.removeAttribute('poster');
+      video.load();
+    }
     deps.captions.setCues(null);
     deps.scenePanel.hide();
     stereoShown = false;
@@ -211,14 +247,16 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
 
   function toggle(): boolean {
     if (state.kind === 'closed') return false;
+    const media = played(state.hit.hotspot.clip);
+    if (media === null) return true;
     if (state.kind === 'playing') {
-      audio.pause();
+      media.pause();
       state = { ...state, kind: 'paused' };
       panel.setPaused(true);
     } else if (state.kind === 'paused') {
       awayMs = 0;
       // A refused play shows as the clip failing: the user can open it again with a tap.
-      audio.play().catch((error: unknown) => {
+      media.play().catch((error: unknown) => {
         if (state.kind !== 'closed') fail(state.hit, error instanceof Error ? error.message : String(error));
       });
       state = { ...state, kind: 'playing' };
@@ -230,13 +268,21 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
   function update(deltaMs: number, forward: THREE.Vector3 | null, stereo: boolean): void {
     if (state.kind === 'closed') return;
     if (state.kind === 'playing' || state.kind === 'paused') {
-      const tS = audio.currentTime;
-      deps.captions.update(tS);
-      const duration = audio.duration;
-      const percent = Number.isFinite(duration) && duration > 0 ? Math.round((1000 * tS) / duration) / 10 : 0;
-      if (percent !== barPercent) {
-        barPercent = percent;
-        panel.setProgress(percent);
+      const { clip } = state.hit.hotspot;
+      if (clip.kind === 'video') {
+        // The browser's controls pause and play it too: the player follows, so a toggle or the look-away is right.
+        if (state.kind === 'playing' && video.paused && !video.ended) state = { ...state, kind: 'paused' };
+        else if (state.kind === 'paused' && !video.paused) state = { ...state, kind: 'playing' };
+        deps.captions.update(video.currentTime);
+      } else {
+        const tS = audio.currentTime;
+        deps.captions.update(tS);
+        const duration = audio.duration;
+        const percent = Number.isFinite(duration) && duration > 0 ? Math.round((1000 * tS) / duration) / 10 : 0;
+        if (percent !== barPercent) {
+          barPercent = percent;
+          panel.setProgress(percent);
+        }
       }
     }
     // The scene panel follows the viewer in and out; the page's panel is hidden with the page in the viewer.
@@ -273,6 +319,7 @@ export function createClipPlayer(deps: ClipPlayerDeps): ClipPlayer {
     dispose() {
       close();
       audio.removeEventListener('ended', onEnded);
+      video.removeEventListener('ended', onEnded);
       panel.dispose();
     },
   };
@@ -284,6 +331,7 @@ class ClipPanel {
   private readonly title: HTMLElement;
   private readonly figure: HTMLElement;
   private readonly image: HTMLImageElement;
+  private readonly video: HTMLVideoElement;
   private readonly caption: HTMLElement;
   private readonly controls: HTMLElement;
   private readonly toggleButton: HTMLButtonElement;
@@ -292,7 +340,7 @@ class ClipPanel {
   private readonly credit: HTMLElement;
   private readonly message: HTMLElement;
 
-  constructor(parent: HTMLElement, actions: { close(): void; toggle(): void }) {
+  constructor(parent: HTMLElement, video: HTMLVideoElement, actions: { close(): void; toggle(): void }) {
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, into: HTMLElement): HTMLElementTagNameMap[K] => {
       const made = document.createElement(tag);
       made.className = className;
@@ -313,6 +361,8 @@ class ClipPanel {
     closeButton.addEventListener('click', actions.close);
     this.figure = el('figure', 'clip__figure', this.root);
     this.image = el('img', 'clip__image', this.figure);
+    this.video = video;
+    this.figure.appendChild(video);
     this.caption = el('figcaption', 'clip__caption', this.figure);
     this.controls = el('div', 'clip__controls', this.root);
     this.toggleButton = el('button', 'clip__toggle', this.controls);
@@ -335,7 +385,11 @@ class ClipPanel {
     this.root.dataset.kind = clip.kind;
     this.root.lang = hit.source.language;
     this.title.textContent = hit.hotspot.title;
-    this.figure.hidden = clip.kind !== 'image';
+    this.figure.hidden = clip.kind === 'audio';
+    this.image.hidden = clip.kind !== 'image';
+    this.video.hidden = clip.kind !== 'video';
+    this.caption.hidden = clip.kind !== 'image';
+    // A video has the browser's controls; audio has the panel's.
     this.controls.hidden = clip.kind !== 'audio';
     this.caption.textContent = clip.kind === 'image' ? clip.caption : '';
     this.image.removeAttribute('src');

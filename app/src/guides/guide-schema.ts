@@ -4,8 +4,8 @@
  * public/guides/guide.schema.json is its output, written by
  * `npm run guides:schema` and held to it by a test.
  *
- * Only what the app plays: of clips, only audio and images. A schema that
- * accepted more would pass guides the app cannot play.
+ * Only what the app plays: of clips, audio, images, and video on the media
+ * host. A schema that accepted more would pass guides the app cannot play.
  */
 
 import {
@@ -23,6 +23,7 @@ import {
 } from '../view/action-schema';
 // Kept in format.ts, which the app imports, so that checking a guide at run time does not bring this schema with it.
 import { GUIDE_FORMAT_VERSION, ID_PATTERN } from './format';
+import { MEDIA_ORIGIN } from './media-origin';
 
 const ID = { type: 'string', pattern: ID_PATTERN, description: 'Lower-case words joined by hyphens.' } as const;
 const TEXT = { type: 'string', minLength: 1 } as const;
@@ -33,6 +34,17 @@ const HTTPS_URL = { type: 'string', pattern: '^https://' } as const;
 const AUDIO_PATH = { type: 'string', pattern: '^[a-z0-9-]+(/[a-z0-9-]+)*\\.m4a$', description: "An .m4a file in the guide's folder." } as const;
 const CAPTIONS_PATH = { type: 'string', pattern: '^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$', description: "A WebVTT file in the guide's folder." } as const;
 const IMAGE_PATH = { type: 'string', pattern: '^[a-z0-9-]+(/[a-z0-9-]+)*\\.(webp|jpg)$', description: "A .webp or .jpg file in the guide's folder." } as const;
+/** The most a video may weigh (spec/guides.md §9): far over a phone's patience, far under what R2 serves. */
+export const VIDEO_MAX_BYTES = 200 * 1024 * 1024;
+/**
+ * A video on the media host, named by its content: <folder>/<name>.<first 8 hex of its sha256>.mp4, the folder
+ * guides/<id> or media (spec/guides.md §10.1). The validator holds the folder and the hash to the file's own.
+ */
+const VIDEO_URL = {
+  type: 'string',
+  pattern: `^${MEDIA_ORIGIN.replaceAll('.', '\\.')}/(guides/[a-z0-9-]+|media)/[a-z0-9-]+\\.[0-9a-f]{8}\\.mp4$`,
+  description: 'An .mp4 on the media host, as npm run guides:put-video prints it.',
+} as const;
 
 const CREDIT = {
   type: 'object',
@@ -65,6 +77,35 @@ const IMAGE_CLIP = {
 } as const;
 
 /**
+ * A film, on the media host since it is too large for the repository. What the file is, is declared, so a guide can
+ * be checked without the network and the file against it with: npm run guides:check-media. H.264 and AAC, at most 1080p.
+ */
+const VIDEO_CLIP = {
+  type: 'object',
+  properties: {
+    kind: { const: 'video' },
+    src: VIDEO_URL,
+    captions: CAPTIONS_PATH,
+    poster: { ...IMAGE_PATH, description: "Shown before it plays: a .webp or .jpg file in the guide's folder." },
+    video: {
+      type: 'object',
+      properties: {
+        bytes: { type: 'integer', minimum: 1, maximum: VIDEO_MAX_BYTES },
+        sha256: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        durationS: { type: 'number', exclusiveMinimum: 0 },
+        width: { type: 'integer', minimum: 1, maximum: 1920 },
+        height: { type: 'integer', minimum: 1, maximum: 1920 },
+      },
+      required: ['bytes', 'sha256', 'durationS', 'width', 'height'],
+      additionalProperties: false,
+    },
+    credit: CREDIT,
+  },
+  required: ['kind', 'src', 'captions', 'poster', 'video', 'credit'],
+  additionalProperties: false,
+} as const;
+
+/**
  * A clip hung on something in the view (spec/guides.md §8.1): its marker sits on `anchor` and reads "▶ title". One
  * format for a guide's step and for the "Stories and clips" layer.
  */
@@ -76,7 +117,7 @@ export const HOTSPOT_SCHEMA = {
     title: { ...TEXT, maxLength: 60 },
     anchor: TARGET_SCHEMA,
     layer: { ...TEXT, description: 'A layer switch: the marker shows only while it is on.' },
-    clip: { oneOf: [AUDIO_CLIP, IMAGE_CLIP] },
+    clip: { oneOf: [AUDIO_CLIP, IMAGE_CLIP, VIDEO_CLIP] },
   },
   required: ['id', 'title', 'anchor', 'clip'],
   additionalProperties: false,
