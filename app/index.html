@@ -1159,7 +1159,9 @@
         background: #ffd27a;
         border-radius: 2px;
       }
-      .captions--stereo {
+      .captions--stereo,
+      .captions.captions--clip.captions--stereo,
+      body:has(.clip[data-kind='video']:not([hidden])) .captions.captions--clip.captions--stereo {
         inset: 0;
         padding: 0;
       }

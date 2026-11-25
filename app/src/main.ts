@@ -836,8 +836,8 @@ export function init(): App | null {
     viewChips.setVisible(position !== null && !ar && !stereo);
     if (stereo) stereoChips.place(width, height, cardboardCalibration.spacingPx());
     else stereoChips.show('');
-    // A clip's captions are not drawn per eye yet: in the viewer a clip shows without them.
-    clipCaptions.setVisible(position !== null && !ar && !stereo);
+    clipCaptions.setVisible(position !== null && !ar);
+    clipCaptions.place(stereo, width, height, cardboardCalibration.spacingPx());
     let hotspotFuse: HotspotFuse | null = null;
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
