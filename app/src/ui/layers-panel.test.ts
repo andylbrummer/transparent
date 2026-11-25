@@ -8,6 +8,7 @@ import {
   loadOpenSections,
   matchesFilter,
   switchesWithLazyLayers,
+  type GuideCredits,
   type LayerSwitch,
 } from './layers-panel';
 import type { LayerDefinition } from '../layers/types';
@@ -105,7 +106,7 @@ describe('LayersPanel with lazy layers', () => {
     lazy('clouds', { section: 'Weather', defaultOn: true }),
   ];
 
-  function setup(saved: string | null = null, openSections?: Record<string, boolean>) {
+  function setup(saved: string | null = null, openSections?: Record<string, boolean>, guideCredits?: () => Promise<readonly GuideCredits[]>) {
     const parent = document.createElement('div');
     const switches = switchesWithLazyLayers(definitions);
     const changes: [string, boolean][] = [];
@@ -119,6 +120,7 @@ describe('LayersPanel with lazy layers', () => {
         switches,
         credits: [{ what: 'Clouds', source: 'A Source', licence: 'public domain', url: 'https://example.org/' }],
         openSections,
+        guideCredits,
       }
     );
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
@@ -455,5 +457,24 @@ describe('LayersPanel with lazy layers', () => {
     expect(link.href).toBe('https://example.org/');
     expect(parent.querySelector('.layers-credits li')!.textContent).toBe('Clouds — A Source (public domain)');
   });
-});
 
+  it('lists each guide\u2019s credits under its title the first time the credits are opened', async () => {
+    const guideCredits = vi.fn(async (): Promise<readonly GuideCredits[]> => [
+      { title: 'Down through the Earth', credits: [{ what: 'Narration', source: 'Piper', licence: 'CC BY 4.0', url: 'https://example.org/n' }] },
+    ]);
+    const { parent } = setup(null, undefined, guideCredits);
+    const block = parent.querySelector<HTMLDetailsElement>('.layers-credits')!;
+    expect(guideCredits).not.toHaveBeenCalled();
+    block.open = true;
+    block.dispatchEvent(new Event('toggle'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(block.querySelector('h3')!.textContent).toBe('Guide: Down through the Earth');
+    expect([...block.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Clouds — A Source (public domain)',
+      'Narration — Piper (CC BY 4.0)',
+    ]);
+    block.dispatchEvent(new Event('toggle'));
+    expect(guideCredits).toHaveBeenCalledOnce();
+  });
+});

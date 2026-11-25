@@ -235,6 +235,8 @@ export interface LayersPanelOptions {
   readonly switches?: readonly LayerSwitch[];
   /** Listed under "Data credits" at the foot of the panel. */
   readonly credits?: readonly Credit[];
+  /** The guides' credits, listed under their own heading: fetched the first time the credits are opened. */
+  readonly guideCredits?: () => Promise<readonly GuideCredits[]>;
   /**
    * Sections as the user left them (loadOpenSections). A section with no
    * entry starts closed: with a hundred switches the panel opens as a list
@@ -324,7 +326,7 @@ export class LayersPanel {
     }
     for (const name of this.sections.keys()) this.updateSection(name);
     this.updatePresets();
-    if (options.credits && options.credits.length > 0) this.panel.appendChild(renderCredits(options.credits));
+    if (options.credits && options.credits.length > 0) this.panel.appendChild(renderCredits(options.credits, options.guideCredits));
     parent.append(this.button, this.panel);
   }
 
@@ -565,13 +567,46 @@ export class LayersPanel {
   }
 }
 
-/** The credits list: what, who, licence, each linking to its source. */
-function renderCredits(credits: readonly Credit[]): HTMLElement {
+/** One guide's credits, under its title. */
+export interface GuideCredits {
+  readonly title: string;
+  readonly credits: readonly Credit[];
+}
+
+/** The credits list: what, who, licence, each linking to its source; then the guides', once the list is first opened. */
+function renderCredits(credits: readonly Credit[], guideCredits?: () => Promise<readonly GuideCredits[]>): HTMLElement {
   const block = document.createElement('details');
   block.className = 'layers-section layers-credits';
   const heading = document.createElement('summary');
   heading.textContent = 'Data credits';
   block.appendChild(heading);
+  block.appendChild(creditList(credits));
+  if (guideCredits) {
+    // The guides are files of their own: fetched when someone opens the credits, not with every page load.
+    let asked = false;
+    block.addEventListener('toggle', () => {
+      if (!block.open || asked) return;
+      asked = true;
+      guideCredits().then(
+        (guides) => {
+          for (const guide of guides) {
+            const title = document.createElement('h3');
+            title.className = 'layers-credits__guide';
+            title.textContent = `Guide: ${guide.title}`;
+            block.append(title, creditList(guide.credits));
+          }
+        },
+        // The list stays as it is; the guide list says what is wrong with the guides.
+        () => {
+          asked = false;
+        }
+      );
+    });
+  }
+  return block;
+}
+
+function creditList(credits: readonly Credit[]): HTMLUListElement {
   const list = document.createElement('ul');
   for (const credit of credits) {
     const item = document.createElement('li');
@@ -585,6 +620,5 @@ function renderCredits(credits: readonly Credit[]): HTMLElement {
     item.append(what, ' — ', link, ` (${credit.licence})`);
     list.appendChild(item);
   }
-  block.appendChild(list);
-  return block;
+  return list;
 }

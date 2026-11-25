@@ -62,7 +62,7 @@ import type { ViewControl } from './view/actions';
 import { GazePointer } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
 import { fetchGuides, guideLink } from './guides/guide-files';
-import { GuideList } from './guides/guide-list';
+import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
@@ -331,9 +331,19 @@ export function init(): App | null {
   resetButton.addEventListener('click', onResetClick);
 
   const presets = [defaultPreset(layerSwitches), ...LAYER_PRESETS];
+  // The guide list and the credits both read every guide: fetched once, by whichever asks first, and again after a failure.
+  let guides: Promise<GuideListing[]> | null = null;
+  const loadGuides = (): Promise<GuideListing[]> => {
+    guides ??= fetchGuides({ fetch: (url) => fetch(url), baseUrl: import.meta.env.BASE_URL }).catch((error: unknown) => {
+      guides = null;
+      throw error;
+    });
+    return guides;
+  };
   const layersPanel = new LayersPanel(container, layerVisibility, applyLayer, localStorage, {
     switches: layerSwitches,
     credits: allCredits(LAYER_DEFINITIONS),
+    guideCredits: () => loadGuides().then((listings) => listings.flatMap((l) => ('guide' in l ? [{ title: l.guide.title, credits: l.guide.credits }] : []))),
     openSections: loadOpenSections(localStorage.getItem(SECTIONS_STORAGE_KEY)),
     presets,
   });
@@ -424,7 +434,7 @@ export function init(): App | null {
   // The list shares the top-left corner with the layers panel: one open closes the other.
   const guideList = new GuideList({
     parent: container,
-    load: () => fetchGuides({ fetch: (url) => fetch(url), baseUrl: import.meta.env.BASE_URL }),
+    load: loadGuides,
     choose: (id) => guideSession.open({ id, at: null }),
     onOpen: () => layersPanel.setOpen(false),
   });
