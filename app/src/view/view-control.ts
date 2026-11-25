@@ -13,12 +13,14 @@ import type { LayerParamValues } from '../layers/types';
 import { SKY_RADIUS_M } from '../layers/types';
 import type { GlobeRenderer } from '../render/globe';
 import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
-import type { DeviceAttitude, SurfacePosition } from '../sensors';
+import type { AppClock } from '../clock';
+import type { DeviceAttitude } from '../sensors';
 import { canFade, type LayerSwitch, type LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
 import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
+import type { StandingPlace } from './standing-place';
 import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex, type LoadedLabels } from './targets';
 
 export interface ViewControlDeps {
@@ -34,10 +36,10 @@ export interface ViewControlDeps {
   readonly shells: Pick<GlobeRenderer, 'setShellOpacity'>;
   /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
   readonly camera: THREE.Camera;
-  /** Where the view stands; null until there is a position. */
-  getPosition(): SurfacePosition | null;
-  /** The app clock. */
-  now(): Date;
+  /** Where the view stands: its position is null until there is one. */
+  readonly standing: Pick<StandingPlace, 'place' | 'position' | 'set'>;
+  /** The app clock: targets are found at its time. */
+  readonly clock: AppClock;
   /** The baked labels by name; null until the label files have loaded. */
   getLabels(): LabelIndex | null;
   /** The names the lazy layers have added, where a label the baked files lack is looked for: the label layer. */
@@ -742,12 +744,12 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   const forward = new THREE.Vector3();
 
   function locate(target: Target): Located | TargetUnresolved {
-    const position = deps.getPosition();
+    const position = deps.standing.position();
     if (!position) return { ok: false, code: 'target-unresolved', message: 'no position yet' };
     const labels = deps.getLabels();
     // Not yet loaded is not unknown: say which, rather than "no label named".
     if (target.kind === 'label' && !labels) return { ok: false, code: 'target-unresolved', message: 'the label files have not loaded' };
-    const found = targetDirection(target, position, deps.now(), labels ?? NO_LABELS, deps.loadedLabels);
+    const found = targetDirection(target, position, deps.clock.now(), labels ?? NO_LABELS, deps.loadedLabels);
     if (!found.ok) return found;
     // The camera as it is now, so the answer holds in a pose as well as in a drag.
     const offCentreDeg = THREE.MathUtils.radToDeg(found.direction.angleTo(deps.camera.getWorldDirection(forward)));

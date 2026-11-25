@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
+import { createClock } from '../clock';
 import { createLookController } from '../input/look';
 import type { LayerManager } from '../layers/manager';
 import { LAYER_DEFINITIONS } from '../layers/registry';
 import { switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { LAYER_PRESETS } from '../ui/presets';
 import { createViewControl } from '../view/view-control';
+import { createStandingPlace } from '../view/standing-place';
 import { helpText, respondToSpeech, type VoiceActions, type VoiceZoom } from './respond';
 
 /**
@@ -47,8 +49,8 @@ function app(
       lazyLayers: { setParams: () => {}, setOpacity: () => {}, ...(state.lazyLayers ?? { preload: () => Promise.resolve() }) },
       shells: { setShellOpacity: () => {} },
       camera: new THREE.PerspectiveCamera(),
-      getPosition: () => null,
-      now: () => new Date(0),
+      standing: createStandingPlace(() => null),
+      clock: createClock('?time=1970-01-01T00:00:00Z', () => 0),
       getLabels: () => null,
       loadedLabels: { find: () => ({ found: 'none' }) },
       look: createLookController(),

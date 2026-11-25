@@ -1,8 +1,10 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
+import { createClock } from '../clock';
 import { createLookController } from '../input/look';
 import type { SurfacePosition } from '../sensors';
 import type { FoldedView, Target } from './actions';
+import { createStandingPlace } from './standing-place';
 
 const austin: SurfacePosition = { lat: 30.27, lon: -97.74 };
 const when = new Date('2026-11-09T06:00:00Z');
@@ -32,8 +34,8 @@ function viewControl() {
     lazyLayers: { preload: vi.fn(async () => {}), setParams: vi.fn(), setOpacity: vi.fn() },
     shells: { setShellOpacity: vi.fn() },
     camera,
-    getPosition: () => austin,
-    now: () => when,
+    standing: createStandingPlace(() => austin),
+    clock: createClock(`?time=${when.toISOString()}`, () => 0),
     getLabels: () => null,
     loadedLabels: { find: () => ({ found: 'none' }) },
     look,

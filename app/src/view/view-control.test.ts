@@ -1,6 +1,7 @@
 import { beforeAll, describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { raDecToUnit } from '@transparent-earth/core';
+import { createClock } from '../clock';
 import { createLookController, DEFAULT_LOOK_STATE, MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
 import { LayerManager, type SharedLayerContext } from '../layers/manager';
 import { SKY_RADIUS_M, type LayerDefinition, type LayerInstance } from '../layers/types';
@@ -12,6 +13,7 @@ import type { FoldedView, Located, Target, ViewAction, ViewControl } from './act
 import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
 import { indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
+import { createStandingPlace } from './standing-place';
 import { ARRIVE_DEG, ARRIVE_MS, MAX_FADE_S, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
 import { CAPTURE_DEG, framingDeg, type SpyglassTarget } from '../ui/spyglass';
 
@@ -84,13 +86,16 @@ describe('createViewControl', () => {
     look.updateCamera(camera, austin, null, 0);
     const view: {
       position: SurfacePosition | null;
-      date: Date;
+      /** The wall clock under the app clock, which starts at `when` and runs at the real rate. */
+      wallMs: number;
       labels: LabelIndex | null;
       attitude: DeviceAttitude | null;
       reducedMotion: boolean;
       stereo: boolean;
-    } = { position: austin, date: when, labels: null, attitude: null, reducedMotion: false, stereo: false };
+    } = { position: austin, wallMs: 0, labels: null, attitude: null, reducedMotion: false, stereo: false };
     const spyglassOpened: SpyglassTarget[] = [];
+    const clock = createClock(`?time=${when.toISOString()}`, () => view.wallMs);
+    const standing = createStandingPlace(() => view.position);
     const labelParent = document.createElement('div');
     const labelLayer = new LabelLayer(labelParent, []);
     const markSpecs: LabelGroupSpec[] = [];
@@ -112,8 +117,8 @@ describe('createViewControl', () => {
       lazyLayers,
       shells: { setShellOpacity: (name, opacity) => shellOpacities.push([name, opacity]) },
       camera,
-      getPosition: () => view.position,
-      now: () => view.date,
+      standing,
+      clock,
       getLabels: () => view.labels,
       loadedLabels: labelLayer,
       look,
@@ -131,7 +136,7 @@ describe('createViewControl', () => {
       },
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs, spyglassOpened, shellOpacities, dips };
+    return { viewControl, switches, changes, stored, input, camera, look, view, clock, standing, labelParent, labelLayer, markSpecs, spyglassOpened, shellOpacities, dips };
   }
 
   const instance = (): LayerInstance => ({ setVisible() {}, dispose() {} });
@@ -880,7 +885,7 @@ describe('createViewControl', () => {
       await t.viewControl.perform({ do: 'mark', target: orion, text: 'Orion Nebula' });
       const position = t.markSpecs[0].labels[0].position;
       const before = markDirection(t);
-      t.view.date = new Date(when.getTime() + HOUR_MS);
+      t.view.wallMs += HOUR_MS;
       t.viewControl.update(16);
       expect(t.markSpecs[0].labels[0].position).toBe(position);
       // An hour of the Earth's turn, 15°, a little less on a circle off the equator.
@@ -911,7 +916,7 @@ describe('createViewControl', () => {
       await t.viewControl.perform({ do: 'mark', target: orion, text: 'Orion Nebula' });
       const held = t.markSpecs[0].labels[0].position.clone();
       t.view.position = null;
-      t.view.date = new Date(when.getTime() + HOUR_MS);
+      t.view.wallMs += HOUR_MS;
       t.viewControl.update(16);
       expect(t.markSpecs[0].labels[0].position.toArray()).toEqual(held.toArray());
       t.view.position = austin;
@@ -1156,7 +1161,7 @@ describe('createViewControl', () => {
       await t.viewControl.perform({ do: 'look', target: orion });
       const direction = t.viewControl.awaitedGaze()!.direction;
       const before = direction.clone();
-      t.view.date = new Date(when.getTime() + 3_600_000);
+      t.view.wallMs += 3_600_000;
       t.viewControl.update(16);
       expect(t.viewControl.awaitedGaze()!.direction).toBe(direction);
       expect(THREE.MathUtils.radToDeg(direction.angleTo(before))).toBeCloseTo(15, 0);
