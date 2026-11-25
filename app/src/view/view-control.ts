@@ -18,7 +18,7 @@ import type { DeviceAttitude } from '../sensors';
 import { canFade, type LayerSwitch, type LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
-import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, TimeSetting, ViewAction, ViewBorrow, ViewControl } from './actions';
+import type { ActionOutcome, AimMode, AwaitedGaze, ClipControl, FoldedView, Located, Target, TargetUnresolved, TimeSetting, ViewAction, ViewBorrow, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
 import { samePlace, type StandingPlace } from './standing-place';
 import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex, type LoadedLabels } from './targets';
@@ -65,6 +65,8 @@ export interface ViewControlDeps {
    * whole view goes through it. Resolves with the change's result once it is made.
    */
   dip<T>(change: () => T | Promise<T>): Promise<T>;
+  /** The clip player, where the app has one: without it every clip names an unknown hotspot. */
+  readonly clips?: ClipControl;
 }
 
 /** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
@@ -383,6 +385,14 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
           deps.standing.set(place);
           return { ok: true };
         });
+      }
+      case 'clip': {
+        if (action.hotspot === null) {
+          deps.clips?.stop();
+          return { ok: true };
+        }
+        if (!deps.clips) return { ok: false, code: 'unknown-hotspot', message: `no hotspot ${action.hotspot}` };
+        return deps.clips.play(action.hotspot);
       }
     }
   }

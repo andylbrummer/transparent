@@ -14,9 +14,10 @@
  */
 
 import * as THREE from 'three';
+import type { ClipControl } from '../view/actions';
 import type { CaptionOverlay } from './captions';
 import type { Clip } from './format';
-import type { FieldHotspot } from './hotspot-field';
+import type { FieldHotspot, HotspotField } from './hotspot-field';
 import { parseVtt } from './vtt';
 
 /** What the clip player uses of an HTMLAudioElement, so a test can stand in for one. */
@@ -73,6 +74,19 @@ export interface ClipPlayer {
   update(deltaMs: number, forward: THREE.Vector3 | null, stereo: boolean): void;
   getClip(): ClipStatus;
   dispose(): void;
+}
+
+/** The `clip` action (spec/guides.md §2): a hotspot found in the view by id and played, its failure an action's outcome. */
+export function clipControl(field: Pick<HotspotField, 'find'>, player: Pick<ClipPlayer, 'open' | 'close'>): ClipControl {
+  return {
+    async play(id) {
+      const hit = field.find(id);
+      if (!hit) return { ok: false, code: 'unknown-hotspot', message: `no hotspot ${id} in the view` };
+      const outcome = await player.open(hit);
+      return outcome.ok ? outcome : { ok: false, code: 'media-failed', message: outcome.message };
+    },
+    stop: () => player.close(),
+  };
 }
 
 export const LOOK_AWAY_DEG = 40;

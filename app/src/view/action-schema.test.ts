@@ -3,6 +3,7 @@ import Ajv2020 from 'ajv/dist/2020';
 import { PLANET_NAMES } from '@transparent-earth/core';
 import { MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
 import { LABEL_KIND_ORDER } from '../render/labels';
+import { ID_PATTERN } from '../guides/format';
 import { TARGET_SCHEMA, VIEW_ACTION_SCHEMA } from './action-schema';
 import { FOV_NEEDS_TARGET_BELOW_DEG } from './view-control';
 
@@ -59,6 +60,8 @@ describe('the action schema', () => {
     { do: 'time', to: '2011-03-11T05:46-05:00', rate: -31_557_600, until: '2010-03-11T05:46Z' },
     { do: 'stand', place: { kind: 'antipode' } },
     { do: 'stand', place: { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } },
+    { do: 'clip', hotspot: 'prem' },
+    { do: 'clip', hotspot: null },
   ])('takes the action %o', (viewAction) => {
     expect(isAction(viewAction)).toBe(true);
   });
@@ -92,6 +95,8 @@ describe('the action schema', () => {
     ['a place with no name', { do: 'stand', place: { kind: 'at', lat: 0, lon: 0 } }],
     ['a place off the globe', { do: 'stand', place: { kind: 'at', lat: 91, lon: 0, name: 'Nowhere' } }],
     ['a place that is not here with a position', { do: 'stand', place: { kind: 'here', lat: 0 } }],
+    ['a clip naming no hotspot', { do: 'clip' }],
+    ['a clip whose hotspot is no id', { do: 'clip', hotspot: 'PREM model' }],
   ])('refuses %s', (_, viewAction) => {
     expect(isAction(viewAction)).toBe(false);
   });
@@ -102,6 +107,10 @@ describe('the action schema', () => {
 
   it('names exactly the label kinds the label layer has', () => {
     expect(new Set(kind('label').properties.labelKind.enum)).toEqual(new Set(LABEL_KIND_ORDER));
+  });
+
+  it('names a hotspot as a guide names its ids', () => {
+    expect(action('clip').properties.hotspot.anyOf[0].pattern).toBe(ID_PATTERN);
   });
 
   it('holds a field of view to the range the view control enforces', () => {

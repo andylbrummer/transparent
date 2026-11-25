@@ -65,7 +65,24 @@ export interface ViewBorrow {
   hold(held: boolean): void;
 }
 
-export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'layer-unavailable' | 'target-unresolved' | 'bad-value';
+export type ActionErrorCode =
+  | 'unknown-preset'
+  | 'unknown-layer'
+  | 'layer-unavailable'
+  | 'target-unresolved'
+  /** A clip names a hotspot that is not in the view. */
+  | 'unknown-hotspot'
+  /** A clip's file did not load or play. */
+  | 'media-failed'
+  | 'bad-value';
+
+/** The clip player as the view reaches it (guides/clip-player.ts clipControl). */
+export interface ClipControl {
+  /** Play the clip of the hotspot in the view with this id. Resolves once it plays or shows: not at its end. */
+  play(hotspot: string): Promise<ActionOutcome>;
+  /** Close the clip that is open, if one is. */
+  stop(): void;
+}
 
 /** What came of an action. A mistake in the action is an outcome, not a throw, so its caller can show it. */
 export type ActionOutcome =

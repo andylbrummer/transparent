@@ -26,6 +26,10 @@ describe('foldAction', () => {
     expect(fold(fromPreset, { do: 'stand', place: pole }, { do: 'preset', id: 'earth' }).place).toEqual(pole);
   });
 
+  it('leaves the view as it was for a clip: a seek replays no clip', () => {
+    expect(fold(fromPreset, { do: 'clip', hotspot: 'prem' }, { do: 'clip', hotspot: null })).toBe(fromPreset);
+  });
+
   it('drops what was flipped before a preset, and keeps what is flipped after it', () => {
     const view = fold(
       fromPreset,

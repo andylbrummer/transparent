@@ -151,8 +151,8 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   let heard: { readonly chapterIndex: number; readonly stepIndex: number; readonly cues: readonly CaptionCue[] } | null = null;
   /** The guide was paused here for a clip, and goes on when the clip closes. */
   let pausedForClip = false;
-  /** Where the hotspots shown were taken from, `guide/chapter/step`; null while none are. */
-  let hotspotsAt: string | null = null;
+  /** The step the hotspots shown were taken from, so a frame at the same step builds nothing; guide null while none are. */
+  const hotspotsAt: { guide: Guide | null; chapterIndex: number; stepIndex: number } = { guide: null, chapterIndex: -1, stepIndex: -1 };
 
   /**
    * Inside a tap, before anything else: the browser allows the element's first play only there. A refusal is not
@@ -224,8 +224,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     heard = null;
     pausedForClip = false;
     // Now, not in the next frame: dispose leaves with no frame to follow.
-    if (hotspotsAt !== null) deps.clips?.showHotspots(null);
-    hotspotsAt = null;
+    if (hotspotsAt.guide !== null) deps.clips?.showHotspots(null);
+    hotspotsAt.guide = null;
+    hotspotsAt.chapterIndex = -1;
+    hotspotsAt.stepIndex = -1;
   }
 
   /**
@@ -284,11 +286,14 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   /** A step's hotspots show from that step to the end of its chapter (spec/guides.md §8.1): handed over when that changes. */
   function showHotspots(state: PlayerState): void {
     if (!deps.clips) return;
-    const at = state.kind === 'idle' ? null : `${state.guide.id}/${state.chapterIndex}/${state.stepIndex}`;
-    if (at === hotspotsAt) return;
-    hotspotsAt = at;
-    if (state.kind === 'idle') return deps.clips.showHotspots(null);
-    const { guide } = state;
+    const guide = state.kind === 'idle' ? null : state.guide;
+    const chapterIndex = state.kind === 'idle' ? -1 : state.chapterIndex;
+    const stepIndex = state.kind === 'idle' ? -1 : state.stepIndex;
+    if (guide === hotspotsAt.guide && chapterIndex === hotspotsAt.chapterIndex && stepIndex === hotspotsAt.stepIndex) return;
+    hotspotsAt.guide = guide;
+    hotspotsAt.chapterIndex = chapterIndex;
+    hotspotsAt.stepIndex = stepIndex;
+    if (state.kind === 'idle' || guide === null) return deps.clips.showHotspots(null);
     const hotspots = guide.chapters[state.chapterIndex].steps.slice(0, state.stepIndex + 1).flatMap((step) => step.hotspots ?? []);
     deps.clips.showHotspots(hotspots.length === 0 ? null : { hotspots, fileUrl: (path) => guideFileUrl(deps.baseUrl, guide, path), language: guide.language });
   }
@@ -353,6 +358,8 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
 
   function update(deltaMs: number): void {
     holdForClip();
+    // Before the player too: a clip cue at a step's start names a hotspot of that step.
+    showHotspots(player.state());
     player.update(deltaMs);
     const state = player.state();
     showHotspots(state);

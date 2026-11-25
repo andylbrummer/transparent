@@ -201,6 +201,14 @@ export const MARK_FIELDS = {
   required: ['do', 'target', 'text'],
 } as const;
 
+/** As a guide's ids (guides/format.ts ID_PATTERN, which a test holds this to): not imported, so the view needs no guide. */
+const HOTSPOT_ID = { type: 'string', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' } as const;
+export const CLIP_FIELDS = {
+  description: "Play a hotspot's clip (spec/guides.md §8); `hotspot: null` stops the clip that is open.",
+  properties: { do: { const: 'clip' }, hotspot: { anyOf: [HOTSPOT_ID, { type: 'null' }] } },
+  required: ['do', 'hotspot'],
+} as const;
+
 /** What a guide cue, a voice command and, later, the voice AI may ask of the view. */
 export const VIEW_ACTION_SCHEMA = {
   oneOf: [
@@ -212,5 +220,6 @@ export const VIEW_ACTION_SCHEMA = {
     { type: 'object', ...MARK_FIELDS, additionalProperties: false },
     { type: 'object', ...STAND_FIELDS, additionalProperties: false },
     { type: 'object', ...TIME_FIELDS, additionalProperties: false },
+    { type: 'object', ...CLIP_FIELDS, additionalProperties: false },
   ],
 } as const;

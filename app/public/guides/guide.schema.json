@@ -1299,6 +1299,37 @@
                               "at"
                             ],
                             "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Play a hotspot's clip (spec/guides.md §8); `hotspot: null` stops the clip that is open.",
+                            "properties": {
+                              "do": {
+                                "const": "clip"
+                              },
+                              "hotspot": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "hotspot",
+                              "at"
+                            ],
+                            "additionalProperties": false
                           }
                         ]
                       }
@@ -2251,6 +2282,37 @@
                             "required": [
                               "do",
                               "to",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Play a hotspot's clip (spec/guides.md §8); `hotspot: null` stops the clip that is open.",
+                            "properties": {
+                              "do": {
+                                "const": "clip"
+                              },
+                              "hotspot": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "hotspot",
                               "at"
                             ],
                             "additionalProperties": false

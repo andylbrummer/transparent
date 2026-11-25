@@ -143,6 +143,18 @@ describe('guideProblems', () => {
       'no label named Atlantis',
     ],
     [
+      'a clip of a hotspot the guide does not have',
+      (g) => cues(g, 0).push({ at: 30, do: 'clip', hotspot: 'prem' }),
+      `${STEP}/cues/2/hotspot`,
+      'no hotspot prem in this step or an earlier one of chapter the-way-down',
+    ],
+    [
+      'a clip of a hotspot that shows only from a later step',
+      (g) => ((steps(g)[1].hotspots = [hotspot('prem')]), cues(g, 0).push({ at: 30, do: 'clip', hotspot: 'prem' })),
+      `${STEP}/cues/2/hotspot`,
+      'no hotspot prem in this step or an earlier one of chapter the-way-down',
+    ],
+    [
       'a step that waits for the gaze with nothing to look at',
       (g) => (cues(g).splice(0, 1), (cues(g)[0].at = 0)),
       `${STEP}/advance`,
@@ -229,6 +241,7 @@ describe('guideProblems', () => {
         cues(g, 1)[2] = { at: 3, do: 'layers', on: [live] };
       },
     ],
+    ['a clip of a hotspot shown since an earlier step, and a stop', (g) => ((steps(g)[0].hotspots = [hotspot('prem')]), cues(g, 1).push({ at: 30, do: 'clip', hotspot: 'prem' }, { at: 31, do: 'clip', hotspot: null }))],
     ['hotspots of different ids in two chapters', (g) => ((steps(g)[0].hotspots = [hotspot('a')]), (g.chapters = [...chapters(g), { ...chapters(g)[0], id: 'again', steps: [{ ...steps(g)[0], hotspots: [hotspot('b')] }] }]))],
   ])('allows %s', (_, change) => {
     const g = copy();

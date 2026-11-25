@@ -9,7 +9,7 @@ import { LabelLayer, type LabelGroupSpec } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
 import { LAYERS_STORAGE_KEY, LayersPanel, loadLayerVisibility, switchesWithLazyLayers, type LayerSwitch } from '../ui/layers-panel';
 import { defaultPreset, presetVisibility, type LayerPreset } from '../ui/presets';
-import type { FoldedView, Located, Target, ViewAction, ViewControl } from './actions';
+import type { ClipControl, FoldedView, Located, Target, ViewAction, ViewControl } from './actions';
 import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
 import { indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
@@ -59,7 +59,7 @@ describe('createViewControl', () => {
    * whether less motion is asked for. Marks go onto a real label layer,
    * and `markSpecs` records each group it was given.
    */
-  function setup(saved: string | null = null, loads: Record<string, LayerDefinition['load']> = {}) {
+  function setup(saved: string | null = null, loads: Record<string, LayerDefinition['load']> = {}, clips?: ClipControl) {
     const parent = document.createElement('div');
     const switches = switchesWithLazyLayers(definitions);
     const changes: [string, boolean][] = [];
@@ -134,6 +134,7 @@ describe('createViewControl', () => {
         if (!dips.held) return Promise.resolve(change());
         return new Promise<T>((resolve, reject) => dips.waiting.push(() => void Promise.resolve().then(change).then(resolve, reject)));
       },
+      clips,
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
     return { viewControl, switches, changes, stored, input, camera, look, view, clock, standing, labelParent, labelLayer, markSpecs, spyglassOpened, shellOpacities, dips };
@@ -157,6 +158,27 @@ describe('createViewControl', () => {
 
   /** Lets every pending callback run, so a promise still pending after it is waiting on something. */
   const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  describe('clip', () => {
+    it('hands a clip to the clip player, and its outcome back', async () => {
+      const asked: string[] = [];
+      const clips: ClipControl = {
+        play: (id) => (asked.push(id), Promise.resolve(id === 'prem' ? { ok: true } : { ok: false, code: 'unknown-hotspot', message: `no hotspot ${id}` })),
+        stop: () => void asked.push('stop'),
+      };
+      const { viewControl } = setup(null, {}, clips);
+      expect(await viewControl.perform({ do: 'clip', hotspot: 'prem' })).toEqual({ ok: true });
+      expect(await viewControl.perform({ do: 'clip', hotspot: 'nothing' })).toEqual({ ok: false, code: 'unknown-hotspot', message: 'no hotspot nothing' });
+      expect(await viewControl.perform({ do: 'clip', hotspot: null })).toEqual({ ok: true });
+      expect(asked).toEqual(['prem', 'nothing', 'stop']);
+    });
+
+    it('knows no hotspot without a clip player, and stops nothing calmly', async () => {
+      const { viewControl } = setup();
+      expect(await viewControl.perform({ do: 'clip', hotspot: 'prem' })).toEqual({ ok: false, code: 'unknown-hotspot', message: 'no hotspot prem' });
+      expect(await viewControl.perform({ do: 'clip', hotspot: null })).toEqual({ ok: true });
+    });
+  });
 
   /** Whether a promise has settled, read after `settle()`. */
   function settledFlag(promise: Promise<unknown>): { settled: boolean } {

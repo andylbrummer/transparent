@@ -30,6 +30,9 @@ export function foldAction(view: FoldedView, action: ViewAction): FoldedView {
     case 'time':
       // The whole setting, not merged: a cue that leaves out the rate means the real rate, not the last one.
       return { ...view, time: timeSetting(action) };
+    case 'clip':
+      // Not part of the view a seek rebuilds: a clip plays only when playback crosses its cue going forward.
+      return view;
   }
 }
 

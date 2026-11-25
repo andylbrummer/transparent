@@ -74,9 +74,10 @@ describe('the guide schema', () => {
     expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
   });
 
-  it('takes hotspots with an image or an audio clip, on a switch or not', () => {
+  it('takes hotspots with an image or an audio clip, on a switch or not, and cues that play and stop them', () => {
     const g = copy();
     step(g).hotspots = [hotspot(IMAGE_CLIP), { ...hotspot(AUDIO_CLIP), id: 'listen', layer: 'shell-core' }];
+    (step(g).cues as Json[]).push({ at: 30, do: 'clip', hotspot: 'prem' }, { at: 40, do: 'clip', hotspot: null });
     expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
   });
 
@@ -120,7 +121,7 @@ describe('the guide schema', () => {
     ['a time at an instant with no offset', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time', to: '2011-03-11T05:46' })],
     ['a time faster than a year a second', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time', to: 'now', rate: 4e7, until: '2030-01-01T00:00Z' })],
     ['a scene time with no instant', SCENE, (g) => ((chapter(g).scene as Json).time = { rate: 1 })],
-    ['a clip, not yet played', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'clip' })],
+    ['a clip naming no hotspot', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'clip' })],
     ['an unknown way to advance', `${STEP}/advance`, (g) => (step(g).advance = 'timer')],
     ['no chapters', '/chapters', (g) => (g.chapters = [])],
     ['no steps', '/chapters/0/steps', (g) => (chapter(g).steps = [])],

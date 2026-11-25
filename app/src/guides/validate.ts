@@ -193,6 +193,12 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
           case 'fov':
           case 'stand':
             break;
+          case 'clip':
+            // The hotspots shown when the cue fires: this step's and the chapter's earlier steps' (guide-session.ts).
+            if (cue.hotspot !== null && !chapter.steps.slice(0, s + 1).some((shown) => shown.hotspots?.some((h) => h.id === cue.hotspot))) {
+              problem(`${cuePath}/hotspot`, `no hotspot ${cue.hotspot} in this step or an earlier one of chapter ${chapter.id}`);
+            }
+            break;
         }
       });
 

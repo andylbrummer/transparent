@@ -9,6 +9,7 @@
  */
 
 import {
+  CLIP_FIELDS,
   FOV_FIELDS,
   LAYERS_FIELDS,
   LOOK_FIELDS,
@@ -144,6 +145,7 @@ const CUE = {
     { type: 'object', ...MARK_FIELDS, properties: { ...MARK_FIELDS.properties, at: AT }, required: [...MARK_FIELDS.required, 'at'], additionalProperties: false },
     { type: 'object', ...STAND_FIELDS, properties: { ...STAND_FIELDS.properties, at: AT }, required: [...STAND_FIELDS.required, 'at'], additionalProperties: false },
     { type: 'object', ...TIME_FIELDS, properties: { ...TIME_FIELDS.properties, at: AT }, required: [...TIME_FIELDS.required, 'at'], additionalProperties: false },
+    { type: 'object', ...CLIP_FIELDS, properties: { ...CLIP_FIELDS.properties, at: AT }, required: [...CLIP_FIELDS.required, 'at'], additionalProperties: false },
   ],
 } as const;
 

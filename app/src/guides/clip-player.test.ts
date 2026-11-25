@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { createClipPlayer, LOOK_AWAY_MS, type ClipPlayerDeps } from './clip-player';
+import { clipControl, createClipPlayer, LOOK_AWAY_MS, type ClipPlayerDeps } from './clip-player';
 import { FakeAudio } from './fake-audio.testdata';
 import type { Clip, Hotspot } from './format';
 import type { FieldHotspot } from './hotspot-field';
@@ -206,5 +206,27 @@ describe('the clip player', () => {
       for (let elapsed = 0; elapsed < 2 * LOOK_AWAY_MS; elapsed += 100) t.player.update(100, away, false);
       expect(t.player.getClip().state).toBe('playing');
     });
+  });
+});
+
+describe('clipControl', () => {
+  it('plays a hotspot found in the view, and names what went wrong as an action does', async () => {
+    const opened: string[] = [];
+    let closed = 0;
+    const field = { find: (id: string) => (id === 'prem' || id === 'broken' ? hit(IMAGE, id) : null) };
+    const player = {
+      open: (found: FieldHotspot) => (
+        opened.push(found.hotspot.id),
+        Promise.resolve(found.hotspot.id === 'prem' ? { ok: true as const } : { ok: false as const, message: 'the image did not load' })
+      ),
+      close: () => void closed++,
+    };
+    const control = clipControl(field, player);
+    expect(await control.play('prem')).toEqual({ ok: true });
+    expect(await control.play('broken')).toEqual({ ok: false, code: 'media-failed', message: 'the image did not load' });
+    expect(await control.play('nothing')).toEqual({ ok: false, code: 'unknown-hotspot', message: 'no hotspot nothing in the view' });
+    control.stop();
+    expect(opened).toEqual(['prem', 'broken']);
+    expect(closed).toBe(1);
   });
 });

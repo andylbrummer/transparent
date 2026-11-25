@@ -66,7 +66,7 @@ import { GazePointer, type StereoEyes } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
 import { StereoNotice } from './guides/stereo-notice';
 import { PauseCard } from './guides/pause-card';
-import { createClipPlayer, type ClipOutcome, type ClipStatus } from './guides/clip-player';
+import { clipControl, createClipPlayer, type ClipOutcome, type ClipStatus } from './guides/clip-player';
 import { ClipScenePanelMesh } from './guides/clip-scene-panel';
 import { createHotspotField, TAP_SLOP_PX, type HotspotFuse } from './guides/hotspot-field';
 import { silentWav } from './guides/narration';
@@ -428,6 +428,26 @@ export function init(): App | null {
     (id, text, tone) => layersPanel.setStatus(id, text, tone),
     checkBuildAfterLoadFailure
   );
+  // Hotspots and their clips (spec/guides.md §8): the field draws the markers and says which one is meant, the
+  // player plays it. Before the view control, whose `clip` action reaches them; the field finds its anchors through it. A guide's step and the "Stories and clips" layer both hand their hotspots to the field.
+  const clipScenePanel = new ClipScenePanelMesh(scene);
+  const clipPlayer = createClipPlayer({
+    parent: container,
+    audio: new Audio(),
+    fetch: (url) => fetch(url),
+    captions: clipCaptions,
+    captionsShown: () => guideSession.getGuide().captionsShown,
+    scenePanel: clipScenePanel,
+    objectUrl: { create: (blob) => URL.createObjectURL(blob), revoke: (url) => URL.revokeObjectURL(url) },
+    silence: silentWav,
+  });
+  const hotspotField = createHotspotField({
+    locate: (target) => viewControl.locate(target),
+    camera,
+    addLabels: (spec) => labels.addGroup(spec),
+    isLayerOn: (id) => layerVisibility[id] ?? false,
+    open: (hit) => void clipPlayer.open(hit),
+  });
   const viewControl = createViewControl({
     presets,
     switches: layerSwitches,
@@ -447,26 +467,7 @@ export function init(): App | null {
     // Read at frame time, by when both exist.
     spyglass: { inStereo: () => cardboard.isActive() && !arRunner.isActive(), openOn: (target) => spyglass.openOn(target) },
     dip: (change) => dip.run(change),
-  });
-  // Hotspots and their clips (spec/guides.md §8): the field draws the markers and says which one is meant, the
-  // player plays it. A guide's step and the "Stories and clips" layer both hand their hotspots to the field.
-  const clipScenePanel = new ClipScenePanelMesh(scene);
-  const clipPlayer = createClipPlayer({
-    parent: container,
-    audio: new Audio(),
-    fetch: (url) => fetch(url),
-    captions: clipCaptions,
-    captionsShown: () => guideSession.getGuide().captionsShown,
-    scenePanel: clipScenePanel,
-    objectUrl: { create: (blob) => URL.createObjectURL(blob), revoke: (url) => URL.revokeObjectURL(url) },
-    silence: silentWav,
-  });
-  const hotspotField = createHotspotField({
-    locate: (target) => viewControl.locate(target),
-    camera,
-    addLabels: (spec) => labels.addGroup(spec),
-    isLayerOn: (id) => layerVisibility[id] ?? false,
-    open: (hit) => void clipPlayer.open(hit),
+    clips: clipControl(hotspotField, clipPlayer),
   });
   const guideSession = createGuideSession({
     parent: container,
