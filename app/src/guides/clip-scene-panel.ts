@@ -3,8 +3,11 @@
  * direction its marker had when the clip opened. It is held there in the local frame, beside the viewer, so it stays
  * put as the head turns, as the spyglass's window does, and a time-lapse does not carry it off with the sky.
  *
- * Both eyes draw it, being in the scene: one image, no per-eye copy. It is near, PANEL_DISTANCE_M, but the eyes'
- * separation is a few centimetres, so it sits as good as at infinity, where the markers and the names are.
+ * Both eyes draw it, being in the scene: one image, no per-eye copy. The eyes are CARDBOARD_BASELINE_M apart
+ * (render/stereo.ts), not a few centimetres, so a panel near the head would stand kilometres to the side of each
+ * eye, out of both views. It hangs at CARDBOARD_CONVERGENCE_M instead, where the two eyes' views coincide: it lands
+ * in the same place in both and sits at the screen, as the names do. Nothing depth-tests, so being under the
+ * ground there does not hide it.
  *
  * A film is the page's own <video>, drawn as a texture: one decode, and its sound and the browser's state are the
  * element's. The texture is made once, for the one element, and kept; three.js marks it for upload on each frame the
@@ -13,10 +16,11 @@
 
 import * as THREE from 'three';
 import { RENDER_ORDER } from '../render/order';
+import { CARDBOARD_CONVERGENCE_M } from '../render/stereo';
 import type { ClipScenePanel } from './clip-player';
 
 export const CLIP_PANEL_DEG = 40;
-const PANEL_DISTANCE_M = 100;
+const PANEL_DISTANCE_M = CARDBOARD_CONVERGENCE_M;
 const PANEL_WIDTH_M = 2 * PANEL_DISTANCE_M * Math.tan(THREE.MathUtils.degToRad(CLIP_PANEL_DEG / 2));
 
 export class ClipScenePanelMesh implements ClipScenePanel {

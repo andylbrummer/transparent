@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
+import { StereoRig } from '../render/stereo';
 import { ClipScenePanelMesh } from './clip-scene-panel';
 
 /** A <video> whose readyState the test sets: jsdom's never leaves HAVE_NOTHING. */
@@ -34,7 +35,35 @@ describe('the clip panel in the scene, with a film', () => {
     expect(map.isVideoTexture && map.image === film).toBe(true);
     expect(map.colorSpace).toBe(THREE.SRGBColorSpace);
     expect(t.mesh.scale.x / t.mesh.scale.y).toBeCloseTo(16 / 9);
-    expect(t.mesh.position.x - t.camera.position.x).toBeCloseTo(100);
+  });
+
+  it('lands in the same place in both eyes, CLIP_PANEL_DEG wide, however far apart the eyes are set', () => {
+    const t = setup();
+    const film = video();
+    film.ready = HTMLMediaElement.HAVE_CURRENT_DATA;
+    // Looking along the panel's direction: east, from a point on the equator.
+    t.camera.position.set(6371000, 0, 0);
+    t.camera.up.set(1, 0, 0);
+    t.camera.lookAt(6371000, 0, -1);
+    t.camera.updateMatrixWorld();
+    t.panel.showVideo(film, 16 / 9, new THREE.Vector3(0, 0, -1));
+    t.panel.update(t.camera);
+    t.mesh.updateMatrixWorld();
+    const rig = new StereoRig();
+    rig.update(t.camera, 400, 400, 200);
+    const corner = new THREE.Vector3(0.5, 0, 0).applyMatrix4(t.mesh.matrixWorld);
+    const centre = t.mesh.position.clone();
+    const [left, right] = [rig.left, rig.right].map((eye) => [centre.clone().project(eye).x, corner.clone().project(eye).x]);
+    // Both eyes see the middle of the panel at their convergence spot (spacing 200 of 400 px: x = ±0.5 NDC, mirrored)...
+    expect(left[0]).toBeCloseTo(0.5, 2);
+    expect(right[0]).toBeCloseTo(-0.5, 2);
+    // ...and the panel the same width in each, in view.
+    expect(left[1] - left[0]).toBeCloseTo(right[1] - right[0], 3);
+    expect(Math.abs(left[1] - left[0])).toBeGreaterThan(0.2);
+    // Upright and not mirrored for a viewer whose head is up: the picture's right to the right, its top up.
+    expect(left[1]).toBeGreaterThan(left[0]);
+    const top = new THREE.Vector3(0, 0.5, 0).applyMatrix4(t.mesh.matrixWorld).project(rig.left);
+    expect(top.y).toBeGreaterThan(centre.clone().project(rig.left).y + 0.1);
   });
 
   it('keeps one texture for the one element across shows, and lets it go only when disposed', () => {
