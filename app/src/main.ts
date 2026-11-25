@@ -16,6 +16,7 @@ import { LabelLayer, type LabelData } from './render/labels';
 import { PlumeLayer, type Plume } from './render/interior';
 import { QuakeLayer, type QuakeData } from './render/quakes';
 import { StereoRig } from './render/stereo';
+import { Dip } from './render/dip';
 import { icrsToEcefMatrix } from '@transparent-earth/core';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, FALLBACK_PLACE, type SensorState } from './sensors';
@@ -249,6 +250,8 @@ export function init(): App | null {
   const interiorObjects: Partial<Record<InteriorLayerName, THREE.Object3D>> = {};
   let quakes: QuakeLayer | null = null;
   const labels = new LabelLayer(container, []);
+  // Over the canvas and the names, under everything that stands over them: so made before those.
+  const dip = new Dip(container, `#${background.getHexString()}`);
   // The baked labels by name, for a guide's label targets; null until the map data has loaded.
   let labelIndex: LabelIndex | null = null;
   let geoStatus: 'loading' | 'ready' | 'failed' = 'loading';
@@ -737,6 +740,7 @@ export function init(): App | null {
     // cue it fires takes effect in this frame.
     guideSession.update(deltaMs);
     viewControl.update(deltaMs);
+    dip.update(deltaMs);
     // In AR the camera is the device's, put in the Earth frame where the window was placed.
     if (ar) arRunner.update(frame, camera);
     if (position) {
@@ -898,6 +902,7 @@ export function init(): App | null {
       removeTalkButton();
       lazyLayers.dispose();
       labels.dispose();
+      dip.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       hud.remove();

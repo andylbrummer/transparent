@@ -131,6 +131,14 @@
         border-radius: 50%;
         box-shadow: 0 0 3px #000, inset 0 0 3px #000;
       }
+      /* The dip to dark (render/dip.ts): over the canvas and the names, which fade with it; under the compass bar,
+         the captions, the pointer and the controls, which come after it in the page at the same or a higher level. */
+      .dip {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+      }
       .compass-bar {
         position: fixed;
         top: 0;
