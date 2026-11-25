@@ -18,6 +18,9 @@ app/public/guides/
     guide.json                        chapters, steps, cues
     audio/<NN-step>.m4a               one narration file per step
     audio/<NN-step>.vtt               its captions
+    audio/, images/                   a hotspot's clip files, captions and posters
+app/public/media/
+  hotspots.json                       the "Stories and clips" layer's hotspots, with their files beside it
 ```
 
 `<id>` is kebab-case and is the folder's name. Add it to `index.json` to list the guide.
@@ -137,6 +140,7 @@ audio's length. Take `at` from narrate.py's sentence starts, so a layer appears 
 | `mark` | `target`, `text` | Puts a marker with a short text on the target; `text: null` takes it down. |
 | `stand` | `place` | Stands the view somewhere else: `{"kind": "here"}`, `{"kind": "antipode"}`, or `{"kind": "at", "lat", "lon", "name"}`. A chip names the place. |
 | `time` | `to`, optional `rate`, `until` | Sets the clock: `to` is an ISO 8601 instant or `"now"`; `rate` is simulated seconds a second (0 stops it); `until` stops it there. A chip shows the time. |
+| `clip` | `hotspot`: an id, or `null` | Opens that hotspot's clip, as a tap on its marker would; `null` closes the clip that is open. The hotspot must be in this step or an earlier step of the chapter. |
 
 A change of place, a jump in time or a preset goes dark for a moment and comes back changed, rather than sweeping.
 
@@ -157,6 +161,82 @@ Targets:
 
 The guide plays wherever the user is, so write for any place: "straight down", not "under Texas".
 
+### Hotspots and clips
+
+A hotspot hangs a clip on something in the view: a marker, "▶ How we know: wave paths", that opens a short
+recording, a picture or a film when it is tapped, stared at in Cardboard, or chosen with Enter. Add them to a step:
+
+```json
+"hotspots": [
+  {
+    "id": "wave-paths",
+    "title": "How we know: wave paths",
+    "anchor": { "kind": "horizon", "azDeg": 0, "altDeg": -72 },
+    "layer": "shell-core",
+    "clip": {
+      "kind": "image",
+      "src": "images/seismic-wave-paths.webp",
+      "alt": "A cross-section of the Earth with the curving paths of waves from one earthquake.",
+      "caption": "Waves bend at each layer; S waves cannot cross the liquid outer core.",
+      "credit": { "what": "Diagram of earthquake wave paths", "source": "U.S. Geological Survey", "licence": "public domain", "url": "https://pubs.usgs.gov/gip/interior/" }
+    }
+  }
+]
+```
+
+- `id` is unique in the guide, kebab-case: a `clip` cue names it. `title` is at most 60 characters; it stands among
+  the map's names.
+- `anchor` is a target, as for `look`. A `label` anchor must be a name that exists.
+- `layer`, optional: the marker shows only while that switch is on.
+- A step's hotspots show from that step to the end of its chapter.
+
+Opening a clip pauses the guide; closing it, or the clip ending, lets the guide go on where it stopped. One thing
+speaks at a time. A clip closes with its × button, Esc, a shake in Cardboard, or a `clip` cue with `hotspot: null`;
+looking 40° away from it for 3 s in Cardboard pauses a recording or a film and puts a picture away.
+
+| `kind` | Fields | Shows |
+|---|---|---|
+| `audio` | `src` (`.m4a`), `captions` (`.vtt`) | A title, a play/pause button, a progress bar and captions. Held to the narration's rules: AAC-LC mono, at most 96 kbit/s and 5 MiB. |
+| `image` | `src` (`.webp` or `.jpg`), `alt`, `caption` | A panel over the lower half, with the caption under it; `alt` is what a screen reader says. At most 1 MiB and 2048 px on its long side. |
+| `video` | `src` (a URL on the media host), `captions`, `poster`, `video` | The browser's own player in the same panel, with the app's captions over it. See below. |
+
+Every clip has a `credit`, as the guide's credits have, and like everything else here the media must be real and
+licensed: a public-domain or openly licensed picture, recording or film, credited to whoever made it. Nothing is
+generated or made up. Each credit goes into `docs/DATA-SOURCES.md` with `npm run docs:sources`.
+
+In Cardboard, a picture or a film is drawn as a flat panel 40° wide where its marker was when it opened, and it stays
+there as the head turns.
+
+### The "Stories and clips" layer
+
+Hotspots that belong to no guide live in `app/public/media/hotspots.json`, with their files in
+`app/public/media/`. The "Stories and clips" switch in the Labels section of the Layers panel shows them with no guide
+playing. The file is `{ "formatVersion": 1, "language": "en", "hotspots": [ … ] }`, each hotspot exactly as in a
+step. The validator checks it with the guides.
+
+### Video
+
+A film is too large for the repository and for the site's 25 MiB file cap, so it lives on the media host,
+`https://media.transparent.sbdev.io`, under a name that carries its hash. Its captions and poster stay in the
+guide's folder. The file must be H.264 with AAC sound in an `.mp4`, at most 1080p either way up and 200 MiB.
+
+```json
+"clip": {
+  "kind": "video",
+  "src": "https://media.transparent.sbdev.io/guides/<id>/wave-paths.a0306900.mp4",
+  "captions": "audio/wave-paths.vtt",
+  "poster": "images/wave-paths-poster.webp",
+  "video": { "bytes": 16898239, "sha256": "a0306900…", "durationS": 90.006, "width": 1280, "height": 720 },
+  "credit": { … }
+}
+```
+
+Never write `src` or `video` by hand. `npm run guides:put-video -- --dry-run <id> film.mp4` reads the file and
+prints both. Open the pull request with them, and a maintainer uploads the same file before merging. The steps and
+the host's setup are in [VIDEO.md](VIDEO.md). The validator holds the `src` to the guide's own folder on the host
+(`media/` for the layer), the name's hash to `sha256`, and the captions to `durationS`. It cannot see the host:
+`npm run guides:check-media` fetches each film and checks it is what the guide says.
+
 ## 4. Check it
 
 ```bash
@@ -169,7 +249,9 @@ The validator fails the build on: a guide that does not match the schema; `index
 a layer, preset or label that does not exist; two switches of one exclusive group on together; cues out of order or
 past the audio's end; a `gaze` step without a `look`; a missing, unused or oversized file; captions out of order,
 overlapping, longer than 37 characters a line or 2 lines a cue, or leaving more than 3 s of speech uncaptioned; a
-missing licence, author or credit.
+missing licence, author or credit. For hotspots: an id used twice; a `clip` cue naming a hotspot not shown by then; a
+layer or label anchor that does not exist; a clip file missing, oversized, or not the format its name says; an image
+over 2048 px; a film off the media host, outside its folder, over 1080p, or named by a hash that is not its own.
 
 Budgets: narration `.m4a` AAC-LC mono, at most 96 kbit/s and 5 MiB a file; a guide's folder at most 20 MiB. The audio stays in the repository's history for good, so keep it
 small.
