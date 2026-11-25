@@ -193,6 +193,31 @@ describe('guideProblems', () => {
     });
   });
 
+  describe('a fade', () => {
+    it('allows fading the shells in and out', () => {
+      const g = copy();
+      cues(g, 1)[2] = { at: 3, do: 'layers', on: ['shell-core'], off: ['shell-moho'], fadeS: 2 };
+      expect(problemsIn(g)).toEqual([]);
+    });
+
+    it('reports each switch a cue fades that cannot fade', () => {
+      const g = copy();
+      cues(g, 1)[2] = { at: 3, do: 'layers', on: ['shell-core', 'political'], off: ['boundaries'], fadeS: 2 };
+      expect(problemsIn(g)).toEqual([
+        { path: '/chapters/0/steps/1/cues/2/on/1', reason: 'political cannot fade' },
+        { path: '/chapters/0/steps/1/cues/2/off/0', reason: 'boundaries cannot fade' },
+      ]);
+    });
+
+    it('refuses in the schema a fade of no time, or too long', () => {
+      for (const fadeS of [0, -1, 11]) {
+        const g = copy();
+        cues(g, 1)[2] = { at: 3, do: 'layers', on: ['shell-core'], fadeS };
+        expect(isGuide(g)).toBe(false);
+      }
+    });
+  });
+
   it('reports every problem, in the order of the file', () => {
     const g = copy();
     steps(g)[1].id = 'look-down';

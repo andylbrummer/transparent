@@ -11,9 +11,10 @@ import type { LayerManager } from '../layers/manager';
 import { paramProblems } from '../layers/params';
 import type { LayerParamValues } from '../layers/types';
 import { SKY_RADIUS_M } from '../layers/types';
+import type { GlobeRenderer } from '../render/globe';
 import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
-import type { LayerSwitch, LayersPanel } from '../ui/layers-panel';
+import { canFade, type LayerSwitch, type LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
 import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
@@ -26,9 +27,11 @@ export interface ViewControlDeps {
   /** Every switch an action may name. */
   readonly switches: readonly LayerSwitch[];
   /** Switches are flipped through the panel, so its rows, the save and the scene stay in step. */
-  readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer' | 'showOnly' | 'borrow'>;
+  readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer' | 'showOnly' | 'borrow' | 'isOn'>;
   /** The lazy layers: a switch-on is not done until its layer has loaded. */
-  readonly lazyLayers: Pick<LayerManager, 'preload' | 'setParams'>;
+  readonly lazyLayers: Pick<LayerManager, 'preload' | 'setParams' | 'setOpacity'>;
+  /** The globe, whose shells fade. */
+  readonly shells: Pick<GlobeRenderer, 'setShellOpacity'>;
   /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
   readonly camera: THREE.Camera;
   /** Where the view stands; null until there is a position. */
@@ -59,6 +62,9 @@ export interface ViewControlDeps {
 
 /** Narrower than this, a field of view needs a target: Cardboard can only magnify through the spyglass, which opens on something. */
 export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
+
+/** The longest fade a `layers` action may ask for: longer is a layer left half-drawn while the guide talks on. */
+export const MAX_FADE_S = 10;
 
 /** A target is centred when it has stayed this near the view's centre for ARRIVE_MS. Looser and quicker than the spyglass's stare: arriving only lets a guide move on. */
 export const ARRIVE_DEG = 8;
@@ -102,6 +108,21 @@ interface Easing {
   seen: LookState;
 }
 
+/** A switch fading in or out (a `layers` action's fadeS), and the action waiting on it. */
+interface Fade {
+  readonly layer: LayerSwitch;
+  readonly from: number;
+  readonly to: 0 | 1;
+  readonly durationMs: number;
+  elapsedMs: number;
+  /** The opacity last written: where a fade that takes over this one starts. */
+  opacity: number;
+  /** A lazy layer still loading: the fade starts once it has, so it is not spent on nothing. */
+  held: boolean;
+  readonly done: Promise<ActionOutcome>;
+  readonly resolve: (outcome: ActionOutcome) => void;
+}
+
 export function createViewControl(deps: ViewControlDeps): ViewControl & {
   /**
    * Advance an ease by a frame's time, keep the marks on their targets and see whether the user has turned to a look
@@ -115,6 +136,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   /** In Cardboard, a narrow look that has arrived and waits for its target within CAPTURE_DEG to open the spyglass. */
   let spyglassWait: { readonly target: Target; readonly spyglass: SpyglassTarget } | null = null;
   const marks = new Map<string, Mark>();
+  const fades = new Map<string, Fade>();
   let borrowed = false;
 
   /**
@@ -211,6 +233,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       case 'preset': {
         const preset = deps.presets.find((p) => p.id === action.id);
         if (!preset) return { ok: false, code: 'unknown-preset', message: `no preset ${action.id}` };
+        dropAllFades();
         deps.layersPanel.applyPreset(preset);
         const on = new Set(preset.on);
         return lazyLayersLoaded(deps.switches.filter((s) => on.has(s.id)));
@@ -226,6 +249,11 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (both.length > 0) return { ok: false, code: 'bad-value', message: `layers turns ${both.join(', ')} both on and off` };
         const badParams = paramsProblem(action.params, on);
         if (badParams) return badParams;
+        const badFade = fadeProblem(action.fadeS, [...off, ...on]);
+        if (badFade) return badFade;
+        if (action.fadeS !== undefined) return fadeLayers(on, off, action.params, action.fadeS * 1000);
+        // A fade under way on a switch flipped at once stops: this action has the last word on it.
+        for (const id of [...off, ...on]) dropFade(id);
         // Off before on, as applyPreset does: an exclusive group never has two on.
         for (const id of off) deps.layersPanel.setLayer(id, false);
         // Settings before the switch, so a layer already loaded never shows a frame as it was.
@@ -313,6 +341,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
 
     const setting = giveParams(params);
     if (setting) return setting;
+    dropAllFades();
     deps.layersPanel.showOnly(switches.on);
     endEase({ ok: true });
     const posed = aimMode() === 'pose';
@@ -409,6 +438,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (ended) throw new Error('the view borrow has already ended');
         ended = true;
         endEase({ ok: true });
+        dropAllFades();
         awaiting = null;
         spyglassWait = null;
         takeMarksDown();
@@ -469,8 +499,120 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   function update(deltaMs: number): void {
     followMarks();
     stepEase(deltaMs);
+    stepFades(deltaMs);
     followGaze(deltaMs);
     followSpyglass();
+  }
+
+  /** A fade's length out of range, or a switch named that cannot fade; null when there is no fade or it is sound. */
+  function fadeProblem(fadeS: number | undefined, ids: readonly string[]): ActionOutcome | null {
+    if (fadeS === undefined) return null;
+    if (!(Number.isFinite(fadeS) && fadeS > 0 && fadeS <= MAX_FADE_S)) return { ok: false, code: 'bad-value', message: `fadeS ${fadeS} is outside 0 to ${MAX_FADE_S}` };
+    const fixed = [...new Set(ids.filter((id) => !canFade(switchesById.get(id)!)))];
+    return fixed.length > 0 ? { ok: false, code: 'bad-value', message: `${fixed.join(', ')} cannot fade` } : null;
+  }
+
+  /**
+   * Fade switches out and in over `durationMs`, checked already. One going off stays on until it has faded out; one
+   * coming on is switched on at nothing and fades up once its layer has loaded. A switch already as asked is left
+   * alone, and one fading the other way turns back from where it has got to. Resolves when every fade has ended, or
+   * with the first failure: a layer that failed to load is left on, at full strength, with its chip.
+   */
+  async function fadeLayers(
+    on: readonly string[],
+    off: readonly string[],
+    params: Readonly<Record<string, LayerParamValues>> | undefined,
+    durationMs: number
+  ): Promise<ActionOutcome> {
+    const started: Fade[] = [];
+    for (const id of new Set(off)) {
+      if (fades.has(id) || deps.layersPanel.isOn(id)) started.push(startFade(switchesById.get(id)!, 0, durationMs));
+    }
+    // Settings before the switch, as without a fade.
+    const setting = giveParams(params);
+    if (setting) return setting;
+    const coming: Fade[] = [];
+    for (const id of new Set(on)) {
+      const running = fades.get(id);
+      if (running) started.push(startFade(running.layer, 1, durationMs));
+      else if (!deps.layersPanel.isOn(id)) {
+        const fade = startFade(switchesById.get(id)!, 1, durationMs);
+        // A shell is drawn already; a lazy layer may have to load first.
+        fade.held = 'lazy' in fade.layer.target;
+        started.push(fade);
+        coming.push(fade);
+        deps.layersPanel.setLayer(id, true);
+      }
+    }
+    const loaded = await lazyLayersLoaded(coming.map((fade) => fade.layer));
+    for (const fade of coming) {
+      // Taken over or dropped while it loaded: whoever did that has the switch now.
+      if (fades.get(fade.layer.id) !== fade) continue;
+      if (loaded.ok) fade.held = false;
+      else dropFade(fade.layer.id);
+    }
+    if (!loaded.ok) return loaded;
+    const outcomes = await Promise.all(started.map((fade) => fade.done));
+    return outcomes.find((outcome) => !outcome.ok) ?? { ok: true };
+  }
+
+  /** Start fading `layer` to `to`, from where a fade under way on it has got to, else from the other end. */
+  function startFade(layer: LayerSwitch, to: 0 | 1, durationMs: number): Fade {
+    const running = fades.get(layer.id);
+    const from = running ? running.opacity : 1 - to;
+    // The fade it takes over has done its part: its action goes on.
+    running?.resolve({ ok: true });
+    let resolve!: (outcome: ActionOutcome) => void;
+    const done = new Promise<ActionOutcome>((r) => (resolve = r));
+    const fade: Fade = { layer, from, to, durationMs, elapsedMs: 0, opacity: from, held: false, done, resolve };
+    fades.set(layer.id, fade);
+    writeOpacity(layer, from);
+    return fade;
+  }
+
+  /** Stop a fade where it is, its switch left as it stands and drawn in full: what comes next decides from there. */
+  function dropFade(id: string): void {
+    const fade = fades.get(id);
+    if (!fade) return;
+    fades.delete(id);
+    writeOpacity(fade.layer, 1);
+    fade.resolve({ ok: true });
+  }
+
+  function dropAllFades(): void {
+    for (const id of [...fades.keys()]) dropFade(id);
+  }
+
+  function writeOpacity(layer: LayerSwitch, opacity: number): void {
+    const { target } = layer;
+    if ('shell' in target) deps.shells.setShellOpacity(target.shell, opacity);
+    else if ('lazy' in target) deps.lazyLayers.setOpacity(target.lazy, opacity);
+  }
+
+  // The frame's time, for stepFade: forEach with a function made once, so a frame of fading allocates nothing.
+  let fadeDeltaMs = 0;
+  function stepFades(deltaMs: number): void {
+    if (fades.size === 0) return;
+    fadeDeltaMs = deltaMs;
+    fades.forEach(stepFade);
+  }
+
+  function stepFade(fade: Fade, id: string): void {
+    if (fade.held) return;
+    fade.elapsedMs += fadeDeltaMs;
+    const t = Math.min(1, fade.elapsedMs / fade.durationMs);
+    // Smoothstep: no jolt at either end, which a linear fade has where it starts and stops.
+    fade.opacity = fade.from + (fade.to - fade.from) * t * t * (3 - 2 * t);
+    writeOpacity(fade.layer, fade.opacity);
+    if (t < 1) return;
+    // Deleting the entry being visited is allowed in a Map's forEach.
+    fades.delete(id);
+    if (fade.to === 0) {
+      deps.layersPanel.setLayer(id, false);
+      // Off now, so full strength shows nothing; it is ready for a later switch-on at once.
+      writeOpacity(fade.layer, 1);
+    }
+    fade.resolve({ ok: true });
   }
 
   /**

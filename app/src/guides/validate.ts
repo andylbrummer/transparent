@@ -9,7 +9,7 @@
 import { paramProblems } from '../layers/params';
 import type { LayerParamValues } from '../layers/types';
 import type { SurfacePosition } from '../sensors';
-import type { LayerSwitch } from '../ui/layers-panel';
+import { canFade, type LayerSwitch } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import type { Target } from '../view/actions';
 import { targetDirection, type LabelIndex } from '../view/targets';
@@ -85,6 +85,14 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     }
   };
 
+  /** Switches a cue fades: each must be one that can (ui/layers-panel.ts canFade, as at run time). Unknown ones are reported already. */
+  const checkFade = (path: string, ids: readonly string[]): void => {
+    ids.forEach((id, i) => {
+      const layer = switches.get(id);
+      if (layer && !canFade(layer)) problem(`${path}/${i}`, `${id} cannot fade`);
+    });
+  };
+
   const checkTarget = (path: string, target: Target): void => {
     // Other kinds are bounded by the schema; only a label's name needs the app to say what it means.
     if (target.kind !== 'label') return;
@@ -121,6 +129,10 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
             checkOn(`${cuePath}/on`, cue.on ?? [], cue.off);
             checkOff(`${cuePath}/off`, cue.off ?? []);
             checkParams(`${cuePath}/params`, cue.params, cue.on ?? []);
+            if (cue.fadeS !== undefined) {
+              checkFade(`${cuePath}/on`, cue.on ?? []);
+              checkFade(`${cuePath}/off`, cue.off ?? []);
+            }
             break;
           case 'look':
           case 'mark':

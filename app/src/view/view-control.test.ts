@@ -12,7 +12,7 @@ import type { FoldedView, Located, Target, ViewAction, ViewControl } from './act
 import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
 import { indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
-import { ARRIVE_DEG, ARRIVE_MS, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
+import { ARRIVE_DEG, ARRIVE_MS, MAX_FADE_S, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
 import { CAPTURE_DEG, framingDeg, type SpyglassTarget } from '../ui/spyglass';
 
 // Loaded up front, as by an earlier body target; body-positions.test.ts covers a view control before they are in.
@@ -39,6 +39,7 @@ describe('createViewControl', () => {
         playing: { type: 'boolean', description: 'whether it plays' },
       },
     }),
+    lazy('mist', { section: 'Weather', fades: true, load: async () => ({ setVisible() {}, setOpacity() {}, dispose() {} }) }),
   ];
   const sky: LayerPreset = { id: 'sky', label: 'Sky', description: 'x-ray sky', on: ['x-ray'] };
   const night: LayerPreset = { id: 'night', label: 'Night', description: 'x-ray and aurora', on: ['x-ray', 'aurora'] };
@@ -93,11 +94,14 @@ describe('createViewControl', () => {
     const labelParent = document.createElement('div');
     const labelLayer = new LabelLayer(labelParent, []);
     const markSpecs: LabelGroupSpec[] = [];
+    // Every opacity written to a shell, in order.
+    const shellOpacities: [string, number][] = [];
     const viewControl = createViewControl({
       presets,
       switches,
       layersPanel,
       lazyLayers,
+      shells: { setShellOpacity: (name, opacity) => shellOpacities.push([name, opacity]) },
       camera,
       getPosition: () => view.position,
       now: () => view.date,
@@ -113,7 +117,7 @@ describe('createViewControl', () => {
       spyglass: { inStereo: () => view.stereo, openOn: (target) => spyglassOpened.push(target) },
     });
     const input = (id: string): HTMLInputElement => parent.querySelector<HTMLInputElement>(`input[data-layer="${id}"]`)!;
-    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs, spyglassOpened };
+    return { viewControl, switches, changes, stored, input, camera, look, view, labelParent, labelLayer, markSpecs, spyglassOpened, shellOpacities };
   }
 
   const instance = (): LayerInstance => ({ setVisible() {}, dispose() {} });
@@ -280,6 +284,113 @@ describe('createViewControl', () => {
     expect(await viewControl.perform({ do: 'layers', on: ['x-ray'] })).toEqual({ ok: true });
     expect(load).toHaveBeenCalledTimes(2);
     error.mockRestore();
+  });
+
+  describe('fades', () => {
+    /** The opacity last written to the outer core's shell, the top of which is shell-core. */
+    const coreOpacity = (written: [string, number][]): number | undefined => written.filter(([name]) => name === 'outer core').at(-1)?.[1];
+
+    it('fades a shell out over fadeS, switching it off only at the end, then back to full strength', async () => {
+      const { viewControl, input, shellOpacities } = setup();
+      await viewControl.perform({ do: 'layers', on: ['shell-core'] });
+      let outcome: unknown = null;
+      void viewControl.perform({ do: 'layers', off: ['shell-core'], fadeS: 2 }).then((o) => (outcome = o));
+      expect(coreOpacity(shellOpacities)).toBe(1);
+      viewControl.update(1000);
+      expect(coreOpacity(shellOpacities)).toBeCloseTo(0.5, 9);
+      expect(input('shell-core').checked).toBe(true);
+      viewControl.update(1000);
+      expect(input('shell-core').checked).toBe(false);
+      expect(shellOpacities.slice(-2)).toEqual([
+        ['outer core', 0],
+        ['outer core', 1],
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(outcome).toEqual({ ok: true });
+    });
+
+    it('switches a shell on at nothing and fades it up', async () => {
+      const { viewControl, input, shellOpacities } = setup();
+      await viewControl.perform({ do: 'layers', off: ['shell-core'] });
+      const fading = viewControl.perform({ do: 'layers', on: ['shell-core'], fadeS: 1 });
+      expect(input('shell-core').checked).toBe(true);
+      expect(coreOpacity(shellOpacities)).toBe(0);
+      // A shell needs no load, so the very next frame fades it.
+      viewControl.update(250);
+      expect(coreOpacity(shellOpacities)).toBeCloseTo(0.15625, 9);
+      viewControl.update(750);
+      expect(coreOpacity(shellOpacities)).toBe(1);
+      expect(await fading).toEqual({ ok: true });
+    });
+
+    it('holds a lazy layer\'s fade until it has loaded, at nothing meanwhile', async () => {
+      const given: number[] = [];
+      let finish!: () => void;
+      const mist = (): Promise<LayerInstance> =>
+        new Promise((resolve) => (finish = () => resolve({ setVisible() {}, setOpacity: (opacity: number) => given.push(opacity), dispose() {} })));
+      const { viewControl } = setup(null, { mist });
+      const fading = viewControl.perform({ do: 'layers', on: ['mist'], fadeS: 1 });
+      viewControl.update(800);
+      finish();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      // The time spent loading is not spent fading: it starts from nothing now.
+      expect(given).toEqual([0]);
+      viewControl.update(500);
+      expect(given.at(-1)).toBeCloseTo(0.5, 9);
+      viewControl.update(500);
+      expect(await fading).toEqual({ ok: true });
+      expect(given.at(-1)).toBe(1);
+    });
+
+    it('turns a fade back from where it has got to, and lets the action it took over go on', async () => {
+      const { viewControl, input, shellOpacities } = setup();
+      await viewControl.perform({ do: 'layers', on: ['shell-core'] });
+      const out = viewControl.perform({ do: 'layers', off: ['shell-core'], fadeS: 2 });
+      viewControl.update(1000);
+      const back = viewControl.perform({ do: 'layers', on: ['shell-core'], fadeS: 2 });
+      expect(await out).toEqual({ ok: true });
+      expect(coreOpacity(shellOpacities)).toBeCloseTo(0.5, 9);
+      await Promise.resolve();
+      viewControl.update(2000);
+      expect(coreOpacity(shellOpacities)).toBe(1);
+      expect(input('shell-core').checked).toBe(true);
+      expect(await back).toEqual({ ok: true });
+    });
+
+    it('leaves a switch already as asked alone', async () => {
+      const { viewControl, shellOpacities } = setup();
+      await viewControl.perform({ do: 'layers', on: ['shell-core'] });
+      const before = shellOpacities.length;
+      expect(await viewControl.perform({ do: 'layers', on: ['shell-core'], fadeS: 1 })).toEqual({ ok: true });
+      expect(shellOpacities.length).toBe(before);
+    });
+
+    it.each<[string, ViewAction, string]>([
+      ['a switch that cannot fade', { do: 'layers', on: ['shell-core', 'aurora'], fadeS: 1 }, 'aurora cannot fade'],
+      ['no time at all', { do: 'layers', on: ['shell-core'], fadeS: 0 }, 'fadeS 0 is outside 0 to 10'],
+      ['too long a fade', { do: 'layers', on: ['shell-core'], fadeS: MAX_FADE_S + 1 }, `fadeS ${MAX_FADE_S + 1} is outside 0 to 10`],
+    ])('refuses %s, flipping nothing', async (_, action, message) => {
+      const { viewControl, changes, shellOpacities } = setup();
+      expect(await viewControl.perform(action)).toEqual({ ok: false, code: 'bad-value', message });
+      expect(changes).toEqual([]);
+      expect(shellOpacities).toEqual([]);
+    });
+
+    it.each<[string, (viewControl: ViewControl & { update(ms: number): void }) => Promise<unknown>]>([
+      ['the switch flipped at once', (viewControl) => viewControl.perform({ do: 'layers', on: ['shell-core'] })],
+      ['a preset', (viewControl) => viewControl.perform({ do: 'preset', id: 'sky' })],
+    ])('stops a fade at full strength for %s', async (_, next) => {
+      const { viewControl, shellOpacities } = setup();
+      await viewControl.perform({ do: 'layers', on: ['shell-core'] });
+      const out = viewControl.perform({ do: 'layers', off: ['shell-core'], fadeS: 2 });
+      viewControl.update(500);
+      await next(viewControl);
+      expect(await out).toEqual({ ok: true });
+      expect(coreOpacity(shellOpacities)).toBe(1);
+      const written = shellOpacities.length;
+      viewControl.update(2000);
+      expect(shellOpacities.length).toBe(written);
+    });
   });
 
   describe("a layer's settings", () => {

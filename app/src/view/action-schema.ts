@@ -12,7 +12,7 @@
 import type { FromSchema, JSONSchema } from 'json-schema-to-ts';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
-import { FOV_NEEDS_TARGET_BELOW_DEG } from './view-control';
+import { FOV_NEEDS_TARGET_BELOW_DEG, MAX_FADE_S } from './view-control';
 
 /** Arrays and fields read-only all the way down; anything else as it is. */
 type DeepReadonly<T> = T extends readonly (infer E)[]
@@ -112,6 +112,14 @@ const LAYER_PARAMS = {
   additionalProperties: { type: 'object', minProperties: 1, additionalProperties: { anyOf: [{ type: 'number' }, { type: 'string' }, { type: 'boolean' }] } },
 } as const;
 
+const FADE_S = {
+  type: 'number',
+  description:
+    'Fade the switches named in or out over this many seconds rather than at once. Only the globe\'s shells and layers that say they fade can; a switch already as asked stays as it is.',
+  exclusiveMinimum: 0,
+  maximum: MAX_FADE_S,
+} as const;
+
 // Each action's description and fields have one home: a guide's cue is an action with a time added (guides/guide-schema.ts).
 export const PRESET_FIELDS = {
   description: 'Every switch as the preset has it (ui/presets.ts).',
@@ -120,7 +128,7 @@ export const PRESET_FIELDS = {
 } as const;
 export const LAYERS_FIELDS = {
   description: 'Named switches on or off; the rest stay.',
-  properties: { do: { const: 'layers' }, on: SWITCH_IDS, off: SWITCH_IDS, params: LAYER_PARAMS },
+  properties: { do: { const: 'layers' }, on: SWITCH_IDS, off: SWITCH_IDS, params: LAYER_PARAMS, fadeS: FADE_S },
   required: ['do'],
 } as const;
 export const LOOK_FIELDS = {

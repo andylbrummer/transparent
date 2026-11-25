@@ -434,6 +434,11 @@ export class LayersPanel {
     this.updatePresets();
   }
 
+  /** Whether a switch is on now. */
+  isOn(id: string): boolean {
+    return this.visibility[id] === true;
+  }
+
   /** Set every switch as `preset` has it: those going off first, so an exclusive group never has two on. */
   applyPreset(preset: LayerPreset): void {
     this.applyVisibility(presetVisibility(preset, this.switches));

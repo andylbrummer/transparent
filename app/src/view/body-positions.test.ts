@@ -28,8 +28,9 @@ function viewControl() {
   return viewControls.createViewControl({
     presets: [],
     switches: [],
-    layersPanel: { applyPreset: vi.fn(), setLayer: vi.fn(), showOnly: vi.fn(), borrow: vi.fn() },
-    lazyLayers: { preload: vi.fn(async () => {}), setParams: vi.fn() },
+    layersPanel: { applyPreset: vi.fn(), setLayer: vi.fn(), showOnly: vi.fn(), borrow: vi.fn(), isOn: () => false },
+    lazyLayers: { preload: vi.fn(async () => {}), setParams: vi.fn(), setOpacity: vi.fn() },
+    shells: { setShellOpacity: vi.fn() },
     camera,
     getPosition: () => austin,
     now: () => when,

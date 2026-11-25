@@ -582,6 +582,12 @@
                                   }
                                 }
                               },
+                              "fadeS": {
+                                "type": "number",
+                                "description": "Fade the switches named in or out over this many seconds rather than at once. Only the globe's shells and layers that say they fade can; a switch already as asked stays as it is.",
+                                "exclusiveMinimum": 0,
+                                "maximum": 10
+                              },
                               "at": {
                                 "type": "number",
                                 "minimum": 0,
@@ -1106,6 +1112,12 @@
                                     ]
                                   }
                                 }
+                              },
+                              "fadeS": {
+                                "type": "number",
+                                "description": "Fade the switches named in or out over this many seconds rather than at once. Only the globe's shells and layers that say they fade can; a switch already as asked stays as it is.",
+                                "exclusiveMinimum": 0,
+                                "maximum": 10
                               },
                               "at": {
                                 "type": "number",

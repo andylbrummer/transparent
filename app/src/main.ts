@@ -414,6 +414,7 @@ export function init(): App | null {
     switches: layerSwitches,
     layersPanel,
     lazyLayers,
+    shells: globe,
     camera,
     getPosition: () => sensorState.position,
     now: () => clock.now(),

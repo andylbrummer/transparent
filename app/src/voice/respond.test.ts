@@ -40,8 +40,10 @@ function app(
           done.push('borrow');
           return { end: () => done.push('end borrow') };
         },
+        isOn: () => false,
       },
-      lazyLayers: { setParams: () => {}, ...(state.lazyLayers ?? { preload: () => Promise.resolve() }) },
+      lazyLayers: { setParams: () => {}, setOpacity: () => {}, ...(state.lazyLayers ?? { preload: () => Promise.resolve() }) },
+      shells: { setShellOpacity: () => {} },
       camera: new THREE.PerspectiveCamera(),
       getPosition: () => null,
       now: () => new Date(0),
