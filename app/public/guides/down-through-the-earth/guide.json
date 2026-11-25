@@ -1,0 +1,122 @@
+{
+  "$schema": "../guide.schema.json",
+  "formatVersion": 1,
+  "id": "down-through-the-earth",
+  "title": "Down through the Earth",
+  "summary": "From the ground under your feet to the inner core, 6,371 km straight down. About three minutes.",
+  "language": "en",
+  "topics": ["geology"],
+  "authors": [{ "name": "Transparent Earth contributors", "url": "https://github.com/andylbrummer/transparent" }],
+  "licence": "CC BY 4.0",
+  "credits": [
+    {
+      "what": "Script",
+      "source": "Transparent Earth contributors",
+      "licence": "CC BY 4.0",
+      "url": "https://github.com/andylbrummer/transparent/blob/main/tools/guides/scripts/down-through-the-earth.md"
+    },
+    {
+      "what": "Narration, synthesized with Piper from the script (voice en_US-ljspeech-high, by Bryce Beattie)",
+      "source": "Rhasspy Piper voices, trained on the LJ Speech Dataset (public domain)",
+      "licence": "MIT (voice model); recording CC BY 4.0",
+      "url": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/high"
+    },
+    {
+      "what": "Depths, pressures and densities quoted (Preliminary Reference Earth Model)",
+      "source": "Dziewonski, A.M. & Anderson, D.L. (1981), Phys. Earth Planet. Inter. 25, 297–356",
+      "licence": "facts from the literature",
+      "url": "https://doi.org/10.1016/0031-9201(81)90046-7"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "under-your-feet",
+      "title": "Under your feet",
+      "scene": {
+        "layers": ["globe-surface", "political", "place-labels", "depth-ladder"],
+        "look": { "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "fovDeg": 60 }
+      },
+      "steps": [
+        {
+          "id": "look-down",
+          "narration": { "audio": "audio/01-look-down.m4a", "captions": "audio/01-look-down.vtt" },
+          "cues": [
+            { "at": 0, "do": "look", "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 } },
+            { "at": 5.9, "do": "mark", "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "text": "The far side · 12,742 km" }
+          ],
+          "advance": "gaze"
+        },
+        {
+          "id": "deepest-hole",
+          "narration": { "audio": "audio/02-deepest-hole.m4a", "captions": "audio/02-deepest-hole.vtt" },
+          "cues": [
+            { "at": 0, "do": "mark", "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "text": null },
+            { "at": 3.8, "do": "layers", "on": ["deep-places"] }
+          ],
+          "advance": "auto"
+        }
+      ]
+    },
+    {
+      "id": "the-rock",
+      "title": "The rock",
+      "scene": {
+        "layers": ["globe-surface", "depth-ladder"],
+        "look": { "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "fovDeg": 60 }
+      },
+      "steps": [
+        {
+          "id": "crust",
+          "narration": { "audio": "audio/03-crust.m4a", "captions": "audio/03-crust.vtt" },
+          "cues": [{ "at": 12.5, "do": "layers", "on": ["shell-moho"] }],
+          "advance": "auto"
+        },
+        {
+          "id": "mantle",
+          "narration": { "audio": "audio/04-mantle.m4a", "captions": "audio/04-mantle.vtt" },
+          "cues": [{ "at": 10.1, "do": "layers", "on": ["shell-670"] }],
+          "advance": "auto"
+        },
+        {
+          "id": "deep-mantle",
+          "narration": { "audio": "audio/05-deep-mantle.m4a", "captions": "audio/05-deep-mantle.vtt" },
+          "cues": [
+            { "at": 0, "do": "layers", "on": ["tomography-slow-bodies", "deep-labels"], "off": ["globe-surface"] },
+            { "at": 5.2, "do": "look", "target": { "kind": "label", "name": "Tuzo (African LLSVP)" } }
+          ],
+          "advance": "gaze"
+        }
+      ]
+    },
+    {
+      "id": "the-core",
+      "title": "The core",
+      "scene": {
+        "layers": ["depth-ladder", "shell-moho", "shell-670"],
+        "look": { "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "fovDeg": 60 }
+      },
+      "steps": [
+        {
+          "id": "outer-core",
+          "narration": { "audio": "audio/06-outer-core.m4a", "captions": "audio/06-outer-core.vtt" },
+          "cues": [
+            { "at": 0, "do": "look", "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 } },
+            { "at": 0.3, "do": "layers", "on": ["shell-core"] },
+            { "at": 11.8, "do": "layers", "on": ["core-field"] }
+          ],
+          "advance": "auto"
+        },
+        {
+          "id": "inner-core",
+          "narration": { "audio": "audio/07-inner-core.m4a", "captions": "audio/07-inner-core.vtt" },
+          "cues": [
+            { "at": 0, "do": "layers", "off": ["core-field"] },
+            { "at": 9, "do": "layers", "on": ["shell-inner-core"] },
+            { "at": 28.9, "do": "layers", "on": ["inner-core"] }
+          ],
+          "advance": "auto"
+        }
+      ]
+    }
+  ]
+}

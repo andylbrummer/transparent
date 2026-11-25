@@ -345,6 +345,14 @@ files and can be removed without touching other layers.
 | Gamma rays (Fermi) (`map-gamma-fermi`) | off | Fermi-LAT all-sky intensity maps, 1-3 and 3-300 GeV | [Fermi LAT instrument team, NASA Goddard Space Flight Center, resampled by NASA SkyView](https://skyview.gsfc.nasa.gov/current/cgi/survey.pl) | public domain (NASA) |
 | Galaxy density (2MASS) (`map-galaxies-2mass`) | off | 2MASS Extended Source Catalog | [Jarrett T.H. et al. 2000, AJ 119, 2498; Skrutskie M.F. et al. 2006, AJ 131, 1163. The Two Micron All Sky Survey is a joint project of the University of Massachusetts and IPAC/Caltech, funded by NASA and the NSF. From the NASA/IPAC Infrared Science Archive](https://irsa.ipac.caltech.edu/Missions/2mass.html) | public, acknowledgement requested |
 
+## Guides
+
+| Guide | Licence | What | Source | Licence |
+| --- | --- | --- | --- | --- |
+| Down through the Earth (`down-through-the-earth`) | CC BY 4.0 | Script | [Transparent Earth contributors](https://github.com/andylbrummer/transparent/blob/main/tools/guides/scripts/down-through-the-earth.md) | CC BY 4.0 |
+|  |  | Narration, synthesized with Piper from the script (voice en_US-ljspeech-high, by Bryce Beattie) | [Rhasspy Piper voices, trained on the LJ Speech Dataset (public domain)](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/high) | MIT (voice model); recording CC BY 4.0 |
+|  |  | Depths, pressures and densities quoted (Preliminary Reference Earth Model) | [Dziewonski, A.M. & Anderson, D.L. (1981), Phys. Earth Planet. Inter. 25, 297–356](https://doi.org/10.1016/0031-9201(81)90046-7) | facts from the literature |
+
 ## Per-slice documents
 
 - [Data sources: the deep-sky slice](data-sources/deep-sky.md)
