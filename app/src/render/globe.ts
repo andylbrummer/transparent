@@ -175,6 +175,10 @@ const FRAGMENT_SHADER = `
 
 const HORIZON_ALPHA = 0.55;
 
+function shellIndex(name: PremLayerName): number {
+  return PREM_LAYERS.findIndex((layer) => layer.name === name);
+}
+
 export class GlobeRenderer {
   private material: THREE.ShaderMaterial;
   private mesh: THREE.Mesh;
@@ -184,6 +188,9 @@ export class GlobeRenderer {
   private overrideImagery: THREE.Texture | null = null;
   private overrideGain = DEFAULT_SURFACE_GAIN;
   private readonly frame: ProjectionFrame = { aspect: 1, tanHalfFov: 1, centerX: 0, centerY: 0 };
+  // Switched on or off, and how far faded: two things, so a fade never turns a switched-off shell back on.
+  private readonly shellShown = new Float32Array(LAYER_COUNT).fill(1);
+  private readonly shellOpacity = new Float32Array(LAYER_COUNT).fill(1);
 
   constructor() {
     const uniforms = {
@@ -233,13 +240,27 @@ export class GlobeRenderer {
    * rest are the glass shells inside.
    */
   setShellVisible(name: PremLayerName, visible: boolean): void {
-    const index = PREM_LAYERS.findIndex((layer) => layer.name === name);
-    (this.material.uniforms.uLayerShown.value as Float32Array)[index] = visible ? 1 : 0;
+    const index = shellIndex(name);
+    this.shellShown[index] = visible ? 1 : 0;
+    this.writeShown(index);
   }
 
   isShellVisible(name: PremLayerName): boolean {
-    const index = PREM_LAYERS.findIndex((layer) => layer.name === name);
-    return (this.material.uniforms.uLayerShown.value as Float32Array)[index] === 1;
+    return this.shellShown[shellIndex(name)] === 1;
+  }
+
+  /**
+   * How much of a shell shows while it is on, 0 to 1: a fade, called every frame of one. The shader already multiplies
+   * this float into the shell's alpha, so a fade writes a uniform and never recompiles anything.
+   */
+  setShellOpacity(name: PremLayerName, opacity: number): void {
+    const index = shellIndex(name);
+    this.shellOpacity[index] = Math.min(1, Math.max(0, opacity));
+    this.writeShown(index);
+  }
+
+  private writeShown(index: number): void {
+    (this.material.uniforms.uLayerShown.value as Float32Array)[index] = this.shellShown[index] * this.shellOpacity[index];
   }
 
   /**

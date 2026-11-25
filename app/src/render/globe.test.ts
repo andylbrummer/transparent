@@ -19,6 +19,26 @@ describe('GlobeRenderer', () => {
     expect(globe.isShellVisible('crust')).toBe(true);
   });
 
+  it('fades a shell by any amount without recompiling, and a fade never turns a switched-off shell on', () => {
+    const globe = new GlobeRenderer();
+    const material = globe.getMesh().material as THREE.ShaderMaterial;
+    const shown = material.uniforms.uLayerShown.value as Float32Array;
+    const index = PREM_LAYERS.findIndex((l) => l.name === 'outer core');
+    const version = material.version;
+    globe.setShellOpacity('outer core', 0.5);
+    expect(shown[index]).toBe(0.5);
+    expect(globe.isShellVisible('outer core')).toBe(true);
+    globe.setShellVisible('outer core', false);
+    globe.setShellOpacity('outer core', 1);
+    expect(shown[index]).toBe(0);
+    globe.setShellVisible('outer core', true);
+    expect(shown[index]).toBe(1);
+    globe.setShellOpacity('outer core', 2);
+    expect(shown[index]).toBe(1);
+    // A uniform write only: the program is the one compiled at the start.
+    expect(material.version).toBe(version);
+  });
+
   it('never frustum-culls its fullscreen quad', () => {
     expect(new GlobeRenderer().getMesh().frustumCulled).toBe(false);
   });
