@@ -123,11 +123,12 @@ export type ViewAction =
   | { readonly do: 'layers'; readonly on?: readonly string[]; readonly off?: readonly string[] }
   | { readonly do: 'stand'; readonly place: Place }
   /**
-   * The app clock. `at` is an ISO 8601 instant or 'now'. `rate` is simulated
+   * The app clock. `to` is an ISO 8601 instant or 'now'. `rate` is simulated
    * seconds per real second: 1 is real time, 0 is frozen. With `until`, the
-   * clock stops there.
+   * clock stops there. (`to`, not `at`: a cue's `at` is already its seconds
+   * into the step.)
    */
-  | { readonly do: 'time'; readonly at: string; readonly rate?: number; readonly until?: string }
+  | { readonly do: 'time'; readonly to: string; readonly rate?: number; readonly until?: string }
   /** Look at a target, optionally `fovDeg` wide. */
   | { readonly do: 'look'; readonly target: Target; readonly fovDeg?: number }
   /** The field of view with no target: 60 is the default. Closes the spyglass. */
@@ -279,7 +280,7 @@ definition later. The TypeScript types in `view/actions.ts` and
       "scene": {                          // the whole view at the chapter's start: required
         "preset": "inside",               // or "layers": ["…"]: exactly one of the two
         "place": { "kind": "here" },
-        "time": { "at": "now" },
+        "time": { "to": "now" },        // place and time may be left out: here and now
         "look": { "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "fovDeg": 60 }
       },
       "steps": [
@@ -340,7 +341,7 @@ from `app/public/geo/geology.json`.
       "scene": {
         "layers": ["globe-surface", "political", "place-labels", "depth-ladder"],
         "place": { "kind": "here" },
-        "time": { "at": "now" },
+        "time": { "to": "now" },        // place and time may be left out: here and now
         "look": { "target": { "kind": "horizon", "azDeg": 0, "altDeg": -90 }, "fovDeg": 60 }
       },
       "steps": [

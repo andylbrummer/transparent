@@ -98,7 +98,8 @@ in the app under **Layers → Data credits** and in [docs/DATA-SOURCES.md](../DA
 
 A chapter opens with a **scene**: the whole view at its start. It is required, and it is what lets someone skip into
 the middle of a guide and see the right thing. Give it exactly one of `preset` (a preset id from the Layers panel,
-or `default`) or `layers` (exactly the switches to have on), plus a `look`.
+or `default`) or `layers` (exactly the switches to have on), plus a `look`. It may also give a `place` and a `time`,
+as the `stand` and `time` cues below take them; left out, they are here and now.
 
 ### Steps
 
@@ -134,6 +135,15 @@ audio's length. Take `at` from narrate.py's sentence starts, so a layer appears 
 | `look` | `target`, optional `fovDeg` | Turns the view to the target, with an ease. On a phone the guide points instead (the user holds the view). |
 | `fov` | `fovDeg` (30 or more) | Zooms. Under 30° a target is needed: use `look` with `fovDeg`. |
 | `mark` | `target`, `text` | Puts a marker with a short text on the target; `text: null` takes it down. |
+| `stand` | `place` | Stands the view somewhere else: `{"kind": "here"}`, `{"kind": "antipode"}`, or `{"kind": "at", "lat", "lon", "name"}`. A chip names the place. |
+| `time` | `to`, optional `rate`, `until` | Sets the clock: `to` is an ISO 8601 instant or `"now"`; `rate` is simulated seconds a second (0 stops it); `until` stops it there. A chip shows the time. |
+
+A change of place, a jump in time or a preset goes dark for a moment and comes back changed, rather than sweeping.
+
+**Time-lapse.** A `rate` above 60 must give `until`: with reduced motion the clock jumps straight there. In Cardboard
+the clock runs no faster than 2,400 times real time, whatever the guide asks (spec §7.3). A layer of today's data
+(marked live in the Layers panel's code, such as the aurora forecast) cannot be on while the time is away from now.
+[A night at the North Pole](../../app/public/guides/a-night-at-the-north-pole/guide.json) uses both.
 
 Targets:
 
