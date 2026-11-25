@@ -74,6 +74,11 @@ export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
 export const MAX_FADE_S = 10;
 /** The fastest a guide may run the app clock, either way: a year a second. */
 export const MAX_TIME_RATE = 31_557_600;
+/**
+ * The fastest the app clock runs in Cardboard, either way (spec/guides.md §7.3): the sky turns 15° an hour, so this is
+ * 10° a second. A whole sky turning faster in a headset makes people ill. A first guess, to be tried in a viewer.
+ */
+export const CARDBOARD_MAX_TIME_RATE = 2400;
 /** Faster than this, a clock is a time-lapse: a sky turning past more than a degree every four seconds. */
 export const TIME_LAPSE_ABOVE_RATE = 60;
 /** A time setting this near where the clock stands is no jump, and no reason to go dark. */

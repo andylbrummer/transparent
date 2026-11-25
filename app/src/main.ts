@@ -69,7 +69,7 @@ import { PauseCard } from './guides/pause-card';
 import { fetchGuides, guideLink } from './guides/guide-files';
 import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
-import { createViewControl } from './view/view-control';
+import { CARDBOARD_MAX_TIME_RATE, createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
 import { createStandingPlace } from './view/standing-place';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -639,6 +639,8 @@ export function init(): App | null {
     layersPanel.setOpen(false);
     guideList.setOpen(false);
     labels.setStereo(stereo);
+    // A time-lapse slows to what a headset can bear, and runs at its own rate again outside.
+    clock.capRate(stereo ? CARDBOARD_MAX_TIME_RATE : null);
     spyglass.reset();
     headGestures.reset();
     labels.setSpyglassHole(null);

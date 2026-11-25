@@ -28,6 +28,11 @@ export interface AppClock {
   isLive(): boolean;
   /** Simulated seconds per real second, as last set: 1 is real time, 0 stands still, below 0 runs back. */
   rate(): number;
+  /**
+   * Run no faster than `maxAbs`, either way, until the cap is lifted with null; the rate set stays as it was, and
+   * runs again once the cap is lifted. Cardboard's: a sky turning fast in a headset makes people ill.
+   */
+  capRate(maxAbs: number | null): void;
   /** Jump to `atMs`, running on at the rate it had. Any stop set with setRate is dropped. */
   set(atMs: number): void;
   /** Run at `rate` from where it is now; with `untilMs`, stop there, for good. */
@@ -58,6 +63,7 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
   let untilMs: number | null = null;
   let live = !pinned;
   let held = false;
+  let cap = Number.POSITIVE_INFINITY;
 
   /** Where the simulation stands at wall time `wall`: read, not ticked, since a tick builds a state and the clock is read several times a frame. */
   function simAt(wall: number): number {
@@ -74,7 +80,8 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
       rate = 0;
       untilMs = null;
     }
-    state = { ...state, simTimeMs: simMs, wallTimeMs: wall, compression: rate, running: rate !== 0 && !held };
+    const paced = Math.sign(rate) * Math.min(Math.abs(rate), cap);
+    state = { ...state, simTimeMs: simMs, wallTimeMs: wall, compression: paced, running: rate !== 0 && !held };
   }
 
   function finite(name: string, value: number): void {
@@ -92,6 +99,12 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
     pinned,
     isLive: () => live,
     rate: () => rate,
+    capRate(maxAbs) {
+      if (maxAbs !== null && !(maxAbs > 0)) throw new RangeError(`clock rate cap ${maxAbs} is not above 0`);
+      const sim = simAt(wallNow());
+      cap = maxAbs ?? Number.POSITIVE_INFINITY;
+      anchor(sim);
+    },
     set(atMs) {
       finite('instant', atMs);
       untilMs = null;

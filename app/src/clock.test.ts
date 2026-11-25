@@ -177,3 +177,48 @@ describe('setting the app clock', () => {
     expect(liveClock.now().getTime()).toBe(wall);
   });
 });
+
+describe('a rate cap', () => {
+  it('slows a fast run to the cap while it holds, and lets it run at its own rate again once lifted', () => {
+    let wall = 0;
+    const clock = createClock('?time=2011-03-11T05:46:00Z', () => wall);
+    const start = clock.now().getTime();
+    clock.setRate(3600);
+    clock.capRate(2400);
+    wall += 1000;
+    expect(clock.now().getTime() - start).toBe(2400 * 1000);
+    expect(clock.rate()).toBe(3600);
+    clock.capRate(null);
+    wall += 1000;
+    expect(clock.now().getTime() - start).toBe((2400 + 3600) * 1000);
+  });
+
+  it('caps a run backward the same, and leaves a slower run alone', () => {
+    let wall = 0;
+    const clock = createClock('?time=2011-03-11T05:46:00Z', () => wall);
+    const start = clock.now().getTime();
+    clock.capRate(2400);
+    clock.setRate(-10_000);
+    wall += 1000;
+    expect(clock.now().getTime() - start).toBe(-2400 * 1000);
+    clock.setRate(60);
+    wall += 1000;
+    expect(clock.now().getTime() - start).toBe((-2400 + 60) * 1000);
+  });
+
+  it('still stops a capped run at its stop', () => {
+    let wall = 0;
+    const clock = createClock('?time=2011-03-11T05:46:00Z', () => wall);
+    const start = clock.now().getTime();
+    clock.capRate(2400);
+    clock.setRate(3600, start + 3_600_000);
+    wall += 1000 * 1000;
+    expect(clock.now().getTime()).toBe(start + 3_600_000);
+    expect(clock.rate()).toBe(0);
+  });
+
+  it('refuses a cap of nothing', () => {
+    expect(() => createClock('').capRate(0)).toThrow(RangeError);
+  });
+});
+
