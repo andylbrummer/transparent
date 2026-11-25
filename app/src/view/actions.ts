@@ -54,6 +54,17 @@ export interface FoldedView {
 /** What aims the view: the device's pose, or the user's drag. */
 export type AimMode = 'pose' | 'manual';
 
+/** A guide's hold on the view, from ViewControl.borrow. */
+export interface ViewBorrow {
+  /** Give the view back. */
+  end(): void;
+  /**
+   * Hold the clock where it stands while the guide is paused, and let it run on as it was on resume: a time-lapse
+   * waits for the narration. A live clock is left live: the present does not wait. end() lets go of a hold.
+   */
+  hold(held: boolean): void;
+}
+
 export type ActionErrorCode = 'unknown-preset' | 'unknown-layer' | 'layer-unavailable' | 'target-unresolved' | 'bad-value';
 
 /** What came of an action. A mistake in the action is an outcome, not a throw, so its caller can show it. */
@@ -114,7 +125,7 @@ export interface ViewControl {
    * back as they stood, takes every mark down, and stops an ease or a look that waits. The aim stays where the user
    * has it. One borrow at a time.
    */
-  borrow(): { end(): void };
+  borrow(): ViewBorrow;
   /** Where a target is now and how far the view's centre is from it. */
   locate(target: Target): Located | TargetUnresolved;
   /** The look still waiting on the user to turn; null once they have arrived, or when no look waits. */

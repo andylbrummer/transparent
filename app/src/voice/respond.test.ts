@@ -42,7 +42,7 @@ function app(
         showOnly: (on) => done.push(`only:${on.join(',')}`),
         borrow: () => {
           done.push('borrow');
-          return { end: () => done.push('end borrow') };
+          return { end: () => done.push('end borrow'), hold: () => {} };
         },
         isOn: () => false,
       },

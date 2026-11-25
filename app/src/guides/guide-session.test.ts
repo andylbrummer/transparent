@@ -113,6 +113,7 @@ function setup(options: { guide?: Guide; files?: Partial<Files>; storage?: Guide
             world.ends++;
             events.push('borrow ended');
           },
+          hold() {},
         };
       },
     },

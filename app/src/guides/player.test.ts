@@ -113,7 +113,7 @@ function setup() {
   const preloadedNarrations: Narration[] = [];
   /** Each narration asked for, to load or to fetch ahead, in the order asked. */
   const asked: string[] = [];
-  const counts = { borrows: 0, ends: 0, stops: 0, awaited: null as AwaitedGaze | null };
+  const counts = { borrows: 0, ends: 0, stops: 0, awaited: null as AwaitedGaze | null, holds: [] as boolean[] };
   const view: PlayerDeps['view'] = {
     perform(action) {
       const outcome = deferred<ActionOutcome>();
@@ -139,6 +139,9 @@ function setup() {
       return {
         end() {
           counts.ends++;
+        },
+        hold(held: boolean) {
+          counts.holds.push(held);
         },
       };
     },
@@ -729,6 +732,22 @@ describe('createPlayer', () => {
       expect(t.player.state().kind).toBe('ended');
       expect(() => t.player.pause()).toThrow(new Error('the guide cannot be paused now'));
       expect(() => t.player.resume()).toThrow(new Error('the guide is not paused'));
+    });
+
+    it("holds the app clock while paused, and lets it go on resume or when the guide ends", async () => {
+      const t = setup();
+      await begin(t);
+      t.player.pause();
+      expect(t.view.holds).toEqual([true]);
+      t.player.resume();
+      expect(t.view.holds).toEqual([true, false]);
+      t.player.pause();
+      t.player.next();
+      // Still paused after a jump, so still held.
+      expect(t.view.holds).toEqual([true, false, true]);
+      t.player.exit();
+      // Ending the borrow lets go of the hold itself.
+      expect(t.view.holds).toEqual([true, false, true]);
     });
 
     it('leaves a paused guide, and the next one starts unpaused', async () => {

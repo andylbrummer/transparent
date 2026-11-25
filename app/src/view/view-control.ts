@@ -18,7 +18,7 @@ import type { DeviceAttitude } from '../sensors';
 import { canFade, type LayerSwitch, type LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
-import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, TimeSetting, ViewAction, ViewControl } from './actions';
+import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, TimeSetting, ViewAction, ViewBorrow, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
 import { samePlace, type StandingPlace } from './standing-place';
 import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex, type LoadedLabels } from './targets';
@@ -506,7 +506,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return { ok: true, on };
   }
 
-  function borrow(): { end(): void } {
+  function borrow(): ViewBorrow {
     if (borrowed) throw new Error('the view is already borrowed');
     const fovDeg = deps.look.getState().fovDeg;
     const place = deps.standing.place();
@@ -515,7 +515,15 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     borrowed = true;
     borrowEpoch++;
     let ended = false;
+    let holding = false;
     return {
+      hold(held) {
+        if (ended) throw new Error('the view borrow has already ended');
+        // A live clock is the present, which does not wait; a guide's clock that goes live meanwhile lets go itself.
+        if (held === holding || (held && deps.clock.isLive())) return;
+        holding = held;
+        deps.clock.hold(held);
+      },
       end: () => {
         if (ended) throw new Error('the view borrow has already ended');
         ended = true;
@@ -532,6 +540,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         // Back where the user stood, at once: leaving the guide is the user's own move, made in their own time.
         deps.standing.set(place);
         // The clock as the user left it, run on through the guide: a live clock is live again, a pinned one has moved on.
+        // Let go first: a hold outlasts a restore, and the user's clock was never held.
+        if (holding) deps.clock.hold(false);
         deps.clock.restore(clock);
         panel.end();
         borrowed = false;

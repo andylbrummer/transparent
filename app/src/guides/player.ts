@@ -15,7 +15,7 @@
  * ViewControl does it.
  */
 
-import type { ActionOutcome, ViewControl } from '../view/actions';
+import type { ActionOutcome, ViewBorrow, ViewControl } from '../view/actions';
 import { foldTo, type Cue, type Guide, type Step } from './format';
 import type { CaptionCue } from './vtt';
 
@@ -137,7 +137,7 @@ const PLAYING_ON: readonly PhaseKind[] = ['loading', 'playing', 'waiting'];
 /** The guide being played and the view it has borrowed. */
 interface Session {
   readonly guide: Guide;
-  readonly borrow: { end(): void };
+  readonly borrow: ViewBorrow;
   chapterIndex: number;
   stepIndex: number;
   phase: Phase;
@@ -279,10 +279,16 @@ export function createPlayer(deps: PlayerDeps): Player {
     else end(current);
   }
 
+  /** No longer paused, as a guide that ends or fails is not: its clock is let go with it. */
+  function unpause(current: Session): void {
+    if (current.paused) current.borrow.hold(false);
+    current.paused = false;
+  }
+
   function end(current: Session): void {
     const { phase } = current;
     clockOf(phase)?.pause();
-    current.paused = false;
+    unpause(current);
     current.phase = { kind: 'ended', loaded: 'loaded' in phase ? phase.loaded : null };
   }
 
@@ -294,7 +300,7 @@ export function createPlayer(deps: PlayerDeps): Player {
     if (current.phase.kind === 'error') return;
     const chapter = current.guide.chapters[chapterIndex];
     clockOf(current.phase)?.pause();
-    current.paused = false;
+    unpause(current);
     current.phase = { kind: 'error', message: `${chapter.id}/${chapter.steps[stepIndex].id}: ${why}` };
   }
 
@@ -366,13 +372,15 @@ export function createPlayer(deps: PlayerDeps): Player {
         throw new Error('the guide cannot be paused now');
       }
       current.paused = true;
+      // The app clock too, if the guide has it: a time-lapse goes on only with the narration (spec/guides.md §5.3).
+      current.borrow.hold(true);
       // Only a playing step's clock runs: a waiting one is over, and a loading one has not started.
       if (current.phase.kind === 'playing') current.phase.loaded.clock.pause();
     },
     resume() {
       const current = session;
       if (!current?.paused) throw new Error('the guide is not paused');
-      current.paused = false;
+      unpause(current);
       if (current.phase.kind === 'playing') current.phase.loaded.clock.play();
     },
     next() {

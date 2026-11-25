@@ -1240,6 +1240,33 @@ describe('createViewControl', () => {
       expect(t.dips.count).toBe(0);
     });
 
+    it("holds a guide's clock while the borrow holds it, and lets go when the borrow ends", async () => {
+      const t = setup();
+      const borrow = t.viewControl.borrow();
+      await t.viewControl.perform({ do: 'time', to: quake, rate: 60 });
+      borrow.hold(true);
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(quakeMs);
+      borrow.hold(false);
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(quakeMs + 60_000);
+      borrow.hold(true);
+      borrow.end();
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(when.getTime() + 3000);
+    });
+
+    it('leaves a live clock live while the borrow holds', async () => {
+      const t = setup();
+      t.view.wallMs = quakeMs;
+      const borrow = t.viewControl.borrow();
+      await t.viewControl.perform({ do: 'time', to: 'now' });
+      borrow.hold(true);
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(quakeMs + 1000);
+      expect(t.clock.isLive()).toBe(true);
+    });
+
     it('gives the clock back as the user left it when the borrow ends, run on meanwhile', async () => {
       const t = setup();
       const borrow = t.viewControl.borrow();

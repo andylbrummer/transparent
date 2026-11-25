@@ -32,7 +32,7 @@ export interface AppClock {
   set(atMs: number): void;
   /** Run at `rate` from where it is now; with `untilMs`, stop there, for good. */
   setRate(rate: number, untilMs?: number): void;
-  /** Back to wall time at the real rate. */
+  /** Back to wall time at the real rate, and no longer held: live time is the wall's, which never stands still. */
   goLive(): void;
   /** What the clock would read live, now: wall time. To check a setting against before making it. */
   liveMs(): number;
@@ -116,6 +116,7 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
       rate = 1;
       untilMs = null;
       live = true;
+      held = false;
       anchor(wallNow());
     },
     liveMs: () => wallNow(),

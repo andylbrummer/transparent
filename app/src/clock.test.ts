@@ -147,6 +147,15 @@ describe('setting the app clock', () => {
     expect(iso(clock)).toBe('2011-03-11T05:47:00.000Z');
   });
 
+  it('lets go of a hold to go live: live time does not stand still', () => {
+    let wall = 0;
+    const clock = createClock('?time=2011-03-11T05:46:00Z', () => wall);
+    clock.hold(true);
+    clock.goLive();
+    wall += 1000;
+    expect(clock.now().getTime()).toBe(1000);
+  });
+
   it('goes on from a save as though nothing had changed it', () => {
     let wall = 0;
     const clock = createClock('?time=2026-01-01T00:00:00Z', () => wall);
