@@ -11,7 +11,9 @@
     "lint": "eslint 'src/**/*.ts' 'scripts/**/*.ts'",
     "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "docs:sources": "vite-node scripts/data-sources.ts",
-    "guides:schema": "vite-node scripts/guide-schema.ts"
+    "guides:schema": "vite-node scripts/guide-schema.ts",
+    "guides:put-video": "vite-node scripts/put-video.ts --",
+    "guides:check-media": "vite-node scripts/check-media.ts"
   },
   "dependencies": {
     "@transparent-earth/core": "*",

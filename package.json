@@ -24,7 +24,9 @@
     "typecheck": "npm run typecheck --workspaces",
     "dev": "npm run dev -w app",
     "docs:sources": "npm run docs:sources -w app --",
-    "guides:schema": "npm run guides:schema -w app --"
+    "guides:schema": "npm run guides:schema -w app --",
+    "guides:put-video": "npm run guides:put-video -w app --",
+    "guides:check-media": "npm run guides:check-media -w app --"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

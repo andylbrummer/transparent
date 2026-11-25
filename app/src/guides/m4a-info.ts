@@ -1,10 +1,11 @@
 /**
  * What a narration file's MP4 header says: its length, its codec and its
- * channels. The guide validator needs these, and runs where there is no
- * ffprobe (CI and the Cloudflare build), so this reads the few boxes it
- * needs itself: ISO/IEC 14496-12 for the boxes, 14496-1 for the esds
- * descriptors and 14496-3 for the AudioSpecificConfig. Pure: it is given
- * the bytes.
+ * channels; and of a video file, its length, its picture's size and its
+ * tracks' codecs. The guide validator and guides:put-video need these, and
+ * run where there is no ffprobe (CI and the Cloudflare build), so this
+ * reads the few boxes it needs itself: ISO/IEC 14496-12 for the boxes,
+ * 14496-1 for the esds descriptors and 14496-3 for the AudioSpecificConfig.
+ * Pure: it is given the bytes.
  */
 
 /** What a narration file's header says of it. */
@@ -48,6 +49,68 @@ export function readM4aInfo(bytes: Uint8Array): M4aInfo {
   if (!esds) throw new Error('no esds box');
   const config = audioSpecificConfig(view, esds);
   return { durationS, ...config };
+}
+
+/** What a video file's header says of it. */
+export interface Mp4VideoInfo {
+  readonly durationS: number;
+  /** The picture's size, as the video track's header gives it. */
+  readonly width: number;
+  readonly height: number;
+  /** Each track's first sample entry type, in order: 'avc1' is H.264, 'mp4a' is AAC. */
+  readonly codecs: readonly string[];
+}
+
+/** Read an .mp4 file's header. Throws, saying what is missing, for bytes that are not one or have no picture. */
+export function readMp4VideoInfo(bytes: Uint8Array): Mp4VideoInfo {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 8 || fourCc(view, 4) !== 'ftyp') throw new Error('not an MP4 file: no ftyp box');
+  const moov = boxesIn(view, 0, bytes.length).find((box) => box.type === 'moov');
+  if (!moov) throw new Error('no moov box');
+  const mvhd = childOf(view, moov, 'mvhd');
+  if (!mvhd) throw new Error('no mvhd box');
+  const durationS = movieDuration(view, mvhd);
+  const codecs: string[] = [];
+  let size: { width: number; height: number } | undefined;
+  for (const trak of boxesIn(view, moov.start, moov.end)) {
+    if (trak.type !== 'trak') continue;
+    const stsd = sampleDescriptions(view, trak);
+    if (!stsd) continue;
+    need(stsd, 16);
+    const codec = fourCc(view, stsd.start + 12);
+    codecs.push(codec);
+    // The picture's size is the first video track's: its tkhd, as players lay it out.
+    const tkhd = childOf(view, trak, 'tkhd');
+    if (size === undefined && tkhd && isVideo(view, trak)) size = trackSize(view, tkhd);
+  }
+  if (!size) throw new Error('no video track');
+  return { durationS, ...size, codecs };
+}
+
+/** moov/trak/mdia/minf/stbl/stsd of one track. */
+function sampleDescriptions(view: DataView, trak: Box): Box | undefined {
+  const mdia = childOf(view, trak, 'mdia');
+  const minf = mdia && childOf(view, mdia, 'minf');
+  const stbl = minf && childOf(view, minf, 'stbl');
+  return stbl && childOf(view, stbl, 'stsd');
+}
+
+/** Whether a track is a picture: its mdia/hdlr handler is 'vide'. */
+function isVideo(view: DataView, trak: Box): boolean {
+  const mdia = childOf(view, trak, 'mdia');
+  const hdlr = mdia && childOf(view, mdia, 'hdlr');
+  if (!hdlr) return false;
+  // Version and flags, pre_defined, then the handler type.
+  need(hdlr, 12);
+  return fourCc(view, hdlr.start + 8) === 'vide';
+}
+
+/** tkhd: width and height, 16.16 fixed point, last; version 1 has 64-bit times, 12 bytes more before them. */
+function trackSize(view: DataView, tkhd: Box): { width: number; height: number } {
+  need(tkhd, 1);
+  const at = tkhd.start + (view.getUint8(tkhd.start) === 1 ? 88 : 76);
+  if (at + 8 > tkhd.end) throw new Error(`box tkhd at ${tkhd.offset} is too short for its fields`);
+  return { width: view.getUint32(at) / 65536, height: view.getUint32(at + 4) / 65536 };
 }
 
 /** The boxes laid end to end from `from` to `to`, each checked to fit. */
