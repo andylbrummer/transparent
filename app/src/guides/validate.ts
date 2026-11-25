@@ -6,6 +6,8 @@
  * name. `npm test` runs them over every guide; the app does not.
  */
 
+import { paramProblems } from '../layers/params';
+import type { LayerParamValues } from '../layers/types';
 import type { SurfacePosition } from '../sensors';
 import type { LayerSwitch } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
@@ -71,6 +73,18 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     });
   };
 
+  /** A cue's settings: each for a switch the cue turns on, and one that switch's layer takes (layers/params.ts, as at run time). */
+  const checkParams = (path: string, params: Readonly<Record<string, LayerParamValues>> | undefined, on: readonly string[]): void => {
+    for (const [id, values] of Object.entries(params ?? {})) {
+      const layer = switches.get(id);
+      // JSON pointer escaping: a switch id is kebab-case, so it has no "~" or "/" to escape.
+      const at = `${path}/${id}`;
+      if (!layer) problem(at, `no layer switch ${id}`);
+      else if (!on.includes(id)) problem(at, `settings for ${id}, which this cue does not turn on`);
+      else for (const reason of paramProblems(id, layer.params, values)) problem(at, reason);
+    }
+  };
+
   const checkTarget = (path: string, target: Target): void => {
     // Other kinds are bounded by the schema; only a label's name needs the app to say what it means.
     if (target.kind !== 'label') return;
@@ -106,6 +120,7 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
           case 'layers':
             checkOn(`${cuePath}/on`, cue.on ?? [], cue.off);
             checkOff(`${cuePath}/off`, cue.off ?? []);
+            checkParams(`${cuePath}/params`, cue.params, cue.on ?? []);
             break;
           case 'look':
           case 'mark':

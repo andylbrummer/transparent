@@ -5,6 +5,7 @@
  * reads no preset, so it needs no registry.
  */
 
+import type { LayerParamValues } from '../layers/types';
 import type { FoldedView, Target, ViewAction } from './actions';
 import { targetKey } from './targets';
 
@@ -14,8 +15,10 @@ export function foldAction(view: FoldedView, action: ViewAction): FoldedView {
     case 'preset':
       // A preset sets every switch, so what was flipped before it is gone.
       return { ...view, layers: { preset: action.id, on: [], off: [] } };
-    case 'layers':
-      return { ...view, layers: foldSwitches(view.layers, action.on ?? [], action.off ?? []) };
+    case 'layers': {
+      const layers = foldSwitches(view.layers, action.on ?? [], action.off ?? []);
+      return action.params ? { ...view, layers, params: foldParams(view.params ?? {}, action.params) } : { ...view, layers };
+    }
     case 'look':
       return { ...view, look: { target: action.target, fovDeg: action.fovDeg ?? view.look.fovDeg } };
     case 'fov':
@@ -44,6 +47,16 @@ const turnedOn = (list: readonly string[], add: readonly string[]): string[] => 
 
 /** `list` with `add` after it, each id once, in the order it first came. */
 const union = (list: readonly string[], add: readonly string[]): string[] => [...new Set([...list, ...add])];
+
+/** Each layer's settings with the new ones over them: a setting not given again keeps its last value. */
+function foldParams(
+  params: NonNullable<FoldedView['params']>,
+  given: Readonly<Record<string, LayerParamValues>>
+): NonNullable<FoldedView['params']> {
+  const next = { ...params };
+  for (const [id, values] of Object.entries(given)) next[id] = { ...next[id], ...values };
+  return next;
+}
 
 /** A mark is known by its target: new text replaces it where it stands; null takes it down. */
 function foldMark(marks: FoldedView['marks'], target: Target, text: string | null): FoldedView['marks'] {

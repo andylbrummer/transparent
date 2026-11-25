@@ -32,6 +32,13 @@ describe('createViewControl', () => {
     lazy('x-ray', { exclusiveGroup: 'sky-map' }),
     lazy('clouds', { section: 'Weather', defaultOn: true }),
     lazy('aurora'),
+    lazy('waves', {
+      section: 'Inside the Earth',
+      params: {
+        quake: { type: 'string', description: 'which earthquake', values: ['tohoku2011', 'sumatra2004'] },
+        playing: { type: 'boolean', description: 'whether it plays' },
+      },
+    }),
   ];
   const sky: LayerPreset = { id: 'sky', label: 'Sky', description: 'x-ray sky', on: ['x-ray'] };
   const night: LayerPreset = { id: 'night', label: 'Night', description: 'x-ray and aurora', on: ['x-ray', 'aurora'] };
@@ -273,6 +280,77 @@ describe('createViewControl', () => {
     expect(await viewControl.perform({ do: 'layers', on: ['x-ray'] })).toEqual({ ok: true });
     expect(load).toHaveBeenCalledTimes(2);
     error.mockRestore();
+  });
+
+  describe("a layer's settings", () => {
+    /** A layer that records the settings it is given, and whether it was showing when it was given them. */
+    function wavesLoad() {
+      const given: { values: Record<string, unknown>; visible: boolean }[] = [];
+      let visible = false;
+      const load = vi.fn<LayerDefinition['load']>(async () => ({
+        setVisible: (next: boolean) => {
+          visible = next;
+        },
+        setParams: (values: Record<string, unknown>) => {
+          if (values.quake === 'sumatra2004') throw new Error('waves: no sumatra2004 in the data');
+          given.push({ values, visible });
+        },
+        dispose() {},
+      }));
+      return { load, given };
+    }
+
+    it('gives a layer the settings of the action that turns it on, before it first shows', async () => {
+      const waves = wavesLoad();
+      const { viewControl } = setup(null, { waves: waves.load });
+      expect(await viewControl.perform({ do: 'layers', on: ['waves'], params: { waves: { quake: 'tohoku2011', playing: true } } })).toEqual({ ok: true });
+      expect(waves.given).toEqual([{ values: { quake: 'tohoku2011', playing: true }, visible: false }]);
+      // Loaded and showing: the next settings arrive at once.
+      expect(await viewControl.perform({ do: 'layers', on: ['waves'], params: { waves: { playing: false } } })).toEqual({ ok: true });
+      expect(waves.given.at(-1)).toEqual({ values: { playing: false }, visible: true });
+    });
+
+    it.each<[string, ViewAction, string, string]>([
+      ['a setting the layer lacks', { do: 'layers', on: ['waves'], params: { waves: { colour: 'red' } } }, 'bad-value', 'waves has no setting colour: it has quake, playing'],
+      ['a value it does not take', { do: 'layers', on: ['waves'], params: { waves: { quake: 'atlantis' } } }, 'bad-value', 'waves quake is one of tohoku2011, sumatra2004'],
+      ['a layer not turned on', { do: 'layers', on: ['aurora'], params: { waves: { playing: true } } }, 'bad-value', 'settings for waves, which this action does not turn on'],
+      ['a layer that takes none', { do: 'layers', on: ['aurora'], params: { aurora: { playing: true } } }, 'bad-value', 'aurora takes no settings'],
+      ['an unknown switch', { do: 'layers', on: ['aurora'], params: { nope: { playing: true } } }, 'unknown-layer', 'no layer switch nope'],
+    ])('refuses settings for %s, and flips nothing', async (_, action, code, message) => {
+      const waves = wavesLoad();
+      const { viewControl, changes } = setup(null, { waves: waves.load });
+      expect(await viewControl.perform(action)).toEqual({ ok: false, code, message });
+      expect(changes).toEqual([]);
+      expect(waves.load).not.toHaveBeenCalled();
+    });
+
+    it('says so when the layer itself refuses a value its data lack', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const waves = wavesLoad();
+      const { viewControl } = setup(null, { waves: waves.load });
+      await viewControl.perform({ do: 'layers', on: ['waves'] });
+      expect(await viewControl.perform({ do: 'layers', on: ['waves'], params: { waves: { quake: 'sumatra2004' } } })).toEqual({
+        ok: false,
+        code: 'bad-value',
+        message: 'waves: no sumatra2004 in the data',
+      });
+      error.mockRestore();
+    });
+
+    it("restores the settings of the layers it turns on, and leaves an off layer's alone", async () => {
+      const waves = wavesLoad();
+      const { viewControl } = setup(null, { waves: waves.load });
+      const view = (only: string[]): FoldedView => ({
+        layers: { only },
+        look: { target: { kind: 'horizon', azDeg: 0, altDeg: -90 }, fovDeg: DEFAULT_LOOK_STATE.fovDeg },
+        marks: [],
+        params: { waves: { quake: 'tohoku2011', playing: true } },
+      });
+      expect(await viewControl.restore(view(['waves']))).toEqual({ ok: true });
+      expect(waves.given).toEqual([{ values: { quake: 'tohoku2011', playing: true }, visible: false }]);
+      expect(await viewControl.restore(view(['aurora']))).toEqual({ ok: true });
+      expect(waves.given).toHaveLength(1);
+    });
   });
 
   describe('locate', () => {

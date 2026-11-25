@@ -7,6 +7,7 @@
  */
 
 import type * as THREE from 'three';
+import type { LayerParamValues } from '../layers/types';
 import type { SchemaType, TARGET_SCHEMA, VIEW_ACTION_SCHEMA } from './action-schema';
 
 /** Something to look at. Every kind resolves to a direction from where the view stands (targets.ts). Written once, as a schema (action-schema.ts). */
@@ -33,6 +34,11 @@ export interface FoldedView {
   readonly look: { readonly target: Target; readonly fovDeg: number };
   /** The marks up, in the order they went up. */
   readonly marks: readonly { readonly target: Target; readonly text: string }[];
+  /**
+   * The layers' settings given so far, by switch id, the last value of each; absent when none were. A layer keeps
+   * what it was set to while it is off, so these are kept when its switch goes off or a preset comes.
+   */
+  readonly params?: Readonly<Record<string, LayerParamValues>>;
 }
 
 /** What aims the view: the device's pose, or the user's drag. */

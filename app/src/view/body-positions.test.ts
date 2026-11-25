@@ -29,7 +29,7 @@ function viewControl() {
     presets: [],
     switches: [],
     layersPanel: { applyPreset: vi.fn(), setLayer: vi.fn(), showOnly: vi.fn(), borrow: vi.fn() },
-    lazyLayers: { preload: vi.fn(async () => {}) },
+    lazyLayers: { preload: vi.fn(async () => {}), setParams: vi.fn() },
     camera,
     getPosition: () => austin,
     now: () => when,

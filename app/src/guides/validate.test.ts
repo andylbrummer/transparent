@@ -130,6 +130,65 @@ describe('guideProblems', () => {
     expect(problemsIn(g)).toEqual([]);
   });
 
+  describe("a layer's settings", () => {
+    // A switch that takes settings, beside the app's own, so these tests do not follow one layer's choices.
+    const waves: LayerSwitch = {
+      id: 'test-waves',
+      label: 'Test waves',
+      section: 'Inside the Earth',
+      target: { lazy: 'test-waves' },
+      params: {
+        quake: { type: 'string', description: 'which earthquake', values: ['tohoku2011'] },
+        playing: { type: 'boolean', description: 'whether it plays' },
+      },
+    };
+    const withWaves = { ...world, switches: [...world.switches, waves] };
+    const problemsWith = (cue: Json): ReturnType<typeof guideProblems> => {
+      const g = copy();
+      cues(g, 1)[2] = { at: 3, ...cue };
+      expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
+      return guideProblems(g as unknown as Guide, withWaves);
+    };
+    const at = '/chapters/0/steps/1/cues/2/params';
+
+    it('allows settings a layer takes, for a switch the cue turns on', () => {
+      expect(problemsWith({ do: 'layers', on: ['test-waves'], params: { 'test-waves': { quake: 'tohoku2011', playing: true } } })).toEqual([]);
+    });
+
+    it.each<[string, Json, string, string]>([
+      [
+        'a setting the layer does not have',
+        { do: 'layers', on: ['test-waves'], params: { 'test-waves': { colour: 'red' } } },
+        `${at}/test-waves`,
+        'test-waves has no setting colour: it has quake, playing',
+      ],
+      [
+        'a value the layer does not take',
+        { do: 'layers', on: ['test-waves'], params: { 'test-waves': { quake: 'atlantis' } } },
+        `${at}/test-waves`,
+        'test-waves quake is one of tohoku2011',
+      ],
+      [
+        'settings for a switch the cue does not turn on',
+        { do: 'layers', off: ['political'], params: { 'test-waves': { playing: true } } },
+        `${at}/test-waves`,
+        'settings for test-waves, which this cue does not turn on',
+      ],
+      ['settings for a layer that takes none', { do: 'layers', on: ['political'], params: { political: { playing: true } } }, `${at}/political`, 'political takes no settings'],
+      ['settings for an unknown switch', { do: 'layers', on: ['political'], params: { nothing: { playing: true } } }, `${at}/nothing`, 'no layer switch nothing'],
+    ])('reports %s', (_, cue, path, reason) => {
+      expect(problemsWith(cue)).toEqual([{ path, reason }]);
+    });
+
+    it('refuses in the schema settings that are not plain values, or none', () => {
+      for (const params of [{ 'test-waves': {} }, {}, { 'test-waves': { quake: ['tohoku2011'] } }]) {
+        const g = copy();
+        cues(g, 1)[2] = { at: 3, do: 'layers', on: ['test-waves'], params };
+        expect(isGuide(g)).toBe(false);
+      }
+    });
+  });
+
   it('reports every problem, in the order of the file', () => {
     const g = copy();
     steps(g)[1].id = 'look-down';

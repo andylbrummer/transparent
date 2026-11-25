@@ -12,7 +12,7 @@ import { OUTLINE_STYLES, SPREADING_RIBBON_MYR, spreadingRampGradient, type Outli
 import type { LabelKind } from '../render/labels';
 import { PLUME_COLOR, depthRampGradient } from '../render/interior';
 import { PREM_LAYERS, type PremLayerName } from '../render/prem';
-import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerSection, type StatusTone } from '../layers/types';
+import { LAYER_SECTIONS, type Credit, type LayerDefinition, type LayerParams, type LayerSection, type StatusTone } from '../layers/types';
 import { matchesPreset, presetVisibility, type LayerPreset } from './presets';
 
 export type InteriorLayerName = 'quakes' | 'plumes';
@@ -44,6 +44,8 @@ export interface LayerSwitch {
   readonly legend?: string;
   /** Text under the legend bar, e.g. its depth scale. */
   readonly caption?: string;
+  /** The settings its lazy layer takes beside the switch (LayerDefinition.params). */
+  readonly params?: LayerParams;
 }
 
 export type LayerVisibility = Record<string, boolean>;
@@ -181,6 +183,7 @@ export function switchesWithLazyLayers(definitions: readonly LayerDefinition[]):
       caption: d.caption,
       defaultOff: !d.defaultOn,
       exclusiveGroup: d.exclusiveGroup,
+      params: d.params,
     })
   );
   const all = [...LAYER_SWITCHES, ...lazy];

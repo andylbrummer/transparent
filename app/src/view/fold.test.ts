@@ -63,6 +63,19 @@ describe('foldAction', () => {
     expect(listed.layers).toEqual({ only: ['political', 'globe-surface'] });
   });
 
+  it("keeps each layer's last settings, through its switch going off and a preset", () => {
+    const view = fold(
+      fromPreset,
+      { do: 'layers', on: ['waves'], params: { waves: { quake: 'tohoku2011', playing: true } } },
+      { do: 'layers', off: ['waves'] },
+      { do: 'preset', id: 'earth' },
+      { do: 'layers', on: ['waves', 'ice'], params: { waves: { playing: false }, ice: { ka: 21 } } },
+    );
+    expect(view.params).toEqual({ waves: { quake: 'tohoku2011', playing: false }, ice: { ka: 21 } });
+    // No settings, no field: a view folded from actions with none is as it was before settings existed.
+    expect('params' in fold(fromPreset, { do: 'layers', on: ['waves'] })).toBe(false);
+  });
+
   it('looks at a new target with or without a new width, and widens without moving', () => {
     expect(foldAction(fromPreset, { do: 'look', target: sun, fovDeg: 10 }).look).toEqual({ target: sun, fovDeg: 10 });
     expect(foldAction(fromPreset, { do: 'look', target: sun }).look).toEqual({ target: sun, fovDeg: 60 });

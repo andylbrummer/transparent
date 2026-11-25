@@ -99,6 +99,19 @@ export const TARGET_SCHEMA = {
 
 const SWITCH_IDS = { type: 'array', items: NAME, minItems: 1, uniqueItems: true } as const;
 
+/**
+ * Settings for the layers an action turns on, by switch id. What each layer takes is in its definition
+ * (layers/<id>/layer.ts, `params`), which the view control and the guide validator check them against: a schema of
+ * every layer's settings here would be a second copy of them.
+ */
+const LAYER_PARAMS = {
+  type: 'object',
+  description:
+    'Settings for switches this action turns on, by switch id, as {"seismic-waves": {"quake": "tohoku2011"}}. Each layer\'s are in its definition (`params`); a setting left out stays as it is.',
+  minProperties: 1,
+  additionalProperties: { type: 'object', minProperties: 1, additionalProperties: { anyOf: [{ type: 'number' }, { type: 'string' }, { type: 'boolean' }] } },
+} as const;
+
 // Each action's description and fields have one home: a guide's cue is an action with a time added (guides/guide-schema.ts).
 export const PRESET_FIELDS = {
   description: 'Every switch as the preset has it (ui/presets.ts).',
@@ -107,7 +120,7 @@ export const PRESET_FIELDS = {
 } as const;
 export const LAYERS_FIELDS = {
   description: 'Named switches on or off; the rest stay.',
-  properties: { do: { const: 'layers' }, on: SWITCH_IDS, off: SWITCH_IDS },
+  properties: { do: { const: 'layers' }, on: SWITCH_IDS, off: SWITCH_IDS, params: LAYER_PARAMS },
   required: ['do'],
 } as const;
 export const LOOK_FIELDS = {

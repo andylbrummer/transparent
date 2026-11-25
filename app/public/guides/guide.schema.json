@@ -560,6 +560,28 @@
                                 "minItems": 1,
                                 "uniqueItems": true
                               },
+                              "params": {
+                                "type": "object",
+                                "description": "Settings for switches this action turns on, by switch id, as {\"seismic-waves\": {\"quake\": \"tohoku2011\"}}. Each layer's are in its definition (`params`); a setting left out stays as it is.",
+                                "minProperties": 1,
+                                "additionalProperties": {
+                                  "type": "object",
+                                  "minProperties": 1,
+                                  "additionalProperties": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
                               "at": {
                                 "type": "number",
                                 "minimum": 0,
@@ -1062,6 +1084,28 @@
                                 },
                                 "minItems": 1,
                                 "uniqueItems": true
+                              },
+                              "params": {
+                                "type": "object",
+                                "description": "Settings for switches this action turns on, by switch id, as {\"seismic-waves\": {\"quake\": \"tohoku2011\"}}. Each layer's are in its definition (`params`); a setting left out stays as it is.",
+                                "minProperties": 1,
+                                "additionalProperties": {
+                                  "type": "object",
+                                  "minProperties": 1,
+                                  "additionalProperties": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  }
+                                }
                               },
                               "at": {
                                 "type": "number",

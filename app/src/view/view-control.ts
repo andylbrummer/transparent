@@ -8,6 +8,8 @@
 import * as THREE from 'three';
 import { MAX_FOV_DEG, MIN_FOV_DEG, type LookController, type LookState } from '../input/look';
 import type { LayerManager } from '../layers/manager';
+import { paramProblems } from '../layers/params';
+import type { LayerParamValues } from '../layers/types';
 import { SKY_RADIUS_M } from '../layers/types';
 import type { LabelGroup, LabelGroupSpec, LabelStyle } from '../render/labels';
 import type { DeviceAttitude, SurfacePosition } from '../sensors';
@@ -26,7 +28,7 @@ export interface ViewControlDeps {
   /** Switches are flipped through the panel, so its rows, the save and the scene stay in step. */
   readonly layersPanel: Pick<LayersPanel, 'applyPreset' | 'setLayer' | 'showOnly' | 'borrow'>;
   /** The lazy layers: a switch-on is not done until its layer has loaded. */
-  readonly lazyLayers: Pick<LayerManager, 'preload'>;
+  readonly lazyLayers: Pick<LayerManager, 'preload' | 'setParams'>;
   /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
   readonly camera: THREE.Camera;
   /** Where the view stands; null until there is a position. */
@@ -222,8 +224,13 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         if (unknown.length > 0) return { ok: false, code: 'unknown-layer', message: `no layer switch ${unknown.join(', ')}` };
         const both = [...new Set(on.filter((id) => off.includes(id)))];
         if (both.length > 0) return { ok: false, code: 'bad-value', message: `layers turns ${both.join(', ')} both on and off` };
+        const badParams = paramsProblem(action.params, on);
+        if (badParams) return badParams;
         // Off before on, as applyPreset does: an exclusive group never has two on.
         for (const id of off) deps.layersPanel.setLayer(id, false);
+        // Settings before the switch, so a layer already loaded never shows a frame as it was.
+        const setting = giveParams(action.params);
+        if (setting) return setting;
         for (const id of on) deps.layersPanel.setLayer(id, true);
         return lazyLayersLoaded([...new Set(on)].map((id) => switchesById.get(id)!));
       }
@@ -284,6 +291,10 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     // Check everything before changing anything, so a mistake leaves the user where they were.
     const switches = switchesOn(view.layers);
     if (!switches.ok) return switches;
+    // Only the settings of the layers that will be on: one switched off since keeps them, unused, as a layer does.
+    const params = view.params && Object.fromEntries(Object.entries(view.params).filter(([id]) => switches.on.includes(id)));
+    const badParams = paramsProblem(params, switches.on);
+    if (badParams) return badParams;
     const badFov = fovOutOfRange(look.fovDeg);
     if (badFov) return badFov;
     if (viewTargets(view).some(needsBodyPositions)) {
@@ -300,6 +311,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       placed.push({ target: mark.target, text: mark.text, direction: found.direction });
     }
 
+    const setting = giveParams(params);
+    if (setting) return setting;
     deps.layersPanel.showOnly(switches.on);
     endEase({ ok: true });
     const posed = aimMode() === 'pose';
@@ -326,6 +339,39 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     const bodies = viewTargets(view).some(needsBodyPositions) ? bodiesLoaded() : Promise.resolve<ActionOutcome>({ ok: true });
     const [layers, positions] = await Promise.all([lazyLayersLoaded(switches.on.map((id) => switchesById.get(id)!)), bodies]);
     return layers.ok ? positions : layers;
+  }
+
+  /**
+   * Why `params` cannot be given, or null: a setting goes to a layer this action turns on (`on`), with its switch
+   * named, and is one that layer takes (layers/params.ts, the words the guide validator uses too).
+   */
+  function paramsProblem(params: Readonly<Record<string, LayerParamValues>> | undefined, on: readonly string[]): ActionOutcome | null {
+    if (!params) return null;
+    const problems: string[] = [];
+    for (const [id, values] of Object.entries(params)) {
+      const layer = switchesById.get(id);
+      if (!layer) problems.push(`no layer switch ${id}`);
+      else if (!on.includes(id)) problems.push(`settings for ${id}, which this action does not turn on`);
+      else problems.push(...paramProblems(id, layer.params, values));
+    }
+    if (problems.length === 0) return null;
+    return { ok: false, code: problems[0].startsWith('no layer switch') ? 'unknown-layer' : 'bad-value', message: problems.join('; ') };
+  }
+
+  /** Hand checked settings to their layers; a value the layer itself refuses comes back as an outcome. */
+  function giveParams(params: Readonly<Record<string, LayerParamValues>> | undefined): ActionOutcome | null {
+    if (!params) return null;
+    for (const [id, values] of Object.entries(params)) {
+      const { target } = switchesById.get(id)!;
+      // A switch with params is a lazy layer's: switchesWithLazyLayers gives them only there.
+      if (!('lazy' in target)) return { ok: false, code: 'bad-value', message: `${id} takes no settings` };
+      try {
+        deps.lazyLayers.setParams(target.lazy, values);
+      } catch (error) {
+        return { ok: false, code: 'bad-value', message: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return null;
   }
 
   /** The targets a folded view locates: its look's and its marks'. */

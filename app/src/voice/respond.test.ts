@@ -41,7 +41,7 @@ function app(
           return { end: () => done.push('end borrow') };
         },
       },
-      lazyLayers: state.lazyLayers ?? { preload: () => Promise.resolve() },
+      lazyLayers: { setParams: () => {}, ...(state.lazyLayers ?? { preload: () => Promise.resolve() }) },
       camera: new THREE.PerspectiveCamera(),
       getPosition: () => null,
       now: () => new Date(0),
