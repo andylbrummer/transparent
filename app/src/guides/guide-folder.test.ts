@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { guidesProblems, type GuidesProblem } from '../../scripts/guide-folder';
+import { guidesProblems, mediaProblems, type GuidesProblem } from '../../scripts/guide-folder';
 import { APP_WORLD } from './app-world.testdata';
 import { EXAMPLE_GUIDE } from './example-guide.testdata';
 import { readFixture, withDuration, withObjectType } from './m4a.testdata';
@@ -344,3 +344,71 @@ function parseMessage(text: string): string {
   }
   throw new Error(`${text} is JSON`);
 }
+
+describe('mediaProblems', () => {
+  const CREDIT = { what: 'Diagram', source: 'USGS', licence: 'public domain', url: 'https://www.usgs.gov/' };
+  const IMAGE = { kind: 'image', src: 'images/prem.webp', alt: 'The layers of the Earth', caption: 'Seismic waves bend at each boundary.', credit: CREDIT };
+  const AUDIO = { kind: 'audio', src: 'audio/prem.m4a', captions: 'audio/prem.vtt', credit: CREDIT };
+  const media = (): Record<string, unknown> => ({
+    formatVersion: 1,
+    language: 'en',
+    hotspots: [
+      { id: 'prem', title: 'How we know', anchor: { kind: 'horizon', azDeg: 0, altDeg: -90 }, clip: IMAGE },
+      { id: 'waves', title: 'Listen', anchor: { kind: 'horizon', azDeg: 90, altDeg: 0 }, layer: 'shell-core', clip: AUDIO },
+    ],
+  });
+  const dir = (...parts: string[]): string => at('media', ...parts);
+  const writeMedia = (value: unknown): void => writeFileSync(dir('hotspots.json'), JSON.stringify(value));
+  const found = (): GuidesProblem[] => mediaProblems(dir(), APP_WORLD);
+
+  /** A media folder with an image hotspot and an audio one on a switch, their files written. */
+  beforeEach(() => {
+    mkdirSync(dir('images'), { recursive: true });
+    mkdirSync(dir('audio'));
+    writeMedia(media());
+    writeFileSync(dir(IMAGE.src), new Uint8Array(readFileSync('src/guides/fixtures/pic-lossy.webp')));
+    writeFileSync(dir(AUDIO.src), narration());
+    writeFileSync(dir(AUDIO.captions), CAPTIONS);
+  });
+
+  it('finds nothing wrong with a good folder', () => {
+    expect(found()).toEqual([]);
+  });
+
+  it.each<[string, () => void, GuidesProblem]>([
+    ['no list', () => rmSync(dir('hotspots.json')), { file: 'hotspots.json', path: '', reason: 'no hotspots.json' }],
+    ['a list that is not JSON', () => writeFileSync(dir('hotspots.json'), '{'), { file: 'hotspots.json', path: '', reason: expect.stringMatching(/^hotspots.json is not JSON/) as string }],
+    ['a list of another format', () => writeMedia({ ...media(), formatVersion: 2 }), { file: 'hotspots.json', path: '/formatVersion', reason: 'must be equal to constant: 1' }],
+    [
+      'a hotspot on a switch the app does not have',
+      () => writeMedia({ ...media(), hotspots: [(media().hotspots as object[])[0], { ...(media().hotspots as object[])[1], layer: 'no-such-layer' }] }),
+      { file: 'hotspots.json', path: '/hotspots/1/layer', reason: 'no layer switch no-such-layer' },
+    ],
+    [
+      'a hotspot id used twice',
+      () => writeMedia({ ...media(), hotspots: [(media().hotspots as object[])[0], { ...(media().hotspots as object[])[1], id: 'prem' }] }),
+      { file: 'hotspots.json', path: '/hotspots/1/id', reason: 'hotspot id prem is used twice' },
+    ],
+    ['an image clip with no file', () => rmSync(dir(IMAGE.src)), { file: 'hotspots.json', path: '/hotspots/0/clip/src', reason: 'no file images/prem.webp' }],
+    ['an audio clip with no captions', () => rmSync(dir(AUDIO.captions)), { file: 'hotspots.json', path: '/hotspots/1/clip/captions', reason: 'no file audio/prem.vtt' }],
+    [
+      'an image that is not one',
+      () => writeFileSync(dir(IMAGE.src), 'not a picture'),
+      { file: IMAGE.src, path: '', reason: `${IMAGE.src} is not an image the app can show: not a JPEG or WebP file` },
+    ],
+    ['a file no clip uses', () => writeFileSync(dir('images', 'spare.webp'), 'x'), { file: 'images/spare.webp', path: '', reason: 'images/spare.webp is not used by hotspots.json' }],
+    [
+      'an image over budget',
+      () => (writeFileSync(dir(IMAGE.src), new Uint8Array(readFileSync('src/guides/fixtures/pic-lossy.webp'))), truncateSync(dir(IMAGE.src), 2 * MIB)),
+      { file: IMAGE.src, path: '', reason: `${IMAGE.src} is 2.0 MiB, over the 1 MiB an image may be` },
+    ],
+  ])('reports %s', (_, change, problem) => {
+    change();
+    expect(found()).toContainEqual(problem);
+  });
+
+  it('reports a link and does not follow it', () => {
+    symlinkSync('/etc/passwd', dir('images', 'linked.webp'));
+    expect(found()).toEqual([{ file: 'images/linked.webp', path: '', reason: 'images/linked.webp is a link' }]);
+  });
+});

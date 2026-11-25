@@ -199,6 +199,9 @@ const CHAPTER = {
   additionalProperties: false,
 } as const;
 
+/** BCP 47: a guide's language, and the media layer's. */
+const LANGUAGE = { type: 'string', pattern: '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$', description: 'BCP 47, as "en" or "pt-BR".' } as const;
+
 /** The guide file format (spec/guides.md §3). Written here once: the types in format.ts and guide.schema.json both come from it. */
 export const GUIDE_SCHEMA = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -210,7 +213,7 @@ export const GUIDE_SCHEMA = {
     id: { ...ID, description: "The guide's folder name and its deep link: ?guide=<id>." },
     title: TEXT,
     summary: TEXT,
-    language: { type: 'string', pattern: '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$', description: 'BCP 47, as "en" or "pt-BR".' },
+    language: LANGUAGE,
     topics: {
       type: 'array',
       items: { enum: ['geology', 'solar-system', 'stars', 'deep-space', 'sun', 'weather', 'near-space'] },
@@ -223,6 +226,23 @@ export const GUIDE_SCHEMA = {
     chapters: { type: 'array', items: CHAPTER, minItems: 1 },
   },
   required: ['formatVersion', 'id', 'title', 'summary', 'language', 'topics', 'authors', 'licence', 'credits', 'chapters'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * public/media/hotspots.json, the "Stories and clips" layer's hotspots (spec/guides.md §8.1): the same hotspots as a
+ * guide step's, with their files beside the list. Read only by the app and the validator, so it has no schema file.
+ */
+export const MEDIA_HOTSPOTS_SCHEMA = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  title: 'Transparent Earth hotspots',
+  type: 'object',
+  properties: {
+    formatVersion: { const: GUIDE_FORMAT_VERSION },
+    language: { ...LANGUAGE, description: "The language of the clips' captions and text." },
+    hotspots: { type: 'array', items: HOTSPOT_SCHEMA, minItems: 1 },
+  },
+  required: ['formatVersion', 'language', 'hotspots'],
   additionalProperties: false,
 } as const;
 

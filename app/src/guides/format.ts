@@ -10,7 +10,7 @@
 import type { FoldedView, Place, TimeSetting } from '../view/actions';
 import type { SchemaType } from '../view/action-schema';
 import { foldAction } from '../view/fold';
-import type { GUIDE_SCHEMA } from './guide-schema';
+import type { GUIDE_SCHEMA, MEDIA_HOTSPOTS_SCHEMA } from './guide-schema';
 
 /** The guide format this app plays. A guide says which it was written for. */
 export const GUIDE_FORMAT_VERSION = 1;
@@ -31,6 +31,8 @@ export type Cue = Step['cues'][number];
 /** A clip hung on something in the view (spec/guides.md §8.1), in a step or in the "Stories and clips" layer. */
 export type Hotspot = NonNullable<Step['hotspots']>[number];
 export type Clip = Hotspot['clip'];
+/** The media layer's file of hotspots, public/media/hotspots.json. */
+export type MediaHotspots = SchemaType<typeof MEDIA_HOTSPOTS_SCHEMA>;
 
 /** The view at a chapter's start: its scene, whole. */
 export function sceneView(scene: Scene): FoldedView {

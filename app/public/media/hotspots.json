@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "language": "en",
+  "hotspots": [
+    {
+      "id": "earthquake-wave-paths",
+      "title": "How we know: earthquake waves",
+      "anchor": { "kind": "horizon", "azDeg": 0, "altDeg": -70 },
+      "clip": {
+        "kind": "image",
+        "src": "images/earthquake-wave-paths.webp",
+        "alt": "A cross-section of the Earth: crust, upper and lower mantle, outer and inner core, with the curving paths of P and S waves from one earthquake, some bouncing off the surface and some crossing the core as K waves.",
+        "caption": "Waves from one earthquake bend at each layer. S waves cannot cross the liquid outer core, and that shadow is how we know it is liquid.",
+        "credit": {
+          "what": "Diagram of earthquake wave paths through the Earth",
+          "source": "U.S. Geological Survey, The Interior of the Earth (E. C. Robertson, 1966), figure 2; redrawn as SVG by SEWilco, Wikimedia Commons",
+          "licence": "public domain",
+          "url": "https://pubs.usgs.gov/gip/interior/"
+        }
+      }
+    }
+  ]
+}

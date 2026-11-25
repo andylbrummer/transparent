@@ -9,6 +9,7 @@
  */
 
 import type * as THREE from 'three';
+import type { HotspotSource } from '../guides/hotspot-field';
 import type { GlobeRenderer } from '../render/globe';
 import type { LabelGroup, LabelGroupSpec } from '../render/labels';
 import type { SurfacePosition } from '../sensors';
@@ -79,6 +80,13 @@ export interface SkyUniforms {
   readonly uPixelRatio: { value: number };
 }
 
+/** Hotspots a layer handed to the app's hotspot field (spec/guides.md §8.1). */
+export interface HotspotGroup {
+  /** Their markers shown or taken down; they start down. */
+  setVisible(visible: boolean): void;
+  remove(): void;
+}
+
 export interface LayerContext {
   readonly renderer: THREE.WebGLRenderer;
   /** Earth-fixed: ECEF metres, origin at the Earth's centre. */
@@ -103,6 +111,8 @@ export interface LayerContext {
   now(): Date;
   getPosition(): SurfacePosition | null;
   addLabels(spec: LabelGroupSpec): LabelGroup;
+  /** Hand hotspots to the one field a guide's hotspots share, so they open the same way. */
+  addHotspots(source: HotspotSource): HotspotGroup;
   /** Chip beside the layer's switch: null clears it. */
   setStatus(text: string | null, tone?: StatusTone): void;
 }

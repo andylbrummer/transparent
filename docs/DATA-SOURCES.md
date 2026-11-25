@@ -345,6 +345,12 @@ files and can be removed without touching other layers.
 | Gamma rays (Fermi) (`map-gamma-fermi`) | off | Fermi-LAT all-sky intensity maps, 1-3 and 3-300 GeV | [Fermi LAT instrument team, NASA Goddard Space Flight Center, resampled by NASA SkyView](https://skyview.gsfc.nasa.gov/current/cgi/survey.pl) | public domain (NASA) |
 | Galaxy density (2MASS) (`map-galaxies-2mass`) | off | 2MASS Extended Source Catalog | [Jarrett T.H. et al. 2000, AJ 119, 2498; Skrutskie M.F. et al. 2006, AJ 131, 1163. The Two Micron All Sky Survey is a joint project of the University of Massachusetts and IPAC/Caltech, funded by NASA and the NSF. From the NASA/IPAC Infrared Science Archive](https://irsa.ipac.caltech.edu/Missions/2mass.html) | public, acknowledgement requested |
 
+## Labels
+
+| Layer | Default | What | Source | Licence |
+| --- | --- | --- | --- | --- |
+| Stories and clips (`media-hotspots`) | off | Diagram of earthquake wave paths through the Earth | [U.S. Geological Survey, The Interior of the Earth (E. C. Robertson, 1966), figure 2; redrawn as SVG by SEWilco, Wikimedia Commons](https://pubs.usgs.gov/gip/interior/) | public domain |
+
 ## Guides
 
 | Guide | Licence | What | Source | Licence |

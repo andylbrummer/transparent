@@ -406,6 +406,8 @@ export function init(): App | null {
         buildCheck = null;
       });
   }
+  /** How many layers have handed hotspots to the field, each under its own key. */
+  let hotspotGroups = 0;
   const lazyLayers = new LayerManager(
     LAYER_DEFINITIONS,
     {
@@ -424,12 +426,18 @@ export function init(): App | null {
       now: () => clock.now(),
       getPosition: () => standing.position(),
       addLabels: (spec) => labels.addGroup(spec),
+      // Called only once a layer loads, after the field below is made.
+      addHotspots: (source) => {
+        const key = `layer-${++hotspotGroups}`;
+        return { setVisible: (visible) => hotspotField.set(key, visible ? source : null), remove: () => hotspotField.set(key, null) };
+      },
     },
     (id, text, tone) => layersPanel.setStatus(id, text, tone),
     checkBuildAfterLoadFailure
   );
   // Hotspots and their clips (spec/guides.md §8): the field draws the markers and says which one is meant, the
-  // player plays it. Before the view control, whose `clip` action reaches them; the field finds its anchors through it. A guide's step and the "Stories and clips" layer both hand their hotspots to the field.
+  // player plays it. A guide's step and the "Stories and clips" layer both hand their hotspots to the field. Made
+  // before the view control, whose `clip` action reaches them; the field finds its anchors through it.
   const clipScenePanel = new ClipScenePanelMesh(scene);
   const clipPlayer = createClipPlayer({
     parent: container,

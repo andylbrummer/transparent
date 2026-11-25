@@ -16,12 +16,12 @@
 
 import { lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';
 import { join } from 'node:path';
-import Ajv2020, { type ErrorObject } from 'ajv/dist/2020';
-import type { Clip, Guide } from '../src/guides/format';
-import { GUIDE_SCHEMA } from '../src/guides/guide-schema';
+import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
+import type { Clip, Guide, MediaHotspots } from '../src/guides/format';
+import { GUIDE_SCHEMA, MEDIA_HOTSPOTS_SCHEMA } from '../src/guides/guide-schema';
 import { readImageInfo, type ImageInfo } from '../src/guides/image-info';
 import { readM4aInfo, type M4aInfo } from '../src/guides/m4a-info';
-import { guideProblems, type GuideWorld } from '../src/guides/validate';
+import { guideProblems, hotspotsProblems, type GuideWorld } from '../src/guides/validate';
 import { parseVtt, type CaptionCue } from '../src/guides/vtt';
 
 /** Something wrong under the guides folder: which file, where in it, and why. */
@@ -58,7 +58,9 @@ const IMAGE_EXTENSION = /\.(webp|jpg)$/;
 /** The files in the guides folder that are not guides. */
 const ROOT_FILES = ['index.json', 'guide.schema.json'];
 
-const isGuide = new Ajv2020().compile<Guide>(GUIDE_SCHEMA);
+const ajv = new Ajv2020();
+const isGuide = ajv.compile<Guide>(GUIDE_SCHEMA);
+const isMediaHotspots = ajv.compile<MediaHotspots>(MEDIA_HOTSPOTS_SCHEMA);
 /** A guide id, as the schema has it: a folder name and nothing else. */
 const GUIDE_ID = new RegExp(GUIDE_SCHEMA.properties.id.pattern);
 
@@ -92,6 +94,33 @@ export function guidesProblems(root: string, world: GuideWorld): GuidesProblem[]
 }
 
 type Report = (file: string, path: string, reason: string) => void;
+
+/** The media layer's file in its folder, public/media. */
+const MEDIA_FILE = 'hotspots.json';
+
+/**
+ * Everything wrong with the media folder under `root` (public/media): hotspots.json passes its schema and the hotspot
+ * rules a guide's step does, and the folder holds the files its clips use, held to a guide's budgets, and no others.
+ * Problems name files from `root`.
+ */
+export function mediaProblems(root: string, world: GuideWorld): GuidesProblem[] {
+  const problems: GuidesProblem[] = [];
+  const problem: Report = (file, path, reason) => void problems.push({ file, path, reason });
+  const files = filesIn(root);
+  for (const file of files) if (file.link) problem(file.path, '', `${file.path} is a link`);
+  const media = readValid(root, MEDIA_FILE, MEDIA_FILE, isMediaHotspots, problem);
+  if (media !== undefined) {
+    for (const found of hotspotsProblems(media.hotspots, world)) problem(MEDIA_FILE, found.path, found.reason);
+    const used = new Set<string>([MEDIA_FILE]);
+    const clips: ClipFiles = { dir: root, folder: '', file: MEDIA_FILE, used, lengths: new Map(), captioned: new Set(), problem };
+    media.hotspots.forEach((hotspot, h) => checkClip(clips, `/hotspots/${h}/clip`, hotspot.clip));
+    for (const file of files) if (!file.link && !used.has(file.path)) problem(file.path, '', `${file.path} is not used by ${MEDIA_FILE}`);
+  }
+  checkFileBudgets('', files, problem);
+  const bytes = files.reduce((sum, file) => sum + file.bytes, 0);
+  if (bytes > GUIDE_FOLDER_MAX_BYTES) problem('', '', `the folder is ${mib(bytes)} MiB, over the 20 MiB a guide may be`);
+  return problems;
+}
 
 /** The guide ids index.json lists, in order; undefined when it is not a list of them. */
 function readIndex(root: string, problem: Report): string[] | undefined {
@@ -178,10 +207,10 @@ function checkGuide(root: string, folder: string, world: GuideWorld, problem: Re
 function checkFileBudgets(folder: string, files: readonly FolderFile[], problem: Report): void {
   for (const file of files) {
     if (file.path.endsWith('.m4a') && file.bytes > NARRATION_MAX_BYTES) {
-      problem(`${folder}/${file.path}`, '', `${file.path} is ${mib(file.bytes)} MiB, over the 5 MiB a narration file may be`);
+      problem(inFolder(folder, file.path), '', `${file.path} is ${mib(file.bytes)} MiB, over the 5 MiB a narration file may be`);
     }
     if (IMAGE_EXTENSION.test(file.path) && file.bytes > IMAGE_MAX_BYTES) {
-      problem(`${folder}/${file.path}`, '', `${file.path} is ${mib(file.bytes)} MiB, over the 1 MiB an image may be`);
+      problem(inFolder(folder, file.path), '', `${file.path} is ${mib(file.bytes)} MiB, over the 1 MiB an image may be`);
     }
   }
 }
@@ -226,7 +255,7 @@ function checkClip(files: ClipFiles, path: string, clip: Clip): void {
 
 /** An image read from its header, held to its extension and to the size a phone shows without waste. */
 function checkImage(dir: string, folder: string, path: string, problem: Report): void {
-  const file = `${folder}/${path}`;
+  const file = inFolder(folder, path);
   let info: ImageInfo;
   try {
     info = readImageInfo(readFileSync(join(dir, path)));
@@ -244,7 +273,7 @@ function checkImage(dir: string, folder: string, path: string, problem: Report):
 
 /** A narration file's length from its header, each way its format is wrong a problem; undefined if it has no header. */
 function narrationLength(dir: string, folder: string, path: string, problem: Report): number | undefined {
-  const file = `${folder}/${path}`;
+  const file = inFolder(folder, path);
   const bytes = readFileSync(join(dir, path));
   let info: M4aInfo;
   try {
@@ -264,7 +293,7 @@ function narrationLength(dir: string, folder: string, path: string, problem: Rep
 
 /** A captions file read with the app's reader and held to its narration, `lengthS` when that is known; each way it fails a problem. */
 function checkCaptions(dir: string, folder: string, path: string, lengthS: number | undefined, problem: Report): void {
-  const file = `${folder}/${path}`;
+  const file = inFolder(folder, path);
   const text = readFileSync(join(dir, path), 'utf8');
   let cues: CaptionCue[];
   try {
@@ -301,21 +330,26 @@ function checkCaptions(dir: string, folder: string, path: string, lengthS: numbe
 
 /** guide.json, if it is there, is JSON and passes the schema; each way it fails is a problem. */
 function readGuide(dir: string, guideFile: string, problem: Report): Guide | undefined {
-  const path = join(dir, 'guide.json');
+  return readValid(dir, 'guide.json', guideFile, isGuide, problem);
+}
+
+/** The JSON file `name` in `dir`, if it is there, is JSON and passes `isValid`; each way it fails is a problem of `file`. */
+function readValid<T>(dir: string, name: string, file: string, isValid: ValidateFunction<T>, problem: Report): T | undefined {
+  const path = join(dir, name);
   if (!statOf(path)?.isFile()) {
-    problem(guideFile, '', 'no guide.json');
+    problem(file, '', `no ${name}`);
     return undefined;
   }
-  let guide: unknown;
+  let value: unknown;
   try {
-    guide = JSON.parse(readFileSync(path, 'utf8'));
+    value = JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
-    problem(guideFile, '', `guide.json is not JSON: ${error.message}`);
+    problem(file, '', `${name} is not JSON: ${error.message}`);
     return undefined;
   }
-  if (isGuide(guide)) return guide;
-  for (const error of isGuide.errors ?? []) problem(guideFile, error.instancePath, schemaReason(error));
+  if (isValid(value)) return value;
+  for (const error of isValid.errors ?? []) problem(file, error.instancePath, schemaReason(error));
   return undefined;
 }
 
@@ -354,3 +388,5 @@ function statOf(path: string): Stats | undefined {
 }
 
 const mib = (bytes: number): string => (bytes / (1024 * 1024)).toFixed(1);
+/** A file's name in problems: from the guides folder, or bare in the media folder, whose files are named from it. */
+const inFolder = (folder: string, path: string): string => (folder === '' ? path : `${folder}/${path}`);
