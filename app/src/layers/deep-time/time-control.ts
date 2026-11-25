@@ -459,6 +459,11 @@ export class TimeControl {
     this.renderPlayButton();
   }
 
+  /** Play or pause as asked, from wherever the control stands: a guide's or a link's setting, not a press. */
+  setPlaying(playing: boolean): void {
+    if (playing !== this.playing) this.togglePlay();
+  }
+
   pause(): void {
     if (!this.playing) return;
     this.playing = false;

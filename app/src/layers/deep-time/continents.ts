@@ -22,7 +22,7 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { LABEL_KIND_ORDER, type LabelGroup } from '../../render/labels';
 import { RENDER_ORDER } from '../../render/order';
-import type { FrameState, LayerContext, LayerInstance } from '../types';
+import type { FrameState, LayerContext, LayerInstance, LayerParamValues } from '../types';
 import { ALWAYS, PlateShapes } from './plate-shapes';
 import {
   crustAt,
@@ -247,8 +247,16 @@ export async function createContinentsLayer(context: LayerContext): Promise<Laye
       swatch: (value) => (value <= 0 ? null : (unitAt(scale, 'period', value)?.color ?? null)),
       trackBackground: periodGradient(scale, maxMa),
     },
-    ageFromLocation(window.location.search, maxMa)
+    0
   );
+  // The address is one caller of setParams; a guide's cue is another, after it.
+  setParams({ ma: ageFromLocation(window.location.search, maxMa) });
+
+  /** The layer's settings (layer.ts CONTINENTS_PARAMS), checked already; one left out stays as it is. The age before play, which starts from it. */
+  function setParams(values: LayerParamValues): void {
+    if (typeof values.ma === 'number') control.setValue(Math.min(maxMa, values.ma));
+    if (typeof values.playing === 'boolean') control.setPlaying(values.playing);
+  }
 
   let visible = false;
   let age = Number.NaN;
@@ -314,6 +322,7 @@ export async function createContinentsLayer(context: LayerContext): Promise<Laye
   control.onChange(() => apply(false));
 
   return {
+    setParams,
     setVisible(on) {
       visible = on;
       shapes.group.visible = on;

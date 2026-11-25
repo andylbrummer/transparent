@@ -4,6 +4,8 @@ import { ageFromLocation, formatMa } from './continents';
 import { crustAt, parsePlateFile, reconstructPoint } from './plates-data';
 import { describeAge, type TimeScale } from './timescale';
 import { advancePlay, snapValue } from './time-control';
+import { paramProblems } from '../params';
+import definitions, { CONTINENTS_PARAMS } from './layer';
 
 /** The baked files themselves: what the layer will read. */
 const file = readFileSync('public/geo/deep-time/plates.bin');
@@ -80,5 +82,14 @@ describe('the time control’s arithmetic and wording', () => {
     expect(snapValue(103, 5, 1000) % 5).toBe(0);
     expect(snapValue(2000, 5, 1000)).toBe(1000);
     expect(advancePlay(10, 1000, 20)).not.toBe(10);
+  });
+});
+
+describe('the settings', () => {
+  it('reach back as far as the model, and are the definition\'s', () => {
+    expect(CONTINENTS_PARAMS.ma.maximum).toBe(model.header.maxAgeMa);
+    expect(definitions[0].params).toBe(CONTINENTS_PARAMS);
+    expect(paramProblems('continents-through-time', CONTINENTS_PARAMS, { ma: 250, playing: true })).toEqual([]);
+    expect(paramProblems('continents-through-time', CONTINENTS_PARAMS, { ma: 1001 })).toEqual(['continents-through-time ma is from 0 to 1000']);
   });
 });

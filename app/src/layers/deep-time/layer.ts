@@ -1,4 +1,4 @@
-import type { Credit, LayerDefinition } from '../types';
+import type { Credit, LayerDefinition, LayerParams } from '../types';
 
 const PLATE_MODEL: Credit = {
   what: 'Plate reconstruction, 1,000 Ma to today: rotations, coastlines and continental blocks (a model)',
@@ -16,6 +16,12 @@ const TIME_SCALE: Credit = {
   url: 'https://stratigraphy.org/chart',
 };
 
+/** What a guide or a link may set (continents.ts setParams). The age reaches as far back as the model: a test holds it to plates.bin. */
+export const CONTINENTS_PARAMS = {
+  ma: { type: 'number', description: 'Millions of years ago; 0 is today.', minimum: 0, maximum: 1000 },
+  playing: { type: 'boolean', description: 'Play toward the present, or pause. Played from today, it starts at 250 Ma.' },
+} as const satisfies LayerParams;
+
 const continents: LayerDefinition = {
   id: 'continents-through-time',
   label: 'Continents through time',
@@ -25,6 +31,7 @@ const continents: LayerDefinition = {
   caption:
     'Where a plate model puts the coasts and continental blocks, today back to 1,000 Ma · Merdith et al. (2021), palaeomagnetic frame: latitudes are real, longitudes the model’s choice · a model, not a measurement · deep time only: the sky and clock stay at now',
   credits: [PLATE_MODEL, TIME_SCALE],
+  params: CONTINENTS_PARAMS,
   load: async (context) => (await import('./continents')).createContinentsLayer(context),
 };
 
