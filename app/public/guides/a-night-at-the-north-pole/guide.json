@@ -1,0 +1,227 @@
+{
+  "$schema": "../guide.schema.json",
+  "formatVersion": 1,
+  "id": "a-night-at-the-north-pole",
+  "title": "A night at the North Pole",
+  "summary": "Stand at the pole on the longest night, and watch the stars circle without setting. About a minute and a half.",
+  "language": "en",
+  "topics": [
+    "stars",
+    "solar-system"
+  ],
+  "authors": [
+    {
+      "name": "Transparent Earth contributors",
+      "url": "https://github.com/andylbrummer/transparent"
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credits": [
+    {
+      "what": "Script",
+      "source": "Transparent Earth contributors",
+      "licence": "CC BY 4.0",
+      "url": "https://github.com/andylbrummer/transparent/blob/main/tools/guides/scripts/a-night-at-the-north-pole.md"
+    },
+    {
+      "what": "Narration, synthesized with Piper from the script (voice en_US-ljspeech-high, by Bryce Beattie)",
+      "source": "Rhasspy Piper voices, trained on the LJ Speech Dataset (public domain)",
+      "licence": "MIT (voice model); recording CC BY 4.0",
+      "url": "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/high"
+    },
+    {
+      "what": "Position of Polaris quoted (Hipparcos main catalogue)",
+      "source": "ESA (1997), The Hipparcos and Tycho Catalogues, ESA SP-1200; CDS I/239",
+      "licence": "facts from the literature",
+      "url": "https://cdsarc.cds.unistra.fr/viz-bin/cat/I/239"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "the-longest-night",
+      "title": "The longest night",
+      "scene": {
+        "layers": [
+          "globe-surface",
+          "stars",
+          "constellations",
+          "milky-way",
+          "planets",
+          "sun",
+          "moon"
+        ],
+        "place": {
+          "kind": "at",
+          "lat": 90,
+          "lon": 0,
+          "name": "North Pole"
+        },
+        "time": {
+          "to": "2025-12-21T12:00:00Z",
+          "rate": 0
+        },
+        "look": {
+          "target": {
+            "kind": "horizon",
+            "azDeg": 180,
+            "altDeg": 15
+          },
+          "fovDeg": 80
+        }
+      },
+      "steps": [
+        {
+          "id": "the-pole",
+          "narration": {
+            "audio": "audio/01-the-pole.m4a",
+            "captions": "audio/01-the-pole.vtt"
+          },
+          "cues": [],
+          "advance": "auto"
+        },
+        {
+          "id": "polaris",
+          "narration": {
+            "audio": "audio/02-polaris.m4a",
+            "captions": "audio/02-polaris.vtt"
+          },
+          "cues": [
+            {
+              "at": 0.3,
+              "do": "look",
+              "target": {
+                "kind": "sky",
+                "raDeg": 37.979,
+                "decDeg": 89.264,
+                "name": "Polaris"
+              },
+              "fovDeg": 60
+            },
+            {
+              "at": 1.67,
+              "do": "mark",
+              "target": {
+                "kind": "sky",
+                "raDeg": 37.979,
+                "decDeg": 89.264,
+                "name": "Polaris"
+              },
+              "text": "Polaris"
+            }
+          ],
+          "advance": "gaze"
+        },
+        {
+          "id": "circling",
+          "narration": {
+            "audio": "audio/03-circling.m4a",
+            "captions": "audio/03-circling.vtt"
+          },
+          "cues": [
+            {
+              "at": 0,
+              "do": "mark",
+              "target": {
+                "kind": "sky",
+                "raDeg": 37.979,
+                "decDeg": 89.264,
+                "name": "Polaris"
+              },
+              "text": null
+            },
+            {
+              "at": 0.3,
+              "do": "time",
+              "to": "2025-12-21T12:00:00Z",
+              "rate": 1200,
+              "until": "2025-12-21T18:00:00Z"
+            },
+            {
+              "at": 0.3,
+              "do": "look",
+              "target": {
+                "kind": "horizon",
+                "azDeg": 180,
+                "altDeg": 55
+              },
+              "fovDeg": 100
+            }
+          ],
+          "advance": "auto"
+        },
+        {
+          "id": "jupiter",
+          "narration": {
+            "audio": "audio/04-jupiter.m4a",
+            "captions": "audio/04-jupiter.vtt"
+          },
+          "cues": [
+            {
+              "at": 0.3,
+              "do": "look",
+              "target": {
+                "kind": "body",
+                "body": "jupiter"
+              },
+              "fovDeg": 60
+            },
+            {
+              "at": 0.3,
+              "do": "mark",
+              "target": {
+                "kind": "body",
+                "body": "jupiter"
+              },
+              "text": "Jupiter · 22° up"
+            }
+          ],
+          "advance": "gaze"
+        },
+        {
+          "id": "the-sun",
+          "narration": {
+            "audio": "audio/05-the-sun.m4a",
+            "captions": "audio/05-the-sun.vtt"
+          },
+          "cues": [
+            {
+              "at": 0,
+              "do": "mark",
+              "target": {
+                "kind": "body",
+                "body": "jupiter"
+              },
+              "text": null
+            },
+            {
+              "at": 0.3,
+              "do": "layers",
+              "on": [
+                "sky-below-horizon"
+              ]
+            },
+            {
+              "at": 0.3,
+              "do": "look",
+              "target": {
+                "kind": "body",
+                "body": "sun"
+              },
+              "fovDeg": 60
+            },
+            {
+              "at": 3.44,
+              "do": "mark",
+              "target": {
+                "kind": "body",
+                "body": "sun"
+              },
+              "text": "The Sun · 23.4° down"
+            }
+          ],
+          "advance": "auto"
+        }
+      ]
+    }
+  ]
+}

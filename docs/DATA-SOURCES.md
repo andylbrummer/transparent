@@ -352,6 +352,9 @@ files and can be removed without touching other layers.
 | Down through the Earth (`down-through-the-earth`) | CC BY 4.0 | Script | [Transparent Earth contributors](https://github.com/andylbrummer/transparent/blob/main/tools/guides/scripts/down-through-the-earth.md) | CC BY 4.0 |
 |  |  | Narration, synthesized with Piper from the script (voice en_US-ljspeech-high, by Bryce Beattie) | [Rhasspy Piper voices, trained on the LJ Speech Dataset (public domain)](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/high) | MIT (voice model); recording CC BY 4.0 |
 |  |  | Depths, pressures and densities quoted (Preliminary Reference Earth Model) | [Dziewonski, A.M. & Anderson, D.L. (1981), Phys. Earth Planet. Inter. 25, 297–356](https://doi.org/10.1016/0031-9201(81)90046-7) | facts from the literature |
+| A night at the North Pole (`a-night-at-the-north-pole`) | CC BY 4.0 | Script | [Transparent Earth contributors](https://github.com/andylbrummer/transparent/blob/main/tools/guides/scripts/a-night-at-the-north-pole.md) | CC BY 4.0 |
+|  |  | Narration, synthesized with Piper from the script (voice en_US-ljspeech-high, by Bryce Beattie) | [Rhasspy Piper voices, trained on the LJ Speech Dataset (public domain)](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/high) | MIT (voice model); recording CC BY 4.0 |
+|  |  | Position of Polaris quoted (Hipparcos main catalogue) | [ESA (1997), The Hipparcos and Tycho Catalogues, ESA SP-1200; CDS I/239](https://cdsarc.cds.unistra.fr/viz-bin/cat/I/239) | facts from the literature |
 
 ## Per-slice documents
 
