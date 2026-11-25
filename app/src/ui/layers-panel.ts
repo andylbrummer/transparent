@@ -48,6 +48,8 @@ export interface LayerSwitch {
   readonly params?: LayerParams;
   /** Its lazy layer can fade (LayerDefinition.fades). A shell always can: canFade. */
   readonly fades?: boolean;
+  /** Its layer shows today's data at any clock time: LayerDefinition.live. */
+  readonly live?: true;
 }
 
 /** Whether a `layers` action may fade the switch in or out: the globe's shells, and lazy layers that say they fade. */
@@ -192,6 +194,7 @@ export function switchesWithLazyLayers(definitions: readonly LayerDefinition[]):
       exclusiveGroup: d.exclusiveGroup,
       params: d.params,
       fades: d.fades,
+      live: d.live,
     })
   );
   const all = [...LAYER_SWITCHES, ...lazy];

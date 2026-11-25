@@ -21,6 +21,7 @@ const PRECIPITATION_LEGEND =
 const WEATHER_LAYERS: readonly LayerDefinition[] = [
   {
     id: 'earth-now',
+    live: true,
     label: 'Earth right now (GOES)',
     section: 'Weather',
     order: 5,
@@ -38,6 +39,7 @@ const WEATHER_LAYERS: readonly LayerDefinition[] = [
   },
   {
     id: 'clouds',
+    live: true,
     label: 'Clouds (infrared)',
     section: 'Weather',
     order: 10,
@@ -55,6 +57,7 @@ const WEATHER_LAYERS: readonly LayerDefinition[] = [
   },
   {
     id: 'precipitation',
+    live: true,
     label: 'Rain and snow',
     section: 'Weather',
     order: 20,
@@ -72,6 +75,7 @@ const WEATHER_LAYERS: readonly LayerDefinition[] = [
   },
   {
     id: 'wind-10m',
+    live: true,
     label: 'Wind at the surface (10 m)',
     section: 'Weather',
     order: 30,
@@ -83,6 +87,7 @@ const WEATHER_LAYERS: readonly LayerDefinition[] = [
   },
   {
     id: 'wind-250hpa',
+    live: true,
     label: 'Jet stream (250 hPa, ~10 km)',
     section: 'Weather',
     order: 31,
@@ -94,6 +99,7 @@ const WEATHER_LAYERS: readonly LayerDefinition[] = [
   },
   {
     id: 'air-temperature',
+    live: true,
     label: 'Air temperature (2 m)',
     section: 'Weather',
     order: 40,

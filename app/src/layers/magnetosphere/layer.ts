@@ -44,6 +44,7 @@ const layers: LayerDefinition[] = [
   },
   {
     id: 'magnetopause',
+    live: true,
     label: 'Magnetopause (model, live solar wind)',
     section: 'Near space',
     order: 41,
@@ -54,6 +55,7 @@ const layers: LayerDefinition[] = [
   },
   {
     id: 'aurora',
+    live: true,
     label: 'Aurora (live forecast)',
     section: 'Near space',
     order: 42,

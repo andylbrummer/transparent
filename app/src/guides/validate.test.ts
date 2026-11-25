@@ -18,6 +18,10 @@ const shared = [...world.labels.entries()].find(
   ([, places]) => places.length >= 2 && new Set(places.map((place) => place.kind)).size === places.length,
 );
 
+// A switch that shows today's data and is in no group, so turning it on breaks no other rule.
+const live = world.switches.find((layer) => layer.live === true && layer.exclusiveGroup === undefined)!.id;
+const QUAKE = '2011-03-11T05:46:24Z';
+
 /** The example guide as plain JSON, to change one thing in. */
 type Json = Record<string, unknown>;
 const copy = (): Json => JSON.parse(JSON.stringify(EXAMPLE_GUIDE)) as Json;
@@ -129,6 +133,33 @@ describe('guideProblems', () => {
       '/chapters/0/scene/time/until',
       'a clock standing still never reaches its until',
     ],
+    [
+      'a time cue that leaves the present with a live layer on',
+      (g) => {
+        (scene(g).layers as string[]).push(live);
+        cues(g, 1)[0] = { at: 0, do: 'time', to: QUAKE };
+      },
+      '/chapters/0/steps/1/cues/0',
+      `${live} shows today's data, and the clock is at ${QUAKE}`,
+    ],
+    [
+      'a live layer turned on while the clock is away',
+      (g) => {
+        cues(g, 0).push({ at: 7, do: 'time', to: 'now', rate: 60 });
+        cues(g, 1)[2] = { at: 3, do: 'layers', on: [live] };
+      },
+      '/chapters/0/steps/1/cues/2',
+      `${live} shows today's data, and the clock is at now at 60×`,
+    ],
+    [
+      'a scene away from the present with a live layer on',
+      (g) => {
+        (scene(g).layers as string[]).push(live);
+        scene(g).time = { to: QUAKE };
+      },
+      '/chapters/0/scene',
+      `${live} shows today's data, and the clock is at ${QUAKE}`,
+    ],
   ])('reports %s', (_, change, path, reason) => {
     const g = copy();
     change(g);
@@ -148,6 +179,23 @@ describe('guideProblems', () => {
     ],
     ['a slow time-lapse with no stop', (g) => (cues(g, 1)[0] = { at: 0, do: 'time', to: 'now', rate: -60 })],
     ['a fast one with a stop ahead', (g) => (cues(g, 1)[0] = { at: 0, do: 'time', to: '2011-03-11T05:46Z', rate: 3600, until: '2011-03-12T05:46Z' })],
+    ['a live layer on in the present', (g) => (scene(g).layers as string[]).push(live)],
+    [
+      'a live layer turned off before the clock goes away',
+      (g) => {
+        (scene(g).layers as string[]).push(live);
+        cues(g, 1)[0] = { at: 0, do: 'layers', off: [live] };
+        cues(g, 1)[1] = { at: 0, do: 'time', to: QUAKE };
+      },
+    ],
+    [
+      'a live layer on again once the clock is back',
+      (g) => {
+        cues(g, 0).push({ at: 7, do: 'time', to: QUAKE });
+        cues(g, 1)[0] = { at: 0, do: 'time', to: 'now' };
+        cues(g, 1)[2] = { at: 3, do: 'layers', on: [live] };
+      },
+    ],
   ])('allows %s', (_, change) => {
     const g = copy();
     change(g);
@@ -236,6 +284,13 @@ describe('guideProblems', () => {
         expect(isGuide(g)).toBe(false);
       }
     });
+  });
+
+  it('reports a live layer and a time away once, where they meet, not at every cue after', () => {
+    const g = copy();
+    (scene(g).layers as string[]).push(live);
+    cues(g, 0).push({ at: 7, do: 'time', to: QUAKE });
+    expect(problemsIn(g).map((p) => p.path)).toEqual(['/chapters/0/steps/0/cues/2']);
   });
 
   it('reports every problem, in the order of the file', () => {

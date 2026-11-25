@@ -166,6 +166,11 @@ export interface LayerDefinition {
   readonly defaultOn?: boolean;
   /** Switches sharing a group are exclusive: turning one on turns the rest off. */
   readonly exclusiveGroup?: string;
+  /**
+   * Shows the provider's newest data whatever the app clock says: today's clouds over a 2011 sky. A guide that takes
+   * the clock away from the present may not have it on (guides/validate.ts).
+   */
+  readonly live?: true;
   readonly credits: readonly Credit[];
   /** The settings a guide, a link or the voice may give it beside its own control; its instance then has setParams. */
   readonly params?: LayerParams;

@@ -3,6 +3,7 @@ import type { LayerDefinition } from '../types';
 
 const quakesRecent: LayerDefinition = {
   id: 'quakes-recent',
+  live: true,
   label: 'Recent earthquakes (live)',
   section: 'Inside the Earth',
   order: 10,

@@ -11,9 +11,10 @@ import type { LayerParamValues } from '../layers/types';
 import type { SurfacePosition } from '../sensors';
 import { canFade, type LayerSwitch } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
-import type { Target, TimeSetting } from '../view/actions';
+import type { FoldedView, Target, TimeSetting } from '../view/actions';
+import { foldAction } from '../view/fold';
 import { targetDirection, type LabelIndex } from '../view/targets';
-import type { Guide } from './format';
+import { sceneView, type Guide } from './format';
 
 /** Something wrong with a guide: where, as a JSON pointer into guide.json, and why. */
 export interface GuideProblem {
@@ -117,6 +118,31 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     }
   };
 
+  const presetsById = new Map(world.presets.map((preset) => [preset.id, preset]));
+  /** The switches a folded view has on. An unknown preset is reported where it is named, so it counts as none here. */
+  const switchesOn = (layers: FoldedView['layers']): readonly string[] => {
+    if ('only' in layers) return layers.only;
+    return [...(presetsById.get(layers.preset)?.on ?? []).filter((id) => !layers.off.includes(id)), ...layers.on];
+  };
+  /**
+   * The live switches on while the clock is away from the present, which show today's data over another day's sky
+   * (spec/guides.md §12, gap 9); none while it is live. Real time from another instant is away too.
+   */
+  const liveAway = (view: FoldedView): string[] => {
+    if (view.time.to === 'now' && (view.time.rate ?? 1) === 1) return [];
+    return switchesOn(view.layers).filter((id) => switches.get(id)?.live === true);
+  };
+  /** Report where a live switch and a time away first meet, not again at every cue after while they stay together. */
+  const checkLiveAway = (path: string, view: FoldedView, before: readonly string[]): string[] => {
+    const now = liveAway(view);
+    const fresh = now.filter((id) => !before.includes(id));
+    if (fresh.length > 0) {
+      const when = view.time.to === 'now' ? `now at ${view.time.rate}×` : view.time.to;
+      problem(path, `${fresh.join(', ')} ${fresh.length === 1 ? 'shows' : 'show'} today's data, and the clock is at ${when}`);
+    }
+    return now;
+  };
+
   const chapterIds = new Set<string>();
   guide.chapters.forEach((chapter, c) => {
     const chapterPath = `/chapters/${c}`;
@@ -129,6 +155,9 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     checkTarget(`${chapterPath}/scene/look/target`, scene.look.target);
     if (scene.time) checkTime(`${chapterPath}/scene/time`, scene.time);
 
+    let view = sceneView(scene);
+    let away = checkLiveAway(`${chapterPath}/scene`, view, []);
+
     const stepIds = new Set<string>();
     chapter.steps.forEach((step, s) => {
       const stepPath = `${chapterPath}/steps/${s}`;
@@ -139,6 +168,8 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
         const cuePath = `${stepPath}/cues/${k}`;
         const previous = step.cues[k - 1];
         if (previous !== undefined && cue.at < previous.at) problem(`${cuePath}/at`, `cue at ${cue.at} comes after one at ${previous.at}`);
+        view = foldAction(view, cue);
+        away = checkLiveAway(cuePath, view, away);
         switch (cue.do) {
           case 'preset':
             checkPreset(`${cuePath}/id`, cue.id);

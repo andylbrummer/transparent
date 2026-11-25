@@ -187,6 +187,8 @@ const OVERLAY_LAYERS: readonly LayerDefinition[] = OVERLAY_ENTRIES.map(({ spec, 
   ...definition,
   section: 'Surface',
   exclusiveGroup: GROUP,
+  // The newest the product has, not the app clock's date; a climatology has no date to be wrong about.
+  ...(spec.time === null ? {} : { live: true as const }),
   load: async (context) => (await import('./overlay')).createOverlayLayer(context, definition.id, spec),
 }));
 

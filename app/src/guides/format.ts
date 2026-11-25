@@ -29,6 +29,19 @@ export type Step = Chapter['steps'][number];
 /** A view action at a time in its step. */
 export type Cue = Step['cues'][number];
 
+/** The view at a chapter's start: its scene, whole. */
+export function sceneView(scene: Scene): FoldedView {
+  return {
+    layers: 'preset' in scene ? { preset: scene.preset, on: [], off: [] } : { only: [...scene.layers] },
+    // A scene is the whole view, so one that says nothing of the place stands here, and one that says nothing of the
+    // time is now.
+    place: scene.place ?? HERE,
+    time: scene.time ?? LIVE,
+    look: scene.look,
+    marks: [],
+  };
+}
+
 /**
  * The view a guide has reached `tS` seconds into a step: the chapter's
  * scene, then every cue of the steps before it, then this step's cues up
@@ -43,15 +56,7 @@ export function foldTo(guide: Guide, chapterIndex: number, stepIndex: number, tS
   if (step === undefined) throw new RangeError(`chapter ${chapter.id} of guide ${guide.id} has no step ${stepIndex}`);
   if (!Number.isFinite(tS) || tS < 0) throw new RangeError(`step time ${tS} is not a time`);
 
-  const { scene } = chapter;
-  let view: FoldedView = {
-    layers: 'preset' in scene ? { preset: scene.preset, on: [], off: [] } : { only: [...scene.layers] },
-    // A scene is the whole view, so one that says nothing of the place stands here.
-    place: scene.place ?? HERE,
-    time: scene.time ?? LIVE,
-    look: scene.look,
-    marks: [],
-  };
+  let view = sceneView(chapter.scene);
   for (const before of chapter.steps.slice(0, stepIndex)) for (const cue of before.cues) view = foldAction(view, cue);
   // A cue at `tS` has fired: at a step's start, tS = 0 and its `at: 0` cues are done. The file's order is trusted
   // (the guide validator checks it, spec/guides.md §9), and a time past the narration's end takes every cue, since

@@ -6,6 +6,7 @@ const SCALE_CAPTION = 'depression · storm · hurricane category 1 – 5 (Saffir
 const cycloneLayers: readonly LayerDefinition[] = [
   {
     id: 'cyclones-live',
+    live: true,
     label: 'Tropical cyclones now (live)',
     section: 'Surface',
     order: 70,

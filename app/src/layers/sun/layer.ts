@@ -59,6 +59,7 @@ const sun: LayerDefinition = {
 
 const euv = (wavelength: '171' | '195' | '304', order: number): LayerDefinition => ({
   id: `sun-euv-${wavelength}`,
+  live: true,
   label: `Sun in EUV ${wavelength} Å`,
   section: 'Sky',
   order,
@@ -70,6 +71,7 @@ const euv = (wavelength: '171' | '195' | '304', order: number): LayerDefinition 
 
 const lasco: LayerDefinition = {
   id: 'sun-corona-lasco',
+  live: true,
   label: 'Corona (SOHO LASCO)',
   section: 'Sky',
   order: 45,
@@ -81,6 +83,7 @@ const lasco: LayerDefinition = {
 
 const ccor: LayerDefinition = {
   id: 'sun-corona-ccor1',
+  live: true,
   label: 'Corona (GOES-19 CCOR-1)',
   section: 'Sky',
   order: 46,
@@ -92,6 +95,7 @@ const ccor: LayerDefinition = {
 
 const activity: LayerDefinition = {
   id: 'sun-activity',
+  live: true,
   label: 'Solar activity',
   section: 'Sky',
   order: 47,

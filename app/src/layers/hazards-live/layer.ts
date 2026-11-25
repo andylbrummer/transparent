@@ -31,6 +31,7 @@ const step = 100 / ALL.length;
 
 const hazardsLive: LayerDefinition = {
   id: 'hazards-live',
+  live: true,
   label: 'Natural events now (live)',
   section: 'Surface',
   order: 73,
