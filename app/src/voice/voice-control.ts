@@ -82,8 +82,11 @@ export interface VoiceControlOptions {
   speak(text: string): Promise<void>;
   /** Stop speaking: the user is about to talk. */
   cancelSpeech(): void;
-  /** Act on a phrase - the recognizer's guesses, best first - and say what was done. */
-  respond(alternatives: readonly string[]): string;
+  /**
+   * Act on a phrase - the recognizer's guesses, best first - and say what was done: a string is shown and spoken, a
+   * quiet reply only shown, and '' is no reply at all.
+   */
+  respond(alternatives: readonly string[]): string | { readonly text: string; readonly quiet: true };
   onStatus(status: VoiceStatus): void;
   lang: string;
   now?: () => number;
@@ -242,8 +245,14 @@ export class VoiceControl {
   }
 
   private act(alternatives: readonly string[]): void {
-    const reply = this.options.respond(alternatives);
+    const answer = this.options.respond(alternatives);
+    const reply = typeof answer === 'string' ? answer : answer.text;
+    if (reply === '') {
+      this.options.onStatus({ state: 'idle' });
+      return;
+    }
     this.options.onStatus({ state: 'reply', text: reply });
+    if (typeof answer !== 'string') return;
     // Long enough to cover the speaking, refreshed when it actually ends.
     this.speakingUntil = Number.POSITIVE_INFINITY;
     void this.options.speak(reply).then(() => {
@@ -287,6 +296,15 @@ export class VoiceControl {
       return;
     }
     this.startRecognizer();
+  }
+
+  /** Say something not in answer to a phrase just heard: what came of a command that had to wait, say for a fetch. */
+  say(text: string): void {
+    this.options.onStatus({ state: 'reply', text });
+    this.speakingUntil = Number.POSITIVE_INFINITY;
+    void this.options.speak(text).then(() => {
+      this.speakingUntil = this.now() + ECHO_GUARD_MS;
+    });
   }
 
   private fail(text: string): void {

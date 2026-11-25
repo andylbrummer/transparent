@@ -23,6 +23,8 @@ function app(
     zoom?: (inward: boolean) => VoiceZoom;
     viewSwitches?: readonly LayerSwitch[];
     lazyLayers?: Pick<LayerManager, 'preload'>;
+    /** A guide open, and whether its narration is heard now. */
+    guide?: { narrating: boolean };
   } = {}
 ) {
   const done: string[] = [];
@@ -64,6 +66,19 @@ function app(
     zoom: (inward) => {
       done.push(inward ? 'zoom-in' : 'zoom-out');
       return state.zoom?.(inward) ?? { done: true, on: null };
+    },
+    guide: {
+      isOpen: () => state.guide !== undefined,
+      isNarrating: () => state.guide?.narrating ?? false,
+      perform: (action) => {
+        if (!state.guide) return null;
+        done.push(`guide:${action}`);
+        return `did ${action}`;
+      },
+      play: (title) => {
+        done.push(`play:${title}`);
+        return `finding ${title}`;
+      },
     },
   };
   return { actions, done };
@@ -141,5 +156,62 @@ describe('respondToSpeech', () => {
     const { actions, done } = app();
     expect(respondToSpeech(['make tea'], actions)).toBe('I heard "make tea". Say help for commands.');
     expect(done).toEqual([]);
+  });
+
+  describe('in a guide', () => {
+    it.each([
+      ['pause', 'pause'],
+      ['hold on', 'pause'],
+      ['resume', 'resume'],
+      ['go on', 'resume'],
+      ['next', 'next'],
+      ['skip', 'next'],
+      ['back', 'back'],
+      ['go back', 'back'],
+      ['stop guide', 'stop'],
+      ['leave the guide', 'stop'],
+    ])('takes "%s" as the guide\'s %s', (heard, action) => {
+      const { actions, done } = app({ guide: { narrating: false } });
+      respondToSpeech([heard], actions);
+      expect(done).toEqual([`guide:${action}`]);
+    });
+
+    it('speaks the reply to a pause or a stop, and only shows the others, which the narration would talk over', () => {
+      const { actions } = app({ guide: { narrating: true } });
+      expect(respondToSpeech(['pause'], actions)).toBe('did pause');
+      expect(respondToSpeech(['stop guide'], actions)).toBe('did stop');
+      expect(respondToSpeech(['next'], actions)).toEqual({ text: 'did next', quiet: true });
+    });
+
+    it('drops everything but its own commands, without a reply, while the narration is heard', () => {
+      const { actions, done } = app({ guide: { narrating: true } });
+      expect(respondToSpeech(['is the third planet from the Sun'], actions)).toBe('');
+      expect(respondToSpeech(['tectonics'], actions)).toBe('');
+      expect(done).toEqual([]);
+    });
+
+    it('takes every command while the guide is paused or waiting', () => {
+      const { actions, done } = app({ guide: { narrating: false } });
+      expect(respondToSpeech(['tectonics'], actions)).toBe('Tectonics.');
+      expect(done).toEqual(['preset:tectonics']);
+    });
+
+    it('leaves "back" and "pause" to the view and the unknown without a guide open', () => {
+      const { actions, done } = app();
+      respondToSpeech(['back'], actions);
+      expect(done).toEqual(['zoom-out']);
+      expect(respondToSpeech(['pause'], actions)).toBe('I heard "pause". Say help for commands.');
+    });
+
+    it('says so when a guide command finds no guide', () => {
+      const { actions } = app();
+      expect(respondToSpeech(['stop guide'], actions)).toBe('I heard "stop guide". Say help for commands.');
+    });
+
+    it('starts a guide by its title at any time, with a quiet reply', () => {
+      const { actions, done } = app({ guide: { narrating: true } });
+      expect(respondToSpeech(['play guide down through the earth'], actions)).toEqual({ text: 'finding down through the earth', quiet: true });
+      expect(done).toEqual(['play:down through the earth']);
+    });
   });
 });

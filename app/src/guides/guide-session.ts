@@ -12,6 +12,7 @@
  */
 
 import type { PauseChoice } from './pause-card';
+import type { GuideVoiceAction } from '../voice/commands';
 import type { CaptionOverlay } from './captions';
 import type { Guide } from './format';
 import { fetchGuide, guideFileUrl, type GuideLink } from './guide-files';
@@ -83,6 +84,19 @@ export interface GuideSession {
   paused(): boolean;
   /** A choice made on the pause card. Back and Next play on from where they go: the card is not a place to stay. */
   choosePauseCard(choice: PauseChoice): void;
+  /** Whether narration is being heard now: playing, not paused. The voice grammar then takes only the guide's commands. */
+  isNarrating(): boolean;
+  /**
+   * A spoken guide command (spec/guides.md §11); the words to show, or null with no guide open. Next and back play on
+   * from where they go, as on the pause card.
+   */
+  onVoice(action: GuideVoiceAction): string | null;
+  /**
+   * Open the guide `id` and start it as soon as it and the map's names are in, leaving any guide already open: "play
+   * guide …" said in the viewer, where the card's Start cannot be pressed. In Cardboard the tap that entered it has
+   * let sound play (§8.5); elsewhere a browser that refuses halts the step, and its Retry is a tap.
+   */
+  play(id: string): void;
   /** A key pressed on the page: true when the guide took it. Space pauses or resumes, N and B step, Escape leaves. */
   onKey(key: string): boolean;
   /** Leave the guide if one is open, then let go of the narration and the page. */
@@ -159,16 +173,18 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   const bar = new PlayBar(deps.parent, controls);
   const transcript = new Transcript(deps.parent, () => closeTranscript());
 
-  const guideCard = new GuideCard(deps.parent, {
-    start() {
-      if (card.kind !== 'ready') throw new Error('no guide is ready to start');
-      unlock();
-      player.start(card.guide, card.at ?? undefined);
-      card = CLOSED;
-      showCard();
-    },
-    close: closeCard,
-  });
+  /** The open that play() asked to start once its card is ready; 0 for none. */
+  let startWhenReady = 0;
+
+  function startCard(): void {
+    if (card.kind !== 'ready') throw new Error('no guide is ready to start');
+    unlock();
+    player.start(card.guide, card.at ?? undefined);
+    card = CLOSED;
+    showCard();
+  }
+
+  const guideCard = new GuideCard(deps.parent, { start: startCard, close: closeCard });
 
   function pause(): void {
     const state = player.state();
@@ -246,6 +262,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
         return guideCard.show({ title: card.title, summary: '', note: card.message, start: 'none' });
       case 'ready': {
         const labels = deps.labels();
+        if (startWhenReady === opens && labels === 'ready') {
+          startWhenReady = 0;
+          return startCard();
+        }
         return guideCard.show({
           title: card.guide.title,
           summary: card.guide.summary,
@@ -346,6 +366,44 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     if (isPaused(state)) player.resume();
   }
 
+  function onVoice(action: GuideVoiceAction): string | null {
+    const state = player.state();
+    if (state.kind === 'idle') return null;
+    const paused = isPaused(state);
+    switch (action) {
+      case 'stop':
+        leave();
+        return 'Guide stopped.';
+      case 'pause':
+        if (paused) return 'Already paused.';
+        if (state.kind === 'error' || state.kind === 'ended') return 'Not playing.';
+        pause();
+        return 'Paused.';
+      case 'resume':
+        if (paused) player.resume();
+        else if (state.kind === 'waiting') player.goOn();
+        else if (state.kind === 'error') controls.retry();
+        else if (state.kind === 'ended') controls.playAgain();
+        else return 'Playing.';
+        return 'Going on.';
+      case 'next':
+      case 'back': {
+        if (!controlEnabled(state, action)) return action === 'next' ? 'This is the last step.' : 'This is the first step.';
+        controls[action]();
+        if (isPaused(player.state())) player.resume();
+        return action === 'next' ? 'Next.' : 'Back.';
+      }
+    }
+  }
+
+  function play(id: string): void {
+    if (player.state().kind !== 'idle') leave();
+    if (card.kind !== 'closed') closeCard();
+    open({ id, at: null });
+    startWhenReady = opens;
+    showCard();
+  }
+
   function getGuide(): GuideStatus {
     const state = player.state();
     const at = state.kind === 'idle' ? null : state;
@@ -375,7 +433,24 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     guideCard.dispose();
   }
 
-  return { open, update, pause, getGuide, stereoNotice, onViewerInput, paused: () => isPaused(player.state()), choosePauseCard, onKey, dispose };
+  return {
+    open,
+    update,
+    pause,
+    getGuide,
+    stereoNotice,
+    onViewerInput,
+    paused: () => isPaused(player.state()),
+    choosePauseCard,
+    isNarrating: () => {
+      const state = player.state();
+      return state.kind === 'playing' && !state.paused;
+    },
+    onVoice,
+    play,
+    onKey,
+    dispose,
+  };
 }
 
 /** The play bar's control each key presses. Escape is not here: it closes the card as well as leaving. */

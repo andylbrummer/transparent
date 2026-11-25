@@ -4,7 +4,7 @@
  * tested without the renderer.
  */
 
-import { WAKE_WORD, bestCommand, type VoiceCommand, type Vocabulary } from './commands';
+import { WAKE_WORD, bestCommand, type GuideVoiceAction, type VoiceCommand, type Vocabulary } from './commands';
 import type { ViewAction, ViewControl } from '../view/actions';
 
 export interface VoiceActions {
@@ -22,6 +22,31 @@ export interface VoiceActions {
   resetView(): void;
   /** Zoom a step (VoiceCommand zoom); what came of it. */
   zoom(inward: boolean): VoiceZoom;
+  readonly guide: VoiceGuide;
+}
+
+/** The guide's side of the voice grammar (spec/guides.md §11). */
+export interface VoiceGuide {
+  /** Whether a guide is open: playing, paused, waiting or ended. Its commands then come first. */
+  isOpen(): boolean;
+  /**
+   * Whether narration is being heard now. Then only the guide's commands are taken, and anything else is dropped
+   * without a reply: the narrator saying "Earth is…" must not be answered over (spec/guides.md §12 risk 12).
+   */
+  isNarrating(): boolean;
+  /** Do a guide command; the words to show, or null when no guide is open to do it to. */
+  perform(action: GuideVoiceAction): string | null;
+  /** Start the guide whose title holds these words; the words to show. */
+  play(title: string): string;
+}
+
+/**
+ * A reply shown but not spoken: a guide's narration is about to play, or plays on, and the reply would talk over it.
+ * The empty string, spoken or not, is no reply at all.
+ */
+export interface QuietReply {
+  readonly text: string;
+  readonly quiet: true;
 }
 
 /**
@@ -36,16 +61,27 @@ const wakeName = WAKE_WORD[0].toUpperCase() + WAKE_WORD.slice(1);
 export function helpText(inCardboard: boolean): string {
   const lead = inCardboard ? `Start with "${wakeName}". ` : '';
   const viewer = inCardboard ? ' "calibrate", "keep", "exit",' : ' "calibrate",';
-  return `${lead}Say a view, like "tectonics" or "deep space"; a layer on or off, like "show stars" or "hide plates"; or "what's that", "zoom in", "zoom out",${viewer} "reset".`;
+  return `${lead}Say a view, like "tectonics" or "deep space"; a layer on or off, like "show stars" or "hide plates"; or "what's that", "zoom in", "zoom out",${viewer} "reset". In a guide: "pause", "resume", "next", "back", "stop guide"; or "play guide" and its title.`;
 }
 
-/** Act on a phrase, the recognizer's guesses best first; the reply to say. */
-export function respondToSpeech(alternatives: readonly string[], actions: VoiceActions): string {
-  return perform(bestCommand(alternatives, actions.vocabulary), actions);
+/** Act on a phrase, the recognizer's guesses best first; the reply to say, or to show only. */
+export function respondToSpeech(alternatives: readonly string[], actions: VoiceActions): string | QuietReply {
+  const command = bestCommand(alternatives, actions.vocabulary, actions.guide.isOpen());
+  const forGuide = command.kind === 'guide' || command.kind === 'play-guide';
+  if (actions.guide.isNarrating() && !forGuide) return '';
+  return perform(command, actions);
 }
 
-function perform(command: VoiceCommand, actions: VoiceActions): string {
+function perform(command: VoiceCommand, actions: VoiceActions): string | QuietReply {
   switch (command.kind) {
+    case 'guide': {
+      const done = actions.guide.perform(command.action);
+      if (done === null) return 'No guide is playing.';
+      // Pausing and leaving end the narration, so the reply can be heard; the others start it again.
+      return command.action === 'pause' || command.action === 'stop' ? done : { text: done, quiet: true };
+    }
+    case 'play-guide':
+      return { text: actions.guide.play(command.title), quiet: true };
     case 'preset':
       performFromVocabulary(actions.viewControl, { do: 'preset', id: command.preset.id });
       return `${command.preset.label}.`;

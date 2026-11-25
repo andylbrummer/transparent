@@ -136,6 +136,38 @@ describe('VoiceControl push to talk', () => {
     expect(voice.getMode()).toBe('off');
   });
 
+  it('shows a quiet reply without speaking it, and makes no reply at all of an empty one', () => {
+    const statuses: VoiceStatus[] = [];
+    const spoken: string[] = [];
+    const recognizer = new FakeRecognizer();
+    let answer: string | { text: string; quiet: true } = { text: 'Next.', quiet: true };
+    const voice = new VoiceControl({
+      createRecognizer: () => recognizer,
+      speak: async (text) => void spoken.push(text),
+      cancelSpeech: () => undefined,
+      respond: () => answer,
+      onStatus: (status) => statuses.push(status),
+      lang: 'en',
+    });
+    voice.pushStart();
+    recognizer.hear(['next']);
+    voice.pushEnd();
+    expect(statuses.at(-1)).toEqual({ state: 'reply', text: 'Next.' });
+    answer = '';
+    voice.pushStart();
+    recognizer.hear(['earth is the third planet']);
+    voice.pushEnd();
+    expect(statuses.at(-1)).toEqual({ state: 'idle' });
+    expect(spoken).toEqual([]);
+  });
+
+  it('says what came of a command that had to wait', () => {
+    const { voice, statuses, spoken } = setup();
+    voice.say('No guide called "the moon".');
+    expect(statuses.at(-1)).toEqual({ state: 'reply', text: 'No guide called "the moon".' });
+    expect(spoken).toEqual(['No guide called "the moon".']);
+  });
+
   it('reports a browser without recognition', () => {
     const statuses: VoiceStatus[] = [];
     const voice = new VoiceControl({

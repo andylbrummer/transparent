@@ -795,6 +795,15 @@ describe('createGuideSession', () => {
       expect(t.session.getGuide().state).toBe('loading');
     });
 
+    it('says whether narration is heard: playing, not paused', async () => {
+      const t = setup();
+      expect(t.session.isNarrating()).toBe(false);
+      await startPlaying(t);
+      expect(t.session.isNarrating()).toBe(true);
+      t.session.onViewerInput('tap');
+      expect(t.session.isNarrating()).toBe(false);
+    });
+
     it('says when it is paused, for the pause card', async () => {
       const t = setup();
       await startPlaying(t);
@@ -837,5 +846,69 @@ describe('createGuideSession', () => {
       expect(t.session.onViewerInput('tap')).toBe(true);
       expect(t.session.getGuide()).toMatchObject({ state: 'loading', chapterIndex: 0, stepIndex: 0 });
     });
+  });
+});
+
+describe('spoken guide commands', () => {
+  it('does nothing with no guide open', () => {
+    expect(setup().session.onVoice('pause')).toBeNull();
+  });
+
+  it('pauses, and resumes from the pause', async () => {
+    const t = setup();
+    await startPlaying(t);
+    expect(t.session.onVoice('resume')).toBe('Playing.');
+    expect(t.session.onVoice('pause')).toBe('Paused.');
+    expect(t.session.onVoice('pause')).toBe('Already paused.');
+    expect(t.session.getGuide().paused).toBe(true);
+    expect(t.session.onVoice('resume')).toBe('Going on.');
+    expect(t.session.getGuide().paused).toBe(false);
+  });
+
+  it('steps on and back, and plays on from a pause', async () => {
+    const t = setup();
+    await startPlaying(t);
+    t.session.onVoice('pause');
+    expect(t.session.onVoice('next')).toBe('Next.');
+    expect(t.session.getGuide()).toMatchObject({ stepIndex: 1, paused: false });
+    expect(t.session.onVoice('back')).toBe('Back.');
+    expect(t.session.getGuide()).toMatchObject({ stepIndex: 0, paused: false });
+  });
+
+  it('stops the guide', async () => {
+    const t = setup();
+    await startPlaying(t);
+    expect(t.session.onVoice('stop')).toBe('Guide stopped.');
+    expect(t.session.getGuide().state).toBe('idle');
+  });
+
+  it('plays a guide by id without the card’s Start, once it is fetched', async () => {
+    const t = setup();
+    t.session.play(ID);
+    expect(t.session.getGuide().card).toBe('fetching');
+    await settle();
+    t.session.update(16);
+    expect(t.session.getGuide()).toMatchObject({ card: 'closed', state: 'playing', stepIndex: 0 });
+  });
+
+  it('waits for the map’s names before it plays', async () => {
+    const t = setup();
+    t.world.labels = 'loading';
+    t.session.play(ID);
+    await settle();
+    t.session.update(16);
+    expect(t.session.getGuide()).toMatchObject({ card: 'ready', state: 'idle' });
+    t.world.labels = 'ready';
+    t.session.update(16);
+    expect(t.session.getGuide().state).toBe('loading');
+  });
+
+  it('leaves the guide playing for the one asked for', async () => {
+    const t = setup();
+    await startPlaying(t, LAST_STEP);
+    t.session.play(ID);
+    await settle();
+    t.session.update(16);
+    expect(t.session.getGuide()).toMatchObject({ state: 'playing', stepIndex: 0 });
   });
 });

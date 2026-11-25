@@ -56,6 +56,7 @@ import { VoiceControl, cancelBrowserSpeech, createBrowserRecognizer, speakWithBr
 import { VoiceOverlay } from './voice/voice-overlay';
 import { createTalkButton } from './voice/talk-button';
 import { IDENTIFY_MAX_ANGLE_RAD, VOICE_ZOOM_FACTOR, respondToSpeech } from './voice/respond';
+import { findTitle } from './voice/commands';
 import { LAYER_DEFINITIONS } from './layers/registry';
 import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
@@ -661,6 +662,23 @@ export function init(): App | null {
         },
         exitCardboard: () => cardboard.exit(),
         resetView: () => look.resetOffset(),
+        guide: {
+          isOpen: () => guideSession.getGuide().state !== 'idle',
+          isNarrating: () => guideSession.isNarrating(),
+          perform: (action) => guideSession.onVoice(action),
+          play: (title) => {
+            loadGuides().then(
+              (listings) => {
+                const found = listings.flatMap((l) => ('guide' in l ? [l.guide] : []));
+                const index = findTitle(title, found.map((g) => g.title));
+                if (index < 0) voice.say(`No guide called "${title}".`);
+                else guideSession.play(found[index].id);
+              },
+              () => voice.say('The guides could not be loaded.')
+            );
+            return `Finding the guide "${title}".`;
+          },
+        },
         zoom: (inward) => {
           if (!cardboard.isActive()) {
             look.zoomIn(inward ? VOICE_ZOOM_FACTOR : 1 / VOICE_ZOOM_FACTOR);

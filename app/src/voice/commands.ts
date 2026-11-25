@@ -11,6 +11,9 @@
  *
  * In Cardboard every command starts with the wake word, WAKE_WORD, since
  * the microphone is open the whole time (stripWakeWord).
+ *
+ * While a guide is open its own commands come first (spec/guides.md §11):
+ * "back" then steps the guide back rather than widening the view.
  */
 
 import type { LayerSwitch } from '../ui/layers-panel';
@@ -30,7 +33,13 @@ export type VoiceCommand =
   | { readonly kind: 'exit' }
   | { readonly kind: 'reset' }
   | { readonly kind: 'help' }
+  /** Pause, resume, step or leave the open guide. */
+  | { readonly kind: 'guide'; readonly action: GuideVoiceAction }
+  /** Start the guide whose title holds these words. */
+  | { readonly kind: 'play-guide'; readonly title: string }
   | { readonly kind: 'unknown'; readonly heard: string };
+
+export type GuideVoiceAction = 'pause' | 'resume' | 'next' | 'back' | 'stop';
 
 export interface Vocabulary {
   readonly presets: readonly LayerPreset[];
@@ -55,8 +64,8 @@ export function stripWakeWord(heard: string): string | null {
   return match ? (match[1] ?? '') : null;
 }
 
-/** Words that carry no name: dropped before a phrase is matched to a switch. */
-const FILLER = new Set(['the', 'a', 'an', 'please', 'layer', 'layers', 'all', 'me', 'my', 'of', 'and', 'with', 'now']);
+/** Words that carry no name: dropped before a phrase is matched to a switch or a guide's title. */
+export const FILLER = new Set(['the', 'a', 'an', 'please', 'layer', 'layers', 'all', 'me', 'my', 'of', 'and', 'with', 'now']);
 
 /** Spoken names for switches whose label says it another way. */
 const LAYER_ALIASES: Readonly<Record<string, string>> = {
@@ -153,9 +162,27 @@ const ZOOM_OUT = /^(?:zoom out|zoom back|wider|go wider|further|farther|back|go 
 const OFF = [/^(?:turn off|switch off|hide|remove|disable|stop showing) (.+)$/, /^(?:turn|switch) (.+) off$/, /^(.+) off$/];
 const ON = [/^(?:turn on|switch on|show|add|enable|display|show me) (.+)$/, /^(?:turn|switch) (.+) on$/, /^(.+) on$/];
 
-/** The command in one phrase; WAKE_WORD already stripped if it was there. */
-export function parseCommand(heard: string, vocabulary: Vocabulary): VoiceCommand {
+const PLAY_GUIDE = /^(?:play|start|open|begin)(?: the)? guide(?: called)? (.+)$/;
+/** Each guide command's phrases, tried only while a guide is open. */
+const GUIDE_ACTIONS: readonly [GuideVoiceAction, RegExp][] = [
+  ['stop', /^(?:stop|leave|end|exit|quit|close)(?: the)? guide$/],
+  ['pause', /^(?:pause|pause (?:the )?guide|hold on|wait)$/],
+  ['resume', /^(?:resume|continue|go on|carry on|keep going|unpause|play)$/],
+  ['next', /^(?:next|next step|skip|skip (?:it|this|ahead)|go ahead)$/],
+  ['back', /^(?:back|go back|previous|previous step|step back|back a step)$/],
+];
+
+/**
+ * The command in one phrase; WAKE_WORD already stripped if it was there. With `guideOpen`, the guide's own commands
+ * are tried first.
+ */
+export function parseCommand(heard: string, vocabulary: Vocabulary, guideOpen = false): VoiceCommand {
   const phrase = normalizeSpeech(heard).replace(/^please /, '').replace(/ please$/, '');
+  const playGuide = PLAY_GUIDE.exec(phrase);
+  if (playGuide) return { kind: 'play-guide', title: playGuide[1] };
+  if (guideOpen) {
+    for (const [action, pattern] of GUIDE_ACTIONS) if (pattern.test(phrase)) return { kind: 'guide', action };
+  }
   if (/^(?:exit|leave|quit|close|stop)(?: cardboard| vr| headset| the headset)?$/.test(phrase)) return { kind: 'exit' };
   if (/^(?:calibrate|calibration|start calibrating|calibrate the headset)$/.test(phrase)) return { kind: 'calibrate' };
   if (/^(?:keep|keep it|keep that|save|save it|done|thats it|thats good|lock it)$/.test(phrase)) return { kind: 'keep' };
@@ -188,10 +215,31 @@ export function parseCommand(heard: string, vocabulary: Vocabulary): VoiceComman
 }
 
 /** The first of the recognizer's guesses that is a command; else the top guess, unknown. */
-export function bestCommand(alternatives: readonly string[], vocabulary: Vocabulary): VoiceCommand {
+export function bestCommand(alternatives: readonly string[], vocabulary: Vocabulary, guideOpen = false): VoiceCommand {
   for (const heard of alternatives) {
-    const command = parseCommand(heard, vocabulary);
+    const command = parseCommand(heard, vocabulary, guideOpen);
     if (command.kind !== 'unknown') return command;
   }
   return { kind: 'unknown', heard: normalizeSpeech(alternatives[0] ?? '') };
+}
+
+/**
+ * The title among `titles` that the spoken words name: every word heard is in it, and of several, the one with the
+ * fewest other words. -1 for none.
+ */
+export function findTitle(heard: string, titles: readonly string[]): number {
+  const wanted = wordsOf(heard).filter((w) => !FILLER.has(w));
+  if (wanted.length === 0) return -1;
+  let best = -1;
+  let bestScore = 0;
+  titles.forEach((title, i) => {
+    const words = wordsOf(title);
+    if (!wanted.every((w) => words.includes(w))) return;
+    const score = wanted.length / words.length;
+    if (score > bestScore) {
+      best = i;
+      bestScore = score;
+    }
+  });
+  return best;
 }

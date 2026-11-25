@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { LAYER_DEFINITIONS } from '../layers/registry';
 import { switchesWithLazyLayers } from '../ui/layers-panel';
 import { LAYER_PRESETS, defaultPreset } from '../ui/presets';
-import { bestCommand, normalizeSpeech, parseCommand, stripWakeWord, type Vocabulary } from './commands';
+import { bestCommand, findTitle, normalizeSpeech, parseCommand, stripWakeWord, type Vocabulary } from './commands';
 
 const switches = switchesWithLazyLayers(LAYER_DEFINITIONS);
 const vocabulary: Vocabulary = { presets: [defaultPreset(switches), ...LAYER_PRESETS], switches };
@@ -131,4 +131,17 @@ describe('bestCommand', () => {
   it('reports the top guess when none is', () => {
     expect(bestCommand(['Show stairs', 'show stares'], vocabulary)).toEqual({ kind: 'unknown', heard: 'show stairs' });
   });
+});
+
+describe('findTitle', () => {
+  const titles = ['Down through the Earth', 'The Sun today', 'A night at the North Pole'];
+  it.each([
+    ['down through the earth', 0],
+    ['down through earth', 0],
+    ['the sun', 1],
+    ['north pole', 2],
+    ['nights at the north pole', 2],
+    ['the moon', -1],
+    ['the', -1],
+  ])('finds "%s" at %i', (heard, index) => expect(findTitle(heard, titles)).toBe(index));
 });
