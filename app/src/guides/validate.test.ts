@@ -111,6 +111,24 @@ describe('guideProblems', () => {
       `${STEP}/advance`,
       'advance is gaze but the step has no look cue to wait for',
     ],
+    [
+      'a fast time-lapse with no stop',
+      (g) => (cues(g, 1)[0] = { at: 0, do: 'time', to: 'now', rate: 61 }),
+      '/chapters/0/steps/1/cues/0',
+      'a rate of 61 needs an until: with reduced motion the clock jumps there instead',
+    ],
+    [
+      'a stop behind a run',
+      (g) => (cues(g, 1)[0] = { at: 0, do: 'time', to: '2011-03-11T05:46Z', rate: -3600, until: '2011-03-12T05:46Z' }),
+      '/chapters/0/steps/1/cues/0/until',
+      'the clock does not reach 2011-03-12T05:46Z from 2011-03-11T05:46Z at a rate of -3600',
+    ],
+    [
+      'a stop for a clock standing still',
+      (g) => (scene(g).time = { to: '2011-03-11T05:46Z', rate: 0, until: '2011-03-12T05:46Z' }),
+      '/chapters/0/scene/time/until',
+      'a clock standing still never reaches its until',
+    ],
   ])('reports %s', (_, change, path, reason) => {
     const g = copy();
     change(g);
@@ -128,6 +146,8 @@ describe('guideProblems', () => {
       'the Tōhoku earthquake played',
       (g) => (cues(g, 1)[2] = { at: 3, do: 'layers', on: ['seismic-waves'], params: { 'seismic-waves': { quake: 'tohoku2011', speed: 120, playing: true } } }),
     ],
+    ['a slow time-lapse with no stop', (g) => (cues(g, 1)[0] = { at: 0, do: 'time', to: 'now', rate: -60 })],
+    ['a fast one with a stop ahead', (g) => (cues(g, 1)[0] = { at: 0, do: 'time', to: '2011-03-11T05:46Z', rate: 3600, until: '2011-03-12T05:46Z' })],
   ])('allows %s', (_, change) => {
     const g = copy();
     change(g);

@@ -52,6 +52,14 @@ describe('the guide schema', () => {
     expect(isGuide(preset), JSON.stringify(isGuide.errors)).toBe(true);
   });
 
+  it('takes a scene that says when it is, and a cue that runs the clock', () => {
+    const g = copy();
+    (chapter(g).scene as Json).time = { to: '2011-03-11T05:46:24Z' };
+    (step(g).cues as Json[]).push({ at: 9, do: 'time', to: '2011-03-11T05:46:24+09:00', rate: 3600, until: '2011-03-12T05:46:24.5Z' });
+    (step(g).cues as Json[]).push({ at: 9, do: 'time', to: 'now' });
+    expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
+  });
+
   it('takes a scene that says where it stands, and a cue that moves it', () => {
     const g = copy();
     (chapter(g).scene as Json).place = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' };
@@ -95,7 +103,10 @@ describe('the guide schema', () => {
     ['an unknown action', `${CUE}/do`, (g) => (cue(g).do = 'spin')],
     ['a stand with no place', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'stand' })],
     ['a scene standing off the globe', `${SCENE}`, (g) => ((chapter(g).scene as Json).place = { kind: 'at', lat: 0, lon: 200, name: 'Nowhere' })],
-    ['a time, not yet played', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time' })],
+    ['a time with no instant', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time' })],
+    ['a time at an instant with no offset', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time', to: '2011-03-11T05:46' })],
+    ['a time faster than a year a second', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time', to: 'now', rate: 4e7, until: '2030-01-01T00:00Z' })],
+    ['a scene time with no instant', SCENE, (g) => ((chapter(g).scene as Json).time = { rate: 1 })],
     ['a clip, not yet played', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'clip' })],
     ['an unknown way to advance', `${STEP}/advance`, (g) => (step(g).advance = 'timer')],
     ['no chapters', '/chapters', (g) => (g.chapters = [])],

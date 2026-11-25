@@ -18,7 +18,7 @@ import type { DeviceAttitude } from '../sensors';
 import { canFade, type LayerSwitch, type LayersPanel } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
-import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
+import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, TimeSetting, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
 import { samePlace, type StandingPlace } from './standing-place';
 import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex, type LoadedLabels } from './targets';
@@ -72,6 +72,10 @@ export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
 
 /** The longest fade a `layers` action may ask for: longer is a layer left half-drawn while the guide talks on. */
 export const MAX_FADE_S = 10;
+/** The fastest a guide may run the app clock, either way: a year a second. */
+export const MAX_TIME_RATE = 31_557_600;
+/** A time setting this near where the clock stands is no jump, and no reason to go dark. */
+const TIME_JUMP_MS = 60_000;
 
 /** A target is centred when it has stayed this near the view's centre for ARRIVE_MS. Looser and quicker than the spyglass's stare: arriving only lets a guide move on. */
 export const ARRIVE_DEG = 8;
@@ -85,6 +89,17 @@ const NO_LABELS: LabelIndex = new Map();
 /** Before every name, countries (rank 0) included: a guide's mark wins any overlap. */
 const MARK_RANK = -1;
 const MARK_STYLE: LabelStyle = { fontPx: 13, color: '#ffffff', bold: true, ring: true };
+
+/** A time setting the view control has checked: in milliseconds, and whether it is live time. */
+interface CheckedTime {
+  readonly ok: true;
+  readonly fromMs: number;
+  readonly rate: number;
+  readonly untilMs: number | undefined;
+  readonly live: boolean;
+  /** Starting from 'now': the wall time when it is made, not when it was checked. */
+  readonly fromNow: boolean;
+}
 
 /** A mark on the view, and the target it is found on again each frame. */
 interface Mark {
@@ -331,6 +346,15 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         putMark(action.target, action.text, located.direction);
         return { ok: true };
       }
+      case 'time': {
+        const checked = checkTime(action);
+        if (!checked.ok) return checked;
+        // Live already, and asked for live: nothing to do.
+        if (checked.live && deps.clock.isLive()) return { ok: true };
+        // A change of rate where the clock stands is not a jump: it just runs on faster, and seeing it is the point.
+        if (Math.abs(checked.fromMs - deps.clock.now().getTime()) < TIME_JUMP_MS) return applyTime(checked);
+        return inTheDark(() => applyTime(checked));
+      }
       case 'stand': {
         const { place } = action;
         if (place.kind === 'at' && !(Math.abs(place.lat) <= 90 && Math.abs(place.lon) <= 180)) {
@@ -367,6 +391,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     if (view.place.kind === 'at' && !(Math.abs(view.place.lat) <= 90 && Math.abs(view.place.lon) <= 180)) {
       return { ok: false, code: 'bad-value', message: `no place at ${view.place.lat}, ${view.place.lon}` };
     }
+    const time = checkTime(view.time);
+    if (!time.ok) return time;
     // Found from where the view will stand, which is not yet where it stands.
     const destination = deps.standing.positionOf(view.place);
     const located = locate(look.target, destination);
@@ -388,6 +414,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     return inTheDark(async () => {
       // First, so the look and the marks below are found from there.
       if (!samePlace(view.place, deps.standing.place())) deps.standing.set(view.place);
+      if (!(time.live && deps.clock.isLive())) applyTime(time);
       deps.layersPanel.showOnly(switches.on);
       const posed = aimMode() === 'pose';
       // Found again in the dark, where the view now stands and when; it resolved before, so it is not refused here.
@@ -483,6 +510,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     if (borrowed) throw new Error('the view is already borrowed');
     const fovDeg = deps.look.getState().fovDeg;
     const place = deps.standing.place();
+    const clock = deps.clock.save();
     const panel = deps.layersPanel.borrow();
     borrowed = true;
     borrowEpoch++;
@@ -503,6 +531,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         deps.look.setAim(state.yawRad, state.pitchRad, fovDeg);
         // Back where the user stood, at once: leaving the guide is the user's own move, made in their own time.
         deps.standing.set(place);
+        // The clock as the user left it, run on through the guide: a live clock is live again, a pinned one has moved on.
+        deps.clock.restore(clock);
         panel.end();
         borrowed = false;
       },
@@ -765,6 +795,34 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   }
 
   const forward = new THREE.Vector3();
+
+  /**
+   * A time setting, checked against the clock before anything changes: the instant it starts from and whether it is
+   * live time, or why it cannot be. The schema bounds the rate; this reads the instants, which a pattern cannot.
+   */
+  function checkTime(setting: TimeSetting): CheckedTime | { readonly ok: false; readonly code: 'bad-value'; readonly message: string } {
+    const bad = (message: string) => ({ ok: false, code: 'bad-value', message }) as const;
+    const rate = setting.rate ?? 1;
+    if (!(Math.abs(rate) <= MAX_TIME_RATE)) return bad(`a clock rate of ${rate} is not between ${-MAX_TIME_RATE} and ${MAX_TIME_RATE}`);
+    const now = setting.to === 'now';
+    const fromMs = now ? deps.clock.liveMs() : Date.parse(setting.to);
+    if (Number.isNaN(fromMs)) return bad(`${setting.to} is not an instant`);
+    if (setting.until === undefined) return { ok: true, fromMs, fromNow: now, rate, untilMs: undefined, live: now && rate === 1 };
+    const untilMs = Date.parse(setting.until);
+    if (Number.isNaN(untilMs)) return bad(`${setting.until} is not an instant`);
+    if (!(rate > 0 ? untilMs > fromMs : rate < 0 ? untilMs < fromMs : false)) {
+      return bad(`the clock does not reach ${setting.until} from ${new Date(fromMs).toISOString()} at a rate of ${rate}`);
+    }
+    return { ok: true, fromMs, fromNow: now, rate, untilMs, live: false };
+  }
+
+  function applyTime(time: CheckedTime): ActionOutcome {
+    // Live time is the wall clock's, read when it is made: the check's instant is a moment old by now.
+    if (time.fromNow) deps.clock.goLive();
+    else deps.clock.set(time.fromMs);
+    if (!time.live) deps.clock.setRate(time.rate, time.untilMs);
+    return { ok: true };
+  }
 
   /** `position`: where the view stands, unless the question is about where it is about to. */
   function locate(target: Target, position = deps.standing.position()): Located | TargetUnresolved {

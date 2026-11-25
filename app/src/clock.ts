@@ -34,6 +34,8 @@ export interface AppClock {
   setRate(rate: number, untilMs?: number): void;
   /** Back to wall time at the real rate. */
   goLive(): void;
+  /** What the clock would read live, now: wall time. To check a setting against before making it. */
+  liveMs(): number;
   /**
    * Stand still while held, and on release run on from where it stood, at the rate and toward the stop it had: a
    * paused guide's time-lapse waits for it. Set and setRate still take effect while held.
@@ -116,6 +118,7 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
       live = true;
       anchor(wallNow());
     },
+    liveMs: () => wallNow(),
     hold(next) {
       const sim = simAt(wallNow());
       held = next;

@@ -12,7 +12,7 @@
 import type { FromSchema, JSONSchema } from 'json-schema-to-ts';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { MAX_FOV_DEG, MIN_FOV_DEG } from '../input/look';
-import { FOV_NEEDS_TARGET_BELOW_DEG, MAX_FADE_S } from './view-control';
+import { FOV_NEEDS_TARGET_BELOW_DEG, MAX_FADE_S, MAX_TIME_RATE } from './view-control';
 
 /** Arrays and fields read-only all the way down; anything else as it is. */
 type DeepReadonly<T> = T extends readonly (infer E)[]
@@ -28,6 +28,11 @@ export type SchemaType<S extends JSONSchema> = DeepReadonly<FromSchema<S>>;
 const EARTH_RADIUS_KM = EARTH_RADIUS_M / 1000;
 
 const NAME = { type: 'string', minLength: 1 } as const;
+/** An ISO 8601 instant with its offset: a date and a time alone would be read in the viewer's own time zone. */
+const INSTANT = {
+  type: 'string',
+  pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$',
+} as const;
 const LATITUDE = { type: 'number', minimum: -90, maximum: 90 } as const;
 
 /** Something to look at. Every kind resolves to a direction from where the view stands (targets.ts). */
@@ -168,6 +173,23 @@ export const FOV_FIELDS = {
   properties: { do: { const: 'fov' }, fovDeg: { type: 'number', minimum: FOV_NEEDS_TARGET_BELOW_DEG, maximum: MAX_FOV_DEG } },
   required: ['do', 'fovDeg'],
 } as const;
+/** The app clock's setting: the whole of it, so a later one replaces an earlier one. */
+export const TIME_PROPERTIES = {
+  // Not `at`, which in a guide is when a cue fires.
+  to: { description: "An ISO 8601 instant with its offset, or 'now'.", anyOf: [{ const: 'now' }, INSTANT] },
+  rate: {
+    description: 'Simulated seconds per real second: 1, or left out, is real time; 0 stands still; below 0 runs back. A year a second at most.',
+    type: 'number',
+    minimum: -MAX_TIME_RATE,
+    maximum: MAX_TIME_RATE,
+  },
+  until: { ...INSTANT, description: 'Where the clock stops, for good: ahead of `to` in the direction it runs.' },
+} as const;
+export const TIME_FIELDS = {
+  description: "Set the app clock. A jump is made in a dip to dark; 'now' at the real rate goes back to live time.",
+  properties: { do: { const: 'time' }, ...TIME_PROPERTIES },
+  required: ['do', 'to'],
+} as const;
 export const STAND_FIELDS = {
   description: 'Stand the view somewhere else on the ground: a dip to dark, then the view from there.',
   properties: { do: { const: 'stand' }, place: PLACE_SCHEMA },
@@ -189,5 +211,6 @@ export const VIEW_ACTION_SCHEMA = {
     { type: 'object', ...FOV_FIELDS, additionalProperties: false },
     { type: 'object', ...MARK_FIELDS, additionalProperties: false },
     { type: 'object', ...STAND_FIELDS, additionalProperties: false },
+    { type: 'object', ...TIME_FIELDS, additionalProperties: false },
   ],
 } as const;

@@ -188,6 +188,39 @@
                     ],
                     "description": "Where the view stands. Left out: here."
                   },
+                  "time": {
+                    "type": "object",
+                    "description": "The app clock at the chapter's start. Left out: now, at the real rate.",
+                    "properties": {
+                      "to": {
+                        "description": "An ISO 8601 instant with its offset, or 'now'.",
+                        "anyOf": [
+                          {
+                            "const": "now"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+                          }
+                        ]
+                      },
+                      "rate": {
+                        "description": "Simulated seconds per real second: 1, or left out, is real time; 0 stands still; below 0 runs back. A year a second at most.",
+                        "type": "number",
+                        "minimum": -31557600,
+                        "maximum": 31557600
+                      },
+                      "until": {
+                        "type": "string",
+                        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+                        "description": "Where the clock stops, for good: ahead of `to` in the direction it runs."
+                      }
+                    },
+                    "required": [
+                      "to"
+                    ],
+                    "additionalProperties": false
+                  },
                   "look": {
                     "type": "object",
                     "properties": {
@@ -437,6 +470,39 @@
                       }
                     ],
                     "description": "Where the view stands. Left out: here."
+                  },
+                  "time": {
+                    "type": "object",
+                    "description": "The app clock at the chapter's start. Left out: now, at the real rate.",
+                    "properties": {
+                      "to": {
+                        "description": "An ISO 8601 instant with its offset, or 'now'.",
+                        "anyOf": [
+                          {
+                            "const": "now"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+                          }
+                        ]
+                      },
+                      "rate": {
+                        "description": "Simulated seconds per real second: 1, or left out, is real time; 0 stands still; below 0 runs back. A year a second at most.",
+                        "type": "number",
+                        "minimum": -31557600,
+                        "maximum": 31557600
+                      },
+                      "until": {
+                        "type": "string",
+                        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+                        "description": "Where the clock stops, for good: ahead of `to` in the direction it runs."
+                      }
+                    },
+                    "required": [
+                      "to"
+                    ],
+                    "additionalProperties": false
                   },
                   "look": {
                     "type": "object",
@@ -1190,6 +1256,49 @@
                               "at"
                             ],
                             "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Set the app clock. A jump is made in a dip to dark; 'now' at the real rate goes back to live time.",
+                            "properties": {
+                              "do": {
+                                "const": "time"
+                              },
+                              "to": {
+                                "description": "An ISO 8601 instant with its offset, or 'now'.",
+                                "anyOf": [
+                                  {
+                                    "const": "now"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+                                  }
+                                ]
+                              },
+                              "rate": {
+                                "description": "Simulated seconds per real second: 1, or left out, is real time; 0 stands still; below 0 runs back. A year a second at most.",
+                                "type": "number",
+                                "minimum": -31557600,
+                                "maximum": 31557600
+                              },
+                              "until": {
+                                "type": "string",
+                                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+                                "description": "Where the clock stops, for good: ahead of `to` in the direction it runs."
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "to",
+                              "at"
+                            ],
+                            "additionalProperties": false
                           }
                         ]
                       }
@@ -1798,6 +1907,49 @@
                             "required": [
                               "do",
                               "place",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Set the app clock. A jump is made in a dip to dark; 'now' at the real rate goes back to live time.",
+                            "properties": {
+                              "do": {
+                                "const": "time"
+                              },
+                              "to": {
+                                "description": "An ISO 8601 instant with its offset, or 'now'.",
+                                "anyOf": [
+                                  {
+                                    "const": "now"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+                                  }
+                                ]
+                              },
+                              "rate": {
+                                "description": "Simulated seconds per real second: 1, or left out, is real time; 0 stands still; below 0 runs back. A year a second at most.",
+                                "type": "number",
+                                "minimum": -31557600,
+                                "maximum": 31557600
+                              },
+                              "until": {
+                                "type": "string",
+                                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+                                "description": "Where the clock stops, for good: ahead of `to` in the direction it runs."
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "to",
                               "at"
                             ],
                             "additionalProperties": false

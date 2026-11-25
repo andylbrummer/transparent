@@ -61,7 +61,7 @@ const guide: Guide = {
   ],
 };
 
-const chapterStart: FoldedView = { layers: { only: ['globe-surface', 'political'] }, place: { kind: 'here' }, look: { target: down, fovDeg: 60 }, marks: [] };
+const chapterStart: FoldedView = { layers: { only: ['globe-surface', 'political'] }, place: { kind: 'here' }, time: { to: 'now' }, look: { target: down, fovDeg: 60 }, marks: [] };
 
 describe('foldTo', () => {
   it("gives the scene at a chapter's start", () => {
@@ -89,6 +89,7 @@ describe('foldTo', () => {
     expect(foldTo(guide, 1, 0, 0)).toEqual({
       layers: { preset: 'sky', on: ['stars'], off: [] },
       place: { kind: 'here' },
+      time: { to: 'now' },
       look: { target: sun, fovDeg: 40 },
       marks: [],
     });
@@ -110,6 +111,15 @@ describe('foldTo', () => {
     expect(foldTo(moving, 0, 0, 0).place).toEqual(pole);
     expect(foldTo(moving, 0, 0, 2).place).toEqual({ kind: 'antipode' });
     expect(foldTo(moving, 1, 0, 0).place).toEqual({ kind: 'here' });
+  });
+
+  it('runs the clock as the scene says, and live when it says nothing', () => {
+    const quake: Guide = { ...guide, chapters: [{ ...guide.chapters[0], scene: { ...guide.chapters[0].scene, time: { to: '2011-03-11T05:46Z' } } }] };
+    expect(foldTo(quake, 0, 0, 0).time).toEqual({ to: '2011-03-11T05:46Z' });
+    expect(foldTo(guide, 0, 0, 0).time).toEqual({ to: 'now' });
+    // A cue's own `at` is when it fired, not part of the clock's setting.
+    const lapse: Guide = { ...guide, chapters: [{ ...guide.chapters[0], steps: [{ id: 'run', silenceS: 9, cues: [{ at: 3, do: 'time', to: 'now', rate: 2 }], advance: 'auto' }] }] };
+    expect(foldTo(lapse, 0, 0, 3).time).toEqual({ to: 'now', rate: 2 });
   });
 
   it('starts from a listed scene as its list, and from a preset scene as the preset with nothing flipped', () => {

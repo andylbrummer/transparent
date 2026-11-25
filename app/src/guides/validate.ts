@@ -11,7 +11,7 @@ import type { LayerParamValues } from '../layers/types';
 import type { SurfacePosition } from '../sensors';
 import { canFade, type LayerSwitch } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
-import type { Target } from '../view/actions';
+import type { Target, TimeSetting } from '../view/actions';
 import { targetDirection, type LabelIndex } from '../view/targets';
 import type { Guide } from './format';
 
@@ -30,6 +30,9 @@ export interface GuideWorld {
   /** The baked labels by name: indexLabels of geo/labels.json, geology.json and quakes.json. */
   readonly labels: LabelIndex;
 }
+
+/** Faster than this, a time-lapse needs a stop: under reduced motion it is a jump there instead (spec/guides.md §7.3). */
+export const RATE_NEEDS_UNTIL_ABOVE = 60;
 
 // A label resolves to the same place from anywhere at any time; the direction is not used.
 const ANYWHERE: SurfacePosition = { lat: 0, lon: 0 };
@@ -100,6 +103,20 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     if (!resolved.ok) problem(path, resolved.message);
   };
 
+  const checkTime = (path: string, time: TimeSetting): void => {
+    const rate = time.rate ?? 1;
+    if (Math.abs(rate) > RATE_NEEDS_UNTIL_ABOVE && time.until === undefined) {
+      problem(path, `a rate of ${rate} needs an until: with reduced motion the clock jumps there instead`);
+    }
+    if (time.until === undefined) return;
+    if (rate === 0) problem(`${path}/until`, 'a clock standing still never reaches its until');
+    // From 'now' the view control checks it when it plays: the present moves.
+    else if (time.to !== 'now') {
+      const ahead = rate > 0 ? Date.parse(time.until) > Date.parse(time.to) : Date.parse(time.until) < Date.parse(time.to);
+      if (!ahead) problem(`${path}/until`, `the clock does not reach ${time.until} from ${time.to} at a rate of ${rate}`);
+    }
+  };
+
   const chapterIds = new Set<string>();
   guide.chapters.forEach((chapter, c) => {
     const chapterPath = `/chapters/${c}`;
@@ -110,6 +127,7 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     if ('preset' in scene) checkPreset(`${chapterPath}/scene/preset`, scene.preset);
     else checkOn(`${chapterPath}/scene/layers`, scene.layers);
     checkTarget(`${chapterPath}/scene/look/target`, scene.look.target);
+    if (scene.time) checkTime(`${chapterPath}/scene/time`, scene.time);
 
     const stepIds = new Set<string>();
     chapter.steps.forEach((step, s) => {
@@ -138,7 +156,11 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
           case 'mark':
             checkTarget(`${cuePath}/target`, cue.target);
             break;
+          case 'time':
+            checkTime(cuePath, cue);
+            break;
           case 'fov':
+          case 'stand':
             break;
         }
       });

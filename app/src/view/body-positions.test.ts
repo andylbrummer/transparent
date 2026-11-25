@@ -65,7 +65,7 @@ describe('before the body positions load', () => {
 });
 
 describe('the view control waits for them', () => {
-  const view: FoldedView = { layers: { only: [] }, place: { kind: 'here' }, look: { target: mars, fovDeg: 60 }, marks: [] };
+  const view: FoldedView = { layers: { only: [] }, place: { kind: 'here' }, time: { to: 'now' }, look: { target: mars, fovDeg: 60 }, marks: [] };
 
   it('in a look at a body', async () => {
     const control = viewControl();

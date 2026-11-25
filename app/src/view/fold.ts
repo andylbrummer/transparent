@@ -6,7 +6,7 @@
  */
 
 import type { LayerParamValues } from '../layers/types';
-import type { FoldedView, Target, ViewAction } from './actions';
+import type { FoldedView, Target, TimeSetting, ViewAction } from './actions';
 import { targetKey } from './targets';
 
 /** The view after one more action. Pure: `view` is not changed. */
@@ -27,6 +27,9 @@ export function foldAction(view: FoldedView, action: ViewAction): FoldedView {
       return { ...view, marks: foldMark(view.marks, action.target, action.text) };
     case 'stand':
       return { ...view, place: action.place };
+    case 'time':
+      // The whole setting, not merged: a cue that leaves out the rate means the real rate, not the last one.
+      return { ...view, time: timeSetting(action) };
   }
 }
 
@@ -67,4 +70,10 @@ function foldMark(marks: FoldedView['marks'], target: Target, text: string | nul
   if (text === null) return at < 0 ? marks : marks.filter((_, i) => i !== at);
   if (at < 0) return [...marks, { target, text }];
   return marks.map((mark, i) => (i === at ? { target, text } : mark));
+}
+
+/** A time action as a setting: its fields without its `do`, and nothing else a cue carries, such as its `at`. */
+export function timeSetting(action: { readonly to: string; readonly rate?: number; readonly until?: string }): TimeSetting {
+  const { to, rate, until } = action;
+  return { to, ...(rate === undefined ? {} : { rate }), ...(until === undefined ? {} : { until }) };
 }

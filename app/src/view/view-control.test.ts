@@ -492,6 +492,7 @@ describe('createViewControl', () => {
       const view = (only: string[]): FoldedView => ({
         layers: { only },
         place: { kind: 'here' },
+        time: { to: 'now' },
         look: { target: { kind: 'horizon', azDeg: 0, altDeg: -90 }, fovDeg: DEFAULT_LOOK_STATE.fovDeg },
         marks: [],
         params: { waves: { quake: 'tohoku2011', playing: true } },
@@ -1179,6 +1180,92 @@ describe('createViewControl', () => {
     });
   });
 
+  describe('time', () => {
+    const quake = '2011-03-11T05:46:24Z';
+    const quakeMs = Date.parse(quake);
+
+    it('jumps the clock in the dark, runs it at the rate given and stops it at the stop', async () => {
+      const t = setup();
+      t.dips.held = true;
+      const outcome = t.viewControl.perform({ do: 'time', to: quake, rate: 3600, until: '2011-03-11T06:46:24Z' });
+      await settle();
+      expect(t.clock.now()).toEqual(when);
+      t.dips.release();
+      expect(await outcome).toEqual({ ok: true });
+      expect(t.clock.now().getTime()).toBe(quakeMs);
+      t.view.wallMs += 500;
+      expect(t.clock.now().getTime()).toBe(quakeMs + 1_800_000);
+      t.view.wallMs += 5_000;
+      expect(t.clock.now().toISOString()).toBe('2011-03-11T06:46:24.000Z');
+      expect(t.dips.count).toBe(1);
+    });
+
+    it('runs on at a new rate from where it stands without going dark', async () => {
+      const t = setup();
+      expect(await t.viewControl.perform({ do: 'time', to: when.toISOString(), rate: 0 })).toEqual({ ok: true });
+      t.view.wallMs += 10_000;
+      expect(t.clock.now()).toEqual(when);
+      expect(t.dips.count).toBe(0);
+    });
+
+    it("goes live for 'now' at the real rate, and does nothing once live", async () => {
+      const t = setup();
+      t.view.wallMs = quakeMs;
+      expect(await t.viewControl.perform({ do: 'time', to: 'now' })).toEqual({ ok: true });
+      expect(t.clock.isLive()).toBe(true);
+      expect(t.clock.now().getTime()).toBe(quakeMs);
+      expect(await t.viewControl.perform({ do: 'time', to: 'now', rate: 1 })).toEqual({ ok: true });
+      expect(t.dips.count).toBe(1);
+    });
+
+    it("runs fast from the present for 'now' with a rate", async () => {
+      const t = setup();
+      t.view.wallMs = quakeMs;
+      expect(await t.viewControl.perform({ do: 'time', to: 'now', rate: 60 })).toEqual({ ok: true });
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(quakeMs + 60_000);
+      expect(t.clock.isLive()).toBe(false);
+    });
+
+    it.each<[string, ViewAction, string]>([
+      ['a stop behind the run', { do: 'time', to: quake, rate: -1, until: '2011-03-12T00:00Z' }, `the clock does not reach 2011-03-12T00:00Z from ${new Date(quakeMs).toISOString()} at a rate of -1`],
+      ['a stop for a clock standing still', { do: 'time', to: quake, rate: 0, until: '2011-03-12T00:00Z' }, `the clock does not reach 2011-03-12T00:00Z from ${new Date(quakeMs).toISOString()} at a rate of 0`],
+      ['an instant that is not one', { do: 'time', to: '2011-13-45T99:99Z' }, '2011-13-45T99:99Z is not an instant'],
+      ['a rate past a year a second', { do: 'time', to: quake, rate: 1e9 }, 'a clock rate of 1000000000 is not between -31557600 and 31557600'],
+    ])('refuses %s and leaves the clock', async (_, action, message) => {
+      const t = setup();
+      expect(await t.viewControl.perform(action)).toEqual({ ok: false, code: 'bad-value', message });
+      expect(t.clock.now()).toEqual(when);
+      expect(t.clock.rate()).toBe(1);
+      expect(t.dips.count).toBe(0);
+    });
+
+    it('gives the clock back as the user left it when the borrow ends, run on meanwhile', async () => {
+      const t = setup();
+      const borrow = t.viewControl.borrow();
+      await t.viewControl.perform({ do: 'time', to: quake, rate: 0 });
+      t.view.wallMs += 1000;
+      borrow.end();
+      expect(t.clock.now().getTime()).toBe(when.getTime() + 1000);
+      expect(t.clock.rate()).toBe(1);
+    });
+
+    it('sets the clock in a restore, before it finds the look', async () => {
+      const t = setup();
+      const sun = { kind: 'body', body: 'sun' } as const;
+      t.view.wallMs = quakeMs;
+      const view: FoldedView = { layers: { only: [] }, place: { kind: 'here' }, time: { to: quake, rate: 0 }, look: { target: sun, fovDeg: 60 }, marks: [] };
+      expect(await t.viewControl.restore(view)).toEqual({ ok: true });
+      expect(t.clock.now().getTime()).toBe(quakeMs);
+      const located = t.viewControl.locate(sun);
+      if (!located.ok) throw new Error(located.message);
+      expect(THREE.MathUtils.radToDeg(t.look.getState().pitchRad)).toBeCloseTo(located.altDeg, 4);
+      // A live scene puts it back live.
+      expect(await t.viewControl.restore({ ...view, time: { to: 'now' } })).toEqual({ ok: true });
+      expect(t.clock.isLive()).toBe(true);
+    });
+  });
+
   describe('stand', () => {
     const pole = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } as const;
     /** The ground straight under the North Pole. */
@@ -1260,6 +1347,7 @@ describe('createViewControl', () => {
     const scene = (layers: FoldedView['layers'], rest: Partial<Omit<FoldedView, 'layers'>> = {}): FoldedView => ({
       layers,
       place: { kind: 'here' },
+      time: { to: 'now' },
       look: { target: down, fovDeg: DEFAULT_LOOK_STATE.fovDeg },
       marks: [],
       ...rest,
@@ -1586,7 +1674,7 @@ describe('createViewControl', () => {
     async function playGuide({ viewControl }: ReturnType<typeof setup>): Promise<void> {
       expect(await viewControl.perform({ do: 'preset', id: 'night' })).toEqual({ ok: true });
       expect(await viewControl.perform({ do: 'layers', on: ['cmb'], off: ['clouds'] })).toEqual({ ok: true });
-      const view: FoldedView = { layers: { only: ['aurora', 'clouds'] }, place: { kind: 'here' }, look: { target: east, fovDeg: 30 }, marks: [] };
+      const view: FoldedView = { layers: { only: ['aurora', 'clouds'] }, place: { kind: 'here' }, time: { to: 'now' }, look: { target: east, fovDeg: 30 }, marks: [] };
       expect(await viewControl.restore(view)).toEqual({ ok: true });
     }
 

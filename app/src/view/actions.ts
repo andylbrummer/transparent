@@ -19,6 +19,9 @@ export type Place = SchemaType<typeof PLACE_SCHEMA>;
 /** One thing asked of the view. Written once, as a schema (action-schema.ts). */
 export type ViewAction = SchemaType<typeof VIEW_ACTION_SCHEMA>;
 
+/** The app clock's setting: a time action without its `do`. */
+export type TimeSetting = Omit<Extract<ViewAction, { readonly do: 'time' }>, 'do'>;
+
 /**
  * A view worked out from actions alone, with nothing done: where a guide
  * stands after its scene and the cues so far. Enough to put the view there
@@ -35,6 +38,8 @@ export interface FoldedView {
     | { readonly only: readonly string[] };
   /** Where the view stands. */
   readonly place: Place;
+  /** The app clock's setting, as the last time cue or the scene gave it. */
+  readonly time: TimeSetting;
   /** What the view looks at and how wide. */
   readonly look: { readonly target: Target; readonly fovDeg: number };
   /** The marks up, in the order they went up. */

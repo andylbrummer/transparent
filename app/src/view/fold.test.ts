@@ -6,13 +6,19 @@ const down: Target = { kind: 'horizon', azDeg: 0, altDeg: -90 };
 const sun: Target = { kind: 'body', body: 'sun' };
 
 /** The view a preset scene starts from. */
-const fromPreset: FoldedView = { layers: { preset: 'sky', on: [], off: [] }, place: { kind: 'here' }, look: { target: down, fovDeg: 60 }, marks: [] };
+const fromPreset: FoldedView = { layers: { preset: 'sky', on: [], off: [] }, place: { kind: 'here' }, time: { to: 'now' }, look: { target: down, fovDeg: 60 }, marks: [] };
 /** The view a listed scene starts from. */
-const fromList: FoldedView = { layers: { only: ['globe-surface', 'political'] }, place: { kind: 'here' }, look: { target: down, fovDeg: 60 }, marks: [] };
+const fromList: FoldedView = { layers: { only: ['globe-surface', 'political'] }, place: { kind: 'here' }, time: { to: 'now' }, look: { target: down, fovDeg: 60 }, marks: [] };
 
 const fold = (view: FoldedView, ...actions: ViewAction[]): FoldedView => actions.reduce(foldAction, view);
 
 describe('foldAction', () => {
+  it('takes the whole of the last time setting, not merged with the one before', () => {
+    const lapse = { do: 'time', to: '2011-03-11T05:46Z', rate: 3600, until: '2011-03-12T05:46Z' } as const;
+    expect(fold(fromPreset, lapse).time).toEqual({ to: '2011-03-11T05:46Z', rate: 3600, until: '2011-03-12T05:46Z' });
+    expect(fold(fromPreset, lapse, { do: 'time', to: 'now' }).time).toEqual({ to: 'now' });
+  });
+
   it('keeps the last place stood at', () => {
     const pole = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } as const;
     expect(fold(fromPreset, { do: 'stand', place: pole }).place).toEqual(pole);
