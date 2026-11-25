@@ -795,6 +795,40 @@ describe('createGuideSession', () => {
       expect(t.session.getGuide().state).toBe('loading');
     });
 
+    it('says when it is paused, for the pause card', async () => {
+      const t = setup();
+      await startPlaying(t);
+      expect(t.session.paused()).toBe(false);
+      t.session.onViewerInput('tap');
+      expect(t.session.paused()).toBe(true);
+    });
+
+    it.each([
+      ['resume', 0],
+      ['next', 1],
+    ] as const)('on the pause card, %s plays on, not paused', async (choice, stepIndex) => {
+      const t = setup();
+      await startPlaying(t);
+      t.session.onViewerInput('tap');
+      t.session.choosePauseCard(choice);
+      expect(t.session.getGuide()).toMatchObject({ paused: false, stepIndex });
+    });
+
+    it('on the pause card, Leave leaves the guide', async () => {
+      const t = setup();
+      await startPlaying(t);
+      t.session.onViewerInput('tap');
+      t.session.choosePauseCard('leave');
+      expect(t.session.getGuide().state).toBe('idle');
+    });
+
+    it('takes no pause-card choice when not paused', async () => {
+      const t = setup();
+      await startPlaying(t);
+      t.session.choosePauseCard('next');
+      expect(t.session.getGuide()).toMatchObject({ state: 'playing', stepIndex: 0 });
+    });
+
     it('plays again from the end at a tap', async () => {
       const t = setup();
       await end(t);

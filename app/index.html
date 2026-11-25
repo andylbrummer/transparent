@@ -968,6 +968,45 @@
         background: rgba(5, 5, 16, 0.82);
         border-radius: 8px;
       }
+      /* Cardboard: the pause card's choices, each eye's copy placed in its half (PauseCard.place). A bar under a choice
+         fills while the wearer looks at it. */
+      .pause-card {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .pause-card[hidden] {
+        display: none;
+      }
+      .pause-card__item {
+        position: absolute;
+        left: 0;
+        top: 0;
+        min-width: 64px;
+        padding: 8px 10px 10px;
+        font: 600 13px/1.2 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        text-align: center;
+        background: rgba(12, 14, 32, 0.85);
+        border: 1px solid rgba(160, 180, 255, 0.35);
+        border-radius: 10px;
+      }
+      .pause-card__item--under {
+        border-color: #ffd27a;
+        color: #ffd27a;
+      }
+      .pause-card__item::after {
+        content: '';
+        position: absolute;
+        left: 8px;
+        bottom: 4px;
+        height: 3px;
+        width: calc((100% - 16px) * var(--dwell, 0));
+        background: #ffd27a;
+        border-radius: 2px;
+      }
       .captions--stereo {
         inset: 0;
         padding: 0;

@@ -62,6 +62,7 @@ import type { ViewControl } from './view/actions';
 import { GazePointer, type StereoEyes } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
 import { StereoNotice } from './guides/stereo-notice';
+import { PauseCard } from './guides/pause-card';
 import { fetchGuides, guideLink } from './guides/guide-files';
 import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
@@ -322,6 +323,7 @@ export function init(): App | null {
   const gazePointer = new GazePointer(container);
   const captions = new CaptionOverlay(container);
   const stereoNotice = new StereoNotice(container);
+  const pauseCard = new PauseCard(container);
 
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
@@ -698,9 +700,11 @@ export function init(): App | null {
     const stereo = !ar && position !== null && cardboard.isActive();
     // AR draws no pointer and no captions; arrival is still counted there.
     gazePointer.setVisible(position !== null && !ar);
-    captions.setVisible(position !== null && !ar);
+    // The pause card stands where the captions would: paused, there is nothing being said to caption.
+    captions.setVisible(position !== null && !ar && !(stereo && pauseCard.isOpen()));
     captions.place(stereo, width, height, cardboardCalibration.spacingPx());
     stereoNotice.show(stereo ? guideSession.stereoNotice() : '');
+    if (!stereo && pauseCard.isOpen()) pauseCard.close();
     if (stereo) stereoNotice.place(width, height, cardboardCalibration.spacingPx());
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
@@ -770,6 +774,13 @@ export function init(): App | null {
       labels.update(stereoRig.left, eyeWidth, height, stereoRig.right, skyRotation);
       pointerEyes.eyeWidth = eyeWidth;
       gazePointer.update(viewControl.awaitedGaze(), camera, width, height, pointerEyes);
+      // Paused in the viewer, the guide's choices stand where the wearer was looking, chosen by a look.
+      if (guideSession.paused() && !cardboard.isCalibrating()) {
+        if (!pauseCard.isOpen()) pauseCard.open(camera);
+        const choice = pauseCard.update(camera.getWorldDirection(headForward), deltaMs);
+        if (choice) guideSession.choosePauseCard(choice);
+        else pauseCard.place(stereoRig.left, stereoRig.right, eyeWidth, height);
+      } else if (pauseCard.isOpen()) pauseCard.close();
       stereoRig.render(
         renderer,
         scene,
@@ -875,6 +886,7 @@ export function init(): App | null {
       guideList.dispose();
       captions.dispose();
       stereoNotice.dispose();
+      pauseCard.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();
     },

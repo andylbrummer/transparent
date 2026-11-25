@@ -11,6 +11,7 @@
  * live region without talking over the narration.
  */
 
+import type { PauseChoice } from './pause-card';
 import type { CaptionOverlay } from './captions';
 import type { Guide } from './format';
 import { fetchGuide, guideFileUrl, type GuideLink } from './guide-files';
@@ -78,6 +79,10 @@ export interface GuideSession {
    * `continue` step and nothing else, since a head nods without meaning to.
    */
   onViewerInput(input: 'tap' | 'nod'): boolean;
+  /** Whether the guide is paused: Cardboard then puts up the pause card. */
+  paused(): boolean;
+  /** A choice made on the pause card. Back and Next play on from where they go: the card is not a place to stay. */
+  choosePauseCard(choice: PauseChoice): void;
   /** A key pressed on the page: true when the guide took it. Space pauses or resumes, N and B step, Escape leaves. */
   onKey(key: string): boolean;
   /** Leave the guide if one is open, then let go of the narration and the page. */
@@ -332,6 +337,15 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     return true;
   }
 
+  function choosePauseCard(choice: PauseChoice): void {
+    if (!isPaused(player.state())) return;
+    if (choice === 'leave') return leave();
+    if (choice === 'back') player.back();
+    else if (choice === 'next') controls.next();
+    const state = player.state();
+    if (isPaused(state)) player.resume();
+  }
+
   function getGuide(): GuideStatus {
     const state = player.state();
     const at = state.kind === 'idle' ? null : state;
@@ -361,7 +375,7 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     guideCard.dispose();
   }
 
-  return { open, update, pause, getGuide, stereoNotice, onViewerInput, onKey, dispose };
+  return { open, update, pause, getGuide, stereoNotice, onViewerInput, paused: () => isPaused(player.state()), choosePauseCard, onKey, dispose };
 }
 
 /** The play bar's control each key presses. Escape is not here: it closes the card as well as leaving. */
