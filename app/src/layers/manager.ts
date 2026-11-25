@@ -19,6 +19,8 @@ interface Slot {
   loading: Promise<void> | null;
   /** Settings given before the layer had loaded, the last value of each, for it to take as it arrives; null when none are. */
   params: LayerParamValues | null;
+  /** The last opacity given, for a layer that fades to take as it arrives; 1 until a fade. */
+  opacity: number;
 }
 
 export class LayerManager {
@@ -35,7 +37,7 @@ export class LayerManager {
     private readonly onLoadFailed: (id: string) => void
   ) {
     for (const definition of definitions) {
-      this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: null, params: null });
+      this.slots.set(definition.id, { definition, wanted: false, instance: null, loading: null, params: null, opacity: 1 });
     }
   }
 
@@ -77,6 +79,17 @@ export class LayerManager {
     else slot.params = { ...slot.params, ...values };
   }
 
+  /**
+   * How much of a layer that fades shows, 0 to 1, called every frame of a fade. One still loading takes the last value
+   * as it loads. A layer that does not fade is a wiring fault and throws: the view control checks first.
+   */
+  setOpacity(id: string, opacity: number): void {
+    const slot = this.slot(id);
+    if (!slot.definition.fades) throw new Error(`lazy layer ${id} cannot fade`);
+    slot.opacity = opacity;
+    slot.instance?.setOpacity?.(opacity);
+  }
+
   private applyParams(instance: LayerInstance, id: string, values: LayerParamValues): void {
     if (!instance.setParams) throw new Error(`lazy layer ${id} has params but no setParams`);
     instance.setParams(values);
@@ -115,15 +128,19 @@ export class LayerManager {
         return;
       }
       // Before the layer is kept: one that refuses its settings has failed to load as asked, and says so as a failed load does.
-      if (slot.params) {
-        const params = slot.params;
-        slot.params = null;
-        try {
+      try {
+        if (slot.params) {
+          const params = slot.params;
+          slot.params = null;
           this.applyParams(instance, id, params);
-        } catch (error) {
-          instance.dispose();
-          throw error;
         }
+        if (slot.definition.fades) {
+          if (!instance.setOpacity) throw new Error(`lazy layer ${id} fades but has no setOpacity`);
+          instance.setOpacity(slot.opacity);
+        }
+      } catch (error) {
+        instance.dispose();
+        throw error;
       }
       slot.instance = instance;
       if (this.resolution) instance.setResolution?.(this.resolution.width, this.resolution.height);

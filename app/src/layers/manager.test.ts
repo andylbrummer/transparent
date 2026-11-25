@@ -358,6 +358,45 @@ describe('LayerManager', () => {
       expect(() => manager.setParams('no-such-layer', { speed: 1 })).toThrow('no lazy layer no-such-layer');
     });
   });
+
+  describe('setOpacity', () => {
+    /** A layer that fades and records each opacity it is given, and whether it was showing then. */
+    function fadingLayer() {
+      const given: { opacity: number; visible: boolean | null }[] = [];
+      const instance = {
+        ...fakeInstance(),
+        setOpacity(opacity: number) {
+          given.push({ opacity, visible: this.visible });
+        },
+      };
+      return { instance, given };
+    }
+
+    it('fades a loaded layer at once, and gives one still loading the last opacity before it first shows', async () => {
+      const { instance, given } = fadingLayer();
+      let finish!: (value: LayerInstance) => void;
+      const manager = new LayerManager([definition('clouds', () => new Promise((r) => (finish = r)), { fades: true })], shared, () => {}, () => {});
+      manager.setOpacity('clouds', 0);
+      const shown = manager.setVisible('clouds', true);
+      manager.setOpacity('clouds', 0.25);
+      finish(instance);
+      await shown;
+      expect(given).toEqual([{ opacity: 0.25, visible: null }]);
+      manager.setOpacity('clouds', 0.5);
+      expect(given.at(-1)).toEqual({ opacity: 0.5, visible: true });
+    });
+
+    it('throws for a layer that does not fade, and fails the load of one that says it fades but cannot', async () => {
+      const manager = new LayerManager(
+        [definition('stars', async () => fakeInstance()), definition('clouds', async () => fakeInstance(), { fades: true })],
+        shared,
+        () => {},
+        () => {}
+      );
+      expect(() => manager.setOpacity('stars', 0.5)).toThrow('lazy layer stars cannot fade');
+      await expect(manager.setVisible('clouds', true)).rejects.toThrow('layer "clouds" failed to load');
+    });
+  });
 });
 
 describe('collectDefinitions', () => {

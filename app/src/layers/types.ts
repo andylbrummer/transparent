@@ -139,6 +139,12 @@ export interface LayerInstance {
    * it. It may throw for a value the data turn out not to have, which reaches the caller as an error.
    */
   setParams?(values: LayerParamValues): void;
+  /**
+   * How much of the layer shows while it is visible, 0 to 1: a fade, called every frame of one, so it writes uniforms
+   * and allocates nothing. Apart from setVisible: an invisible layer stays invisible whatever this says. A layer whose
+   * definition says it `fades` has it.
+   */
+  setOpacity?(opacity: number): void;
   /** Called every frame while visible. */
   update?(frame: FrameState): void;
   /** CSS-pixel size of the viewport (one eye's in stereo). */
@@ -163,6 +169,8 @@ export interface LayerDefinition {
   readonly credits: readonly Credit[];
   /** The settings a guide, a link or the voice may give it beside its own control; its instance then has setParams. */
   readonly params?: LayerParams;
+  /** It can fade in and out (a `layers` action's fadeS); its instance then has setOpacity. */
+  readonly fades?: boolean;
   /** Fetch code and data and build the layer. Runs once, on first switch-on. */
   load(context: LayerContext): Promise<LayerInstance>;
 }

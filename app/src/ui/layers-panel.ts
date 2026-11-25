@@ -46,6 +46,13 @@ export interface LayerSwitch {
   readonly caption?: string;
   /** The settings its lazy layer takes beside the switch (LayerDefinition.params). */
   readonly params?: LayerParams;
+  /** Its lazy layer can fade (LayerDefinition.fades). A shell always can: canFade. */
+  readonly fades?: boolean;
+}
+
+/** Whether a `layers` action may fade the switch in or out: the globe's shells, and lazy layers that say they fade. */
+export function canFade(layer: LayerSwitch): boolean {
+  return 'shell' in layer.target || ('lazy' in layer.target && layer.fades === true);
 }
 
 export type LayerVisibility = Record<string, boolean>;
@@ -184,6 +191,7 @@ export function switchesWithLazyLayers(definitions: readonly LayerDefinition[]):
       defaultOff: !d.defaultOn,
       exclusiveGroup: d.exclusiveGroup,
       params: d.params,
+      fades: d.fades,
     })
   );
   const all = [...LAYER_SWITCHES, ...lazy];

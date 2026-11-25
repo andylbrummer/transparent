@@ -7,6 +7,7 @@ import {
   loadLayerVisibility,
   loadOpenSections,
   matchesFilter,
+  canFade,
   switchesWithLazyLayers,
   type GuideCredits,
   type LayerSwitch,
@@ -476,5 +477,22 @@ describe('LayersPanel with lazy layers', () => {
     ]);
     block.dispatchEvent(new Event('toggle'));
     expect(guideCredits).toHaveBeenCalledOnce();
+  });
+});
+
+describe('canFade', () => {
+  it('lets the shells fade, and a lazy layer only when its definition says it fades', () => {
+    const load = (): Promise<never> => Promise.reject(new Error('not loaded in this test'));
+    const switches = switchesWithLazyLayers([
+      { id: 'clouds', label: 'Clouds', section: 'Sky', credits: [], fades: true, load },
+      { id: 'stars', label: 'Stars', section: 'Sky', credits: [], load },
+    ]);
+    const byId = (id: string): LayerSwitch => switches.find((s) => s.id === id)!;
+    expect(canFade(byId('clouds'))).toBe(true);
+    expect(canFade(byId('stars'))).toBe(false);
+    const shells = LAYER_SWITCHES.filter((s) => 'shell' in s.target);
+    expect(shells.length).toBeGreaterThan(0);
+    for (const shell of shells) expect(canFade(shell)).toBe(true);
+    for (const other of LAYER_SWITCHES.filter((s) => !('shell' in s.target))) expect(canFade(other)).toBe(false);
   });
 });
