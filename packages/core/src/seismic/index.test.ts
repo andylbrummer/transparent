@@ -10,6 +10,7 @@ import {
   MAX_ACTIVE_EVENTS,
   tickClock,
   seekClock,
+  simTimeAfter,
   setCompression,
   togglePlay,
   loadEvents,
@@ -222,6 +223,13 @@ describe('playback clock', () => {
     const state = { ...DEFAULT_CLOCK, running: false };
     const next = tickClock(state, 1000);
     expect(next.simTimeMs).toBe(0);
+  });
+
+  it('reads where a tick would put the sim, without ticking', () => {
+    const state = { ...DEFAULT_CLOCK, running: true, simTimeMs: 5000, compression: -3600 };
+    expect(simTimeAfter(state, 1000)).toBe(tickClock(state, 1000).simTimeMs);
+    expect(simTimeAfter(state, 1000)).toBe(5000 - 3600000);
+    expect(simTimeAfter({ ...state, running: false }, 1000)).toBe(5000);
   });
 
   it('seek is idempotent', () => {

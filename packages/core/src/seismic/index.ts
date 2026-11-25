@@ -247,12 +247,21 @@ export function activeEventsAt(events: readonly EventRecord[], simTimeMs: number
 }
 
 /**
+ * Where the simulation stands `deltaWallMs` of wall time after the state's
+ * last tick, without ticking: tickClock's arithmetic, for a clock read far
+ * more often than it changes, which would otherwise build a state per read.
+ */
+export function simTimeAfter(state: ClockState, deltaWallMs: number): number {
+  return state.running ? state.simTimeMs + deltaWallMs * state.compression : state.simTimeMs;
+}
+
+/**
  * Advance the clock by a wall-time delta.
  */
 export function tickClock(state: ClockState, deltaWallMs: number): ClockState {
   if (!state.running) return state;
 
-  const newSimTime = state.simTimeMs + deltaWallMs * state.compression;
+  const newSimTime = simTimeAfter(state, deltaWallMs);
   return {
     ...state,
     wallTimeMs: state.wallTimeMs + deltaWallMs,
