@@ -61,7 +61,7 @@ const guide: Guide = {
   ],
 };
 
-const chapterStart: FoldedView = { layers: { only: ['globe-surface', 'political'] }, look: { target: down, fovDeg: 60 }, marks: [] };
+const chapterStart: FoldedView = { layers: { only: ['globe-surface', 'political'] }, place: { kind: 'here' }, look: { target: down, fovDeg: 60 }, marks: [] };
 
 describe('foldTo', () => {
   it("gives the scene at a chapter's start", () => {
@@ -86,7 +86,30 @@ describe('foldTo', () => {
   });
 
   it("starts the next chapter from its own scene, with nothing of the last one's", () => {
-    expect(foldTo(guide, 1, 0, 0)).toEqual({ layers: { preset: 'sky', on: ['stars'], off: [] }, look: { target: sun, fovDeg: 40 }, marks: [] });
+    expect(foldTo(guide, 1, 0, 0)).toEqual({
+      layers: { preset: 'sky', on: ['stars'], off: [] },
+      place: { kind: 'here' },
+      look: { target: sun, fovDeg: 40 },
+      marks: [],
+    });
+  });
+
+  it('stands where the scene says, here when it says nothing, and where a cue moves it', () => {
+    const pole = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } as const;
+    const moving: Guide = {
+      ...guide,
+      chapters: [
+        {
+          ...guide.chapters[0],
+          scene: { ...guide.chapters[0].scene, place: pole },
+          steps: [{ id: 'away', silenceS: 5, cues: [{ at: 2, do: 'stand', place: { kind: 'antipode' } }], advance: 'auto' }],
+        },
+        guide.chapters[1],
+      ],
+    };
+    expect(foldTo(moving, 0, 0, 0).place).toEqual(pole);
+    expect(foldTo(moving, 0, 0, 2).place).toEqual({ kind: 'antipode' });
+    expect(foldTo(moving, 1, 0, 0).place).toEqual({ kind: 'here' });
   });
 
   it('starts from a listed scene as its list, and from a preset scene as the preset with nothing flipped', () => {

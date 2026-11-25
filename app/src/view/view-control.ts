@@ -20,7 +20,7 @@ import type { LayerPreset } from '../ui/presets';
 import { CAPTURE_DEG, FRAME_MARGIN, type SpyglassTarget } from '../ui/spyglass';
 import type { ActionOutcome, AimMode, AwaitedGaze, FoldedView, Located, Target, TargetUnresolved, ViewAction, ViewControl } from './actions';
 import { easeAim, type Aim, type AimEase } from './aim-ease';
-import type { StandingPlace } from './standing-place';
+import { samePlace, type StandingPlace } from './standing-place';
 import { horizonOf, loadBodyPositions, needsBodyPositions, targetDirection, targetKey, targetName, type LabelIndex, type LoadedLabels } from './targets';
 
 export interface ViewControlDeps {
@@ -37,7 +37,7 @@ export interface ViewControlDeps {
   /** The view's camera: its forward is the view's centre, in a pose as in a drag. */
   readonly camera: THREE.Camera;
   /** Where the view stands: its position is null until there is one. */
-  readonly standing: Pick<StandingPlace, 'place' | 'position' | 'set'>;
+  readonly standing: Pick<StandingPlace, 'place' | 'position' | 'set' | 'positionOf'>;
   /** The app clock: targets are found at its time. */
   readonly clock: AppClock;
   /** The baked labels by name; null until the label files have loaded. */
@@ -153,9 +153,9 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
    * Make `change` in the dark, unless the borrow it was asked in has ended or begun while the view went dark: then
    * the view is no longer the asker's, and nothing is done.
    */
-  function inTheDark(change: () => Promise<ActionOutcome>): Promise<ActionOutcome> {
+  function inTheDark(change: () => ActionOutcome | Promise<ActionOutcome>): Promise<ActionOutcome> {
     const epoch = borrowEpoch;
-    return deps.dip(() => (epoch === borrowEpoch ? change() : Promise.resolve<ActionOutcome>({ ok: true })));
+    return deps.dip((): ActionOutcome | Promise<ActionOutcome> => (epoch === borrowEpoch ? change() : { ok: true }));
   }
 
   /**
@@ -331,6 +331,19 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         putMark(action.target, action.text, located.direction);
         return { ok: true };
       }
+      case 'stand': {
+        const { place } = action;
+        if (place.kind === 'at' && !(Math.abs(place.lat) <= 90 && Math.abs(place.lon) <= 180)) {
+          return { ok: false, code: 'bad-value', message: `no place at ${place.lat}, ${place.lon}` };
+        }
+        // Standing where it stands already is no change, and no reason to go dark.
+        if (samePlace(place, deps.standing.place())) return { ok: true };
+        // The whole view moves: in the dark. The aim stays, as a direction in the new place's own frame.
+        return inTheDark(() => {
+          deps.standing.set(place);
+          return { ok: true };
+        });
+      }
     }
   }
 
@@ -351,12 +364,17 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       const loaded = await bodiesLoaded();
       if (!loaded.ok) return loaded;
     }
-    const located = locate(look.target);
+    if (view.place.kind === 'at' && !(Math.abs(view.place.lat) <= 90 && Math.abs(view.place.lon) <= 180)) {
+      return { ok: false, code: 'bad-value', message: `no place at ${view.place.lat}, ${view.place.lon}` };
+    }
+    // Found from where the view will stand, which is not yet where it stands.
+    const destination = deps.standing.positionOf(view.place);
+    const located = locate(look.target, destination);
     if (!located.ok) return { ok: false, code: 'target-unresolved', message: located.message };
     const placed: { readonly target: Target; readonly text: string; readonly direction: THREE.Vector3 }[] = [];
     for (const mark of view.marks) {
       if (mark.text === '') return { ok: false, code: 'bad-value', message: 'mark text is empty' };
-      const found = locate(mark.target);
+      const found = locate(mark.target, destination);
       if (!found.ok) return { ok: false, code: 'target-unresolved', message: found.message };
       placed.push({ target: mark.target, text: mark.text, direction: found.direction });
     }
@@ -368,6 +386,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     endEase({ ok: true });
     spyglassWait = null;
     return inTheDark(async () => {
+      // First, so the look and the marks below are found from there.
+      if (!samePlace(view.place, deps.standing.place())) deps.standing.set(view.place);
       deps.layersPanel.showOnly(switches.on);
       const posed = aimMode() === 'pose';
       // Found again in the dark, where the view now stands and when; it resolved before, so it is not refused here.
@@ -462,6 +482,7 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
   function borrow(): { end(): void } {
     if (borrowed) throw new Error('the view is already borrowed');
     const fovDeg = deps.look.getState().fovDeg;
+    const place = deps.standing.place();
     const panel = deps.layersPanel.borrow();
     borrowed = true;
     borrowEpoch++;
@@ -480,6 +501,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
         // to a pose's limit. The aim is left alone: the user is looking there now.
         const state = deps.look.getState();
         deps.look.setAim(state.yawRad, state.pitchRad, fovDeg);
+        // Back where the user stood, at once: leaving the guide is the user's own move, made in their own time.
+        deps.standing.set(place);
         panel.end();
         borrowed = false;
       },
@@ -743,8 +766,8 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
 
   const forward = new THREE.Vector3();
 
-  function locate(target: Target): Located | TargetUnresolved {
-    const position = deps.standing.position();
+  /** `position`: where the view stands, unless the question is about where it is about to. */
+  function locate(target: Target, position = deps.standing.position()): Located | TargetUnresolved {
     if (!position) return { ok: false, code: 'target-unresolved', message: 'no position yet' };
     const labels = deps.getLabels();
     // Not yet loaded is not unknown: say which, rather than "no label named".

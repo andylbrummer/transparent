@@ -4,11 +4,11 @@
  * public/guides/guide.schema.json is its output, written by
  * `npm run guides:schema` and held to it by a test.
  *
- * Only what phase 1 plays: no place, time, hotspots or clips. A schema
- * that accepted them would pass guides the app cannot play.
+ * Only what the app plays: no time, hotspots or clips yet. A schema that
+ * accepted them would pass guides the app cannot play.
  */
 
-import { FOV_FIELDS, LAYERS_FIELDS, LOOK_FIELDS, MARK_FIELDS, PRESET_FIELDS, TARGET_SCHEMA } from '../view/action-schema';
+import { FOV_FIELDS, LAYERS_FIELDS, LOOK_FIELDS, MARK_FIELDS, PLACE_SCHEMA, PRESET_FIELDS, STAND_FIELDS, TARGET_SCHEMA } from '../view/action-schema';
 // Kept in format.ts, which the app imports, so that checking a guide at run time does not bring this schema with it.
 import { GUIDE_FORMAT_VERSION, ID_PATTERN } from './format';
 
@@ -43,12 +43,15 @@ const SCENE_LOOK = {
   additionalProperties: false,
 } as const;
 
+/** Where the view stands at a chapter's start. Left out, it stands here: a scene is still the whole view. */
+const SCENE_PLACE = { ...PLACE_SCHEMA, description: 'Where the view stands. Left out: here.' } as const;
+
 const SCENE = {
   description: "The whole view at the chapter's start: where a guide seeks to. Its switches as a preset has them, or as listed.",
   oneOf: [
     {
       type: 'object',
-      properties: { preset: TEXT, look: SCENE_LOOK },
+      properties: { preset: TEXT, place: SCENE_PLACE, look: SCENE_LOOK },
       required: ['preset', 'look'],
       additionalProperties: false,
     },
@@ -56,6 +59,7 @@ const SCENE = {
       type: 'object',
       properties: {
         layers: { type: 'array', items: TEXT, uniqueItems: true, description: 'The switches that are on; every other is off. Empty is all off.' },
+        place: SCENE_PLACE,
         look: SCENE_LOOK,
       },
       required: ['layers', 'look'],
@@ -82,6 +86,7 @@ const CUE = {
     { type: 'object', ...LOOK_FIELDS, properties: { ...LOOK_FIELDS.properties, at: AT }, required: [...LOOK_FIELDS.required, 'at'], additionalProperties: false },
     { type: 'object', ...FOV_FIELDS, properties: { ...FOV_FIELDS.properties, at: AT }, required: [...FOV_FIELDS.required, 'at'], additionalProperties: false },
     { type: 'object', ...MARK_FIELDS, properties: { ...MARK_FIELDS.properties, at: AT }, required: [...MARK_FIELDS.required, 'at'], additionalProperties: false },
+    { type: 'object', ...STAND_FIELDS, properties: { ...STAND_FIELDS.properties, at: AT }, required: [...STAND_FIELDS.required, 'at'], additionalProperties: false },
   ],
 } as const;
 

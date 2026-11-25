@@ -42,6 +42,14 @@ export interface StandingPlace {
   position(): SurfacePosition | null;
   /** Stand somewhere else. A place out of range throws: actions are checked before they get here. */
   set(place: Place): void;
+  /** Where `place` is now, without standing there: to check a view before moving to it. Builds a new object. */
+  positionOf(place: Place): SurfacePosition | null;
+}
+
+/** Whether two places are the one place: standing at it again changes nothing. */
+export function samePlace(a: Place, b: Place): boolean {
+  if (a.kind !== 'at' || b.kind !== 'at') return a.kind === b.kind;
+  return a.lat === b.lat && a.lon === b.lon && a.name === b.name;
 }
 
 /** `here()` is the sensors' position, the fix or its stand-in; it is read, never copied, so a new fix moves `here` at once. */
@@ -77,6 +85,17 @@ export function createStandingPlace(here: () => SurfacePosition | null): Standin
         at = { lat, lon };
       }
       place = next;
+    },
+    positionOf(other) {
+      const from = here();
+      switch (other.kind) {
+        case 'here':
+          return from;
+        case 'antipode':
+          return from === null ? null : antipodeOf(from);
+        case 'at':
+          return { lat: other.lat, lon: other.lon };
+      }
     },
   };
 }

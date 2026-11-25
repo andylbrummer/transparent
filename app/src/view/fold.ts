@@ -25,6 +25,8 @@ export function foldAction(view: FoldedView, action: ViewAction): FoldedView {
       return { ...view, look: { target: view.look.target, fovDeg: action.fovDeg } };
     case 'mark':
       return { ...view, marks: foldMark(view.marks, action.target, action.text) };
+    case 'stand':
+      return { ...view, place: action.place };
   }
 }
 

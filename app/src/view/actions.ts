@@ -33,6 +33,8 @@ export interface FoldedView {
   readonly layers:
     | { readonly preset: string; readonly on: readonly string[]; readonly off: readonly string[] }
     | { readonly only: readonly string[] };
+  /** Where the view stands. */
+  readonly place: Place;
   /** What the view looks at and how wide. */
   readonly look: { readonly target: Target; readonly fovDeg: number };
   /** The marks up, in the order they went up. */

@@ -53,6 +53,9 @@ describe('the action schema', () => {
     { do: 'fov', fovDeg: MAX_FOV_DEG },
     { do: 'mark', target: sun, text: 'The Sun' },
     { do: 'mark', target: sun, text: null },
+    { do: 'stand', place: { kind: 'here' } },
+    { do: 'stand', place: { kind: 'antipode' } },
+    { do: 'stand', place: { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } },
   ])('takes the action %o', (viewAction) => {
     expect(isAction(viewAction)).toBe(true);
   });
@@ -77,6 +80,10 @@ describe('the action schema', () => {
     ['an unknown body', { do: 'look', target: { kind: 'body', body: 'pluto' } }],
     ['an unknown label kind', { do: 'look', target: { kind: 'label', name: 'Tuzo', labelKind: 'ocean' } }],
     ['an empty preset id', { do: 'preset', id: '' }],
+    ['a stand with no place', { do: 'stand' }],
+    ['a place with no name', { do: 'stand', place: { kind: 'at', lat: 0, lon: 0 } }],
+    ['a place off the globe', { do: 'stand', place: { kind: 'at', lat: 91, lon: 0, name: 'Nowhere' } }],
+    ['a place that is not here with a position', { do: 'stand', place: { kind: 'here', lat: 0 } }],
   ])('refuses %s', (_, viewAction) => {
     expect(isAction(viewAction)).toBe(false);
   });

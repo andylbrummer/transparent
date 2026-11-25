@@ -168,6 +168,11 @@ export const FOV_FIELDS = {
   properties: { do: { const: 'fov' }, fovDeg: { type: 'number', minimum: FOV_NEEDS_TARGET_BELOW_DEG, maximum: MAX_FOV_DEG } },
   required: ['do', 'fovDeg'],
 } as const;
+export const STAND_FIELDS = {
+  description: 'Stand the view somewhere else on the ground: a dip to dark, then the view from there.',
+  properties: { do: { const: 'stand' }, place: PLACE_SCHEMA },
+  required: ['do', 'place'],
+} as const;
 export const MARK_FIELDS = {
   description: 'A ring and a line of text on a target; `text: null` removes it.',
   properties: { do: { const: 'mark' }, target: TARGET_SCHEMA, text: { type: ['string', 'null'], minLength: 1 } },
@@ -183,5 +188,6 @@ export const VIEW_ACTION_SCHEMA = {
     { type: 'object', ...LOOK_FIELDS, additionalProperties: false },
     { type: 'object', ...FOV_FIELDS, additionalProperties: false },
     { type: 'object', ...MARK_FIELDS, additionalProperties: false },
+    { type: 'object', ...STAND_FIELDS, additionalProperties: false },
   ],
 } as const;

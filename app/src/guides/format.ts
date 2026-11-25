@@ -7,7 +7,7 @@
  * pattern, are kept here instead, and the schema takes them from here.
  */
 
-import type { FoldedView } from '../view/actions';
+import type { FoldedView, Place } from '../view/actions';
 import type { SchemaType } from '../view/action-schema';
 import { foldAction } from '../view/fold';
 import type { GUIDE_SCHEMA } from './guide-schema';
@@ -16,6 +16,8 @@ import type { GUIDE_SCHEMA } from './guide-schema';
 export const GUIDE_FORMAT_VERSION = 1;
 /** Every id in a guide, its own included: lower-case words joined by hyphens. */
 export const ID_PATTERN = '^[a-z0-9]+(-[a-z0-9]+)*$';
+
+const HERE: Place = { kind: 'here' };
 
 /** A guide file, as guide.schema.json describes it. */
 export type Guide = SchemaType<typeof GUIDE_SCHEMA>;
@@ -43,6 +45,8 @@ export function foldTo(guide: Guide, chapterIndex: number, stepIndex: number, tS
   const { scene } = chapter;
   let view: FoldedView = {
     layers: 'preset' in scene ? { preset: scene.preset, on: [], off: [] } : { only: [...scene.layers] },
+    // A scene is the whole view, so one that says nothing of the place stands here.
+    place: scene.place ?? HERE,
     look: scene.look,
     marks: [],
   };

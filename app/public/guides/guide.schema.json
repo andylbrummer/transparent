@@ -127,6 +127,67 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "place": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "description": "Where the sensors say the user is.",
+                        "properties": {
+                          "kind": {
+                            "const": "here"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "description": "The far side of the Earth from here.",
+                        "properties": {
+                          "kind": {
+                            "const": "antipode"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "description": "A named place on the ground. The name is what the place chip says.",
+                        "properties": {
+                          "kind": {
+                            "const": "at"
+                          },
+                          "lat": {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          },
+                          "lon": {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "lat",
+                          "lon",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "Where the view stands. Left out: here."
+                  },
                   "look": {
                     "type": "object",
                     "properties": {
@@ -315,6 +376,67 @@
                     },
                     "uniqueItems": true,
                     "description": "The switches that are on; every other is off. Empty is all off."
+                  },
+                  "place": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "description": "Where the sensors say the user is.",
+                        "properties": {
+                          "kind": {
+                            "const": "here"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "description": "The far side of the Earth from here.",
+                        "properties": {
+                          "kind": {
+                            "const": "antipode"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "description": "A named place on the ground. The name is what the place chip says.",
+                        "properties": {
+                          "kind": {
+                            "const": "at"
+                          },
+                          "lat": {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          },
+                          "lon": {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "lat",
+                          "lon",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "Where the view stands. Left out: here."
                   },
                   "look": {
                     "type": "object",
@@ -988,6 +1110,86 @@
                               "at"
                             ],
                             "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Stand the view somewhere else on the ground: a dip to dark, then the view from there.",
+                            "properties": {
+                              "do": {
+                                "const": "stand"
+                              },
+                              "place": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "description": "Where the sensors say the user is.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "here"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "The far side of the Earth from here.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "antipode"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A named place on the ground. The name is what the place chip says.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "at"
+                                      },
+                                      "lat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "lon": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "lat",
+                                      "lon",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "place",
+                              "at"
+                            ],
+                            "additionalProperties": false
                           }
                         ]
                       }
@@ -1516,6 +1718,86 @@
                               "do",
                               "target",
                               "text",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "description": "Stand the view somewhere else on the ground: a dip to dark, then the view from there.",
+                            "properties": {
+                              "do": {
+                                "const": "stand"
+                              },
+                              "place": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "description": "Where the sensors say the user is.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "here"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "The far side of the Earth from here.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "antipode"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "description": "A named place on the ground. The name is what the place chip says.",
+                                    "properties": {
+                                      "kind": {
+                                        "const": "at"
+                                      },
+                                      "lat": {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      },
+                                      "lon": {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "lat",
+                                      "lon",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "at": {
+                                "type": "number",
+                                "minimum": 0,
+                                "description": "Seconds from the start of the step's narration."
+                              }
+                            },
+                            "required": [
+                              "do",
+                              "place",
                               "at"
                             ],
                             "additionalProperties": false

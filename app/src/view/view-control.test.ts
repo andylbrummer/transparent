@@ -13,7 +13,7 @@ import type { FoldedView, Located, Target, ViewAction, ViewControl } from './act
 import { foldAction } from './fold';
 import { EASE_MIN_MS } from './aim-ease';
 import { indexLabels, loadBodyPositions, targetDirection, targetKey, targetName, type LabelIndex } from './targets';
-import { createStandingPlace } from './standing-place';
+import { antipodeOf, createStandingPlace } from './standing-place';
 import { ARRIVE_DEG, ARRIVE_MS, MAX_FADE_S, POSE_MIN_FOV_DEG, createViewControl } from './view-control';
 import { CAPTURE_DEG, framingDeg, type SpyglassTarget } from '../ui/spyglass';
 
@@ -491,6 +491,7 @@ describe('createViewControl', () => {
       const { viewControl } = setup(null, { waves: waves.load });
       const view = (only: string[]): FoldedView => ({
         layers: { only },
+        place: { kind: 'here' },
         look: { target: { kind: 'horizon', azDeg: 0, altDeg: -90 }, fovDeg: DEFAULT_LOOK_STATE.fovDeg },
         marks: [],
         params: { waves: { quake: 'tohoku2011', playing: true } },
@@ -1178,6 +1179,77 @@ describe('createViewControl', () => {
     });
   });
 
+  describe('stand', () => {
+    const pole = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } as const;
+    /** The ground straight under the North Pole. */
+    const poleGround = { kind: 'ground', lat: 90, lon: 0 } as const;
+
+    function altitudeOf(viewControl: ViewControl, target: Target): number {
+      const located = viewControl.locate(target);
+      if (!located.ok) throw new Error(located.message);
+      return located.altDeg;
+    }
+
+    it('moves the view to a named place in the dark, and finds targets from there', async () => {
+      const t = setup();
+      t.dips.held = true;
+      const outcome = t.viewControl.perform({ do: 'stand', place: pole });
+      await settle();
+      expect(t.standing.position()).toBe(austin);
+      t.dips.release();
+      expect(await outcome).toEqual({ ok: true });
+      expect(t.standing.place()).toEqual(pole);
+      expect(t.standing.position()).toEqual({ lat: 90, lon: 0 });
+      expect(altitudeOf(t.viewControl, poleGround)).toBeCloseTo(-90, 6);
+      expect(t.dips.count).toBe(1);
+    });
+
+    it('stands at the far side from here', async () => {
+      const t = setup();
+      expect(await t.viewControl.perform({ do: 'stand', place: { kind: 'antipode' } })).toEqual({ ok: true });
+      expect(t.standing.position()).toEqual(antipodeOf(austin));
+    });
+
+    it('does not go dark to stand where it stands', async () => {
+      const t = setup();
+      expect(await t.viewControl.perform({ do: 'stand', place: { kind: 'here' } })).toEqual({ ok: true });
+      await t.viewControl.perform({ do: 'stand', place: pole });
+      expect(await t.viewControl.perform({ do: 'stand', place: { ...pole } })).toEqual({ ok: true });
+      expect(t.dips.count).toBe(1);
+    });
+
+    it('refuses a place off the globe, and stays', async () => {
+      const t = setup();
+      expect(await t.viewControl.perform({ do: 'stand', place: { kind: 'at', lat: 0, lon: 181, name: 'Nowhere' } })).toEqual({
+        ok: false,
+        code: 'bad-value',
+        message: 'no place at 0, 181',
+      });
+      expect(t.standing.place()).toEqual({ kind: 'here' });
+      expect(t.dips.count).toBe(0);
+    });
+
+    it('keeps a mark on its target from the new place', async () => {
+      const t = setup();
+      await t.viewControl.perform({ do: 'mark', target: poleGround, text: 'Pole' });
+      await t.viewControl.perform({ do: 'stand', place: pole });
+      t.viewControl.update(16);
+      const markAt = t.markSpecs[0].labels[0].position.clone().sub(t.camera.position).normalize();
+      // The camera has not moved (main.ts moves it), but the mark is found from the pole now: straight down there.
+      const down = new THREE.Vector3(0, 0, -1);
+      expect(markAt.angleTo(down)).toBeLessThan(1e-6);
+    });
+
+    it('stands where the user stood when the borrow ends', async () => {
+      const t = setup();
+      const borrow = t.viewControl.borrow();
+      await t.viewControl.perform({ do: 'stand', place: pole });
+      borrow.end();
+      expect(t.standing.place()).toEqual({ kind: 'here' });
+      expect(t.standing.position()).toBe(austin);
+    });
+  });
+
   describe('restore', () => {
     const down = { kind: 'horizon', azDeg: 0, altDeg: -90 } as const;
     const east = { kind: 'horizon', azDeg: 90, altDeg: 0 } as const;
@@ -1187,6 +1259,7 @@ describe('createViewControl', () => {
     /** A whole view with these switches, looking straight down as the app starts, with no marks. */
     const scene = (layers: FoldedView['layers'], rest: Partial<Omit<FoldedView, 'layers'>> = {}): FoldedView => ({
       layers,
+      place: { kind: 'here' },
       look: { target: down, fovDeg: DEFAULT_LOOK_STATE.fovDeg },
       marks: [],
       ...rest,
@@ -1244,6 +1317,19 @@ describe('createViewControl', () => {
       cmb.finish();
       expect(await outcome).toEqual({ ok: true });
       expect(t.dips.count).toBe(1);
+    });
+
+    it('stands where the view says before it finds the look and the marks', async () => {
+      const t = setup();
+      const pole = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } as const;
+      const poleGround = { kind: 'ground', lat: 90, lon: 0 } as const;
+      // No fix: here has no position, and the pole still has one.
+      t.view.position = null;
+      expect(await t.viewControl.restore(scene({ only: [] }, { place: pole, look: { target: poleGround, fovDeg: 60 } }))).toEqual({ ok: true });
+      expect(t.standing.place()).toEqual(pole);
+      expect(THREE.MathUtils.radToDeg(t.look.getState().pitchRad)).toBeCloseTo(-90, 6);
+      expect(await t.viewControl.restore(scene({ only: [] }))).toEqual({ ok: false, code: 'target-unresolved', message: 'no position yet' });
+      expect(t.standing.place()).toEqual(pole);
     });
 
     it('goes dark for nothing it refuses', async () => {
@@ -1500,7 +1586,7 @@ describe('createViewControl', () => {
     async function playGuide({ viewControl }: ReturnType<typeof setup>): Promise<void> {
       expect(await viewControl.perform({ do: 'preset', id: 'night' })).toEqual({ ok: true });
       expect(await viewControl.perform({ do: 'layers', on: ['cmb'], off: ['clouds'] })).toEqual({ ok: true });
-      const view: FoldedView = { layers: { only: ['aurora', 'clouds'] }, look: { target: east, fovDeg: 30 }, marks: [] };
+      const view: FoldedView = { layers: { only: ['aurora', 'clouds'] }, place: { kind: 'here' }, look: { target: east, fovDeg: 30 }, marks: [] };
       expect(await viewControl.restore(view)).toEqual({ ok: true });
     }
 

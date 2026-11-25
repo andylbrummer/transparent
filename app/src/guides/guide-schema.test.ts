@@ -52,6 +52,13 @@ describe('the guide schema', () => {
     expect(isGuide(preset), JSON.stringify(isGuide.errors)).toBe(true);
   });
 
+  it('takes a scene that says where it stands, and a cue that moves it', () => {
+    const g = copy();
+    (chapter(g).scene as Json).place = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' };
+    (step(g).cues as Json[]).push({ at: 9, do: 'stand', place: { kind: 'antipode' } });
+    expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
+  });
+
   it.each<[string, string, (g: Json) => void]>([
     ['an unknown field in the guide', '', (g) => (g.speed = 2)],
     ['an unknown field in a chapter', '/chapters/0', (g) => (chapter(g).speed = 2)],
@@ -86,7 +93,8 @@ describe('the guide schema', () => {
     ['an empty mark', `${STEP}/cues/1/text`, (g) => ((step(g).cues as Json[])[1].text = '')],
     ['layers naming no switch', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'layers' })],
     ['an unknown action', `${CUE}/do`, (g) => (cue(g).do = 'spin')],
-    ['a stand, not yet played', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'stand' })],
+    ['a stand with no place', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'stand' })],
+    ['a scene standing off the globe', `${SCENE}`, (g) => ((chapter(g).scene as Json).place = { kind: 'at', lat: 0, lon: 200, name: 'Nowhere' })],
     ['a time, not yet played', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'time' })],
     ['a clip, not yet played', CUE, (g) => ((step(g).cues as Json[])[0] = { at: 0, do: 'clip' })],
     ['an unknown way to advance', `${STEP}/advance`, (g) => (step(g).advance = 'timer')],

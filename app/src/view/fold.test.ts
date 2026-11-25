@@ -6,13 +6,20 @@ const down: Target = { kind: 'horizon', azDeg: 0, altDeg: -90 };
 const sun: Target = { kind: 'body', body: 'sun' };
 
 /** The view a preset scene starts from. */
-const fromPreset: FoldedView = { layers: { preset: 'sky', on: [], off: [] }, look: { target: down, fovDeg: 60 }, marks: [] };
+const fromPreset: FoldedView = { layers: { preset: 'sky', on: [], off: [] }, place: { kind: 'here' }, look: { target: down, fovDeg: 60 }, marks: [] };
 /** The view a listed scene starts from. */
-const fromList: FoldedView = { layers: { only: ['globe-surface', 'political'] }, look: { target: down, fovDeg: 60 }, marks: [] };
+const fromList: FoldedView = { layers: { only: ['globe-surface', 'political'] }, place: { kind: 'here' }, look: { target: down, fovDeg: 60 }, marks: [] };
 
 const fold = (view: FoldedView, ...actions: ViewAction[]): FoldedView => actions.reduce(foldAction, view);
 
 describe('foldAction', () => {
+  it('keeps the last place stood at', () => {
+    const pole = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' } as const;
+    expect(fold(fromPreset, { do: 'stand', place: pole }).place).toEqual(pole);
+    expect(fold(fromPreset, { do: 'stand', place: pole }, { do: 'stand', place: { kind: 'antipode' } }).place).toEqual({ kind: 'antipode' });
+    expect(fold(fromPreset, { do: 'stand', place: pole }, { do: 'preset', id: 'earth' }).place).toEqual(pole);
+  });
+
   it('drops what was flipped before a preset, and keeps what is flipped after it', () => {
     const view = fold(
       fromPreset,
