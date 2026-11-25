@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { formatKa, positionFromLocation, sliceAt, sliceDescription, sliceSpoken, sliceStatus, sliceText, type IceSheetsData } from './slices';
-import definition from './layer';
+import { formatKa, positionFromLocation, positionOf, sliceFromLocation, sliceAt, sliceDescription, sliceSpoken, sliceStatus, sliceText, type IceSheetsData } from './slices';
+import { paramProblems } from '../params';
+import definition, { ICE_SHEETS_TIME_PARAMS } from './layer';
 import iceAge from '../ice-age/layer';
 
 /** The baked file itself: what the layer will read. */
@@ -64,6 +65,22 @@ describe('a slice on the control', () => {
     expect(sliceStatus(byId('mis6'))).toBe('MIS 6 · ice 34 million km² · best estimate');
     expect(sliceStatus(byId('30ka'))).toBe('30 ka · ice 14 million km² · best estimate');
     expect(sliceStatus(null)).toBe('today: of these ice sheets only Greenland’s is left');
+  });
+});
+
+describe('the settings', () => {
+  it('offer the present and every baked slice, in the control\'s order', () => {
+    expect(ICE_SHEETS_TIME_PARAMS.slice.values).toEqual(['today', ...data.slices.map((slice) => slice.id)]);
+    ICE_SHEETS_TIME_PARAMS.slice.values.forEach((id, position) => expect(positionOf(data, id)).toBe(position));
+    expect(positionOf(data, 'nonsense')).toBeNull();
+  });
+
+  it('are the definition\'s, and the address asks for one of them', () => {
+    expect(definition.params).toBe(ICE_SHEETS_TIME_PARAMS);
+    for (const search of ['?ice=mis6', '?ice=today', '?ice=nonsense', '']) {
+      expect(paramProblems('ice-sheets-time', ICE_SHEETS_TIME_PARAMS, { slice: sliceFromLocation(search, data) })).toEqual([]);
+    }
+    expect(sliceFromLocation('?ice=nonsense', data)).toBe('lgm');
   });
 });
 

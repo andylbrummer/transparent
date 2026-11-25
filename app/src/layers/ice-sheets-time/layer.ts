@@ -1,5 +1,38 @@
-import type { LayerDefinition } from '../types';
+import type { LayerDefinition, LayerParams } from '../types';
 import { ICE_SHEET_COLOR } from '../ice-age/layer';
+
+/**
+ * What a guide or a link may set (ice-sheets-time.ts setParams). The slice ids are the baked file's, written here so
+ * that a guide is checked without fetching it; a test holds the two together.
+ */
+export const ICE_SHEETS_TIME_PARAMS = {
+  slice: {
+    type: 'string',
+    description: 'The time-slice, youngest first; today is the present, with no northern ice sheets but Greenland’s.',
+    values: [
+      'today',
+      'lgm',
+      '30ka',
+      '35ka',
+      '40ka',
+      '45ka',
+      'mis4',
+      'mis5a',
+      'mis5b',
+      'mis5c',
+      'mis5d',
+      'mis6',
+      'mis8',
+      'mis10',
+      'mis12',
+      'mis16',
+      'mis20-24',
+      'early-matuyama',
+      'late-gauss',
+    ],
+  },
+  playing: { type: 'boolean', description: 'Step toward the present, or pause. Played from today, it starts at the oldest slice.' },
+} as const satisfies LayerParams;
 
 const iceSheetsTime: LayerDefinition = {
   id: 'ice-sheets-time',
@@ -20,6 +53,7 @@ const iceSheetsTime: LayerDefinition = {
       url: 'https://doi.org/10.1038/s41467-019-11601-2',
     },
   ],
+  params: ICE_SHEETS_TIME_PARAMS,
   load: async (context) => (await import('./ice-sheets-time')).createIceSheetsTimeLayer(context),
 };
 

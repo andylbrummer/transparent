@@ -70,10 +70,23 @@ export function sliceStatus(slice: IceSheetSlice | null): string {
   return `${name} · ice ${millionsText(slice.areaKm2)} · best estimate`;
 }
 
-/** Where the control opens: the slice `?ice=<id>` names (`today` for the present), else the Last Glacial Maximum. */
-export function positionFromLocation(search: string, data: IceSheetsData): number {
-  const id = new URLSearchParams(search).get('ice');
-  if (id === 'today') return 0;
+/** What the present is called where a slice is asked for by id: in `?ice=` and in the layer's `slice` setting. */
+export const TODAY = 'today';
+
+/** The control's position for a slice id (TODAY for the present); null for an id the data lack. */
+export function positionOf(data: IceSheetsData, id: string): number | null {
+  if (id === TODAY) return 0;
   const index = data.slices.findIndex((slice) => slice.id === id);
-  return index < 0 ? 1 : index + 1;
+  return index < 0 ? null : index + 1;
+}
+
+/** The slice `?ice=<id>` names (TODAY for the present), else the Last Glacial Maximum: where the control opens. */
+export function sliceFromLocation(search: string, data: IceSheetsData): string {
+  const id = new URLSearchParams(search).get('ice');
+  return id !== null && positionOf(data, id) !== null ? id : data.slices[0].id;
+}
+
+/** Where the control opens, as a position. */
+export function positionFromLocation(search: string, data: IceSheetsData): number {
+  return positionOf(data, sliceFromLocation(search, data))!;
 }

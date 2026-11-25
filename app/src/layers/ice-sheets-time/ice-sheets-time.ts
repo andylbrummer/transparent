@@ -13,8 +13,8 @@ import { SurfaceShell } from '../../render/surface-shell';
 import { TimeControl } from '../deep-time/time-control';
 import { glslColor } from '../ice/glaciers';
 import { ICE_SHEET_COLOR } from '../ice-age/layer';
-import type { FrameState, LayerContext, LayerInstance } from '../types';
-import { positionFromLocation, sliceAt, sliceDescription, sliceSpoken, sliceStatus, sliceText, type IceSheetSlice, type IceSheetsData } from './slices';
+import type { FrameState, LayerContext, LayerInstance, LayerParamValues } from '../types';
+import { positionOf, sliceFromLocation, sliceAt, sliceDescription, sliceSpoken, sliceStatus, sliceText, type IceSheetSlice, type IceSheetsData } from './slices';
 
 const SHADE = `
   float ice = texel.r;
@@ -59,8 +59,23 @@ export async function createIceSheetsTimeLayer(context: LayerContext): Promise<L
       formatSpoken: (position) => sliceSpoken(sliceAt(data, position)),
       describe: (position) => sliceDescription(sliceAt(data, position)),
     },
-    positionFromLocation(window.location.search, data)
+    0
   );
+  // The address is one caller of setParams; a guide's cue is another, after it.
+  setParams({ slice: sliceFromLocation(window.location.search, data) });
+
+  /**
+   * The layer's settings (layer.ts ICE_SHEETS_TIME_PARAMS), checked already; one left out stays as it is. The slice
+   * before play, which starts from it. A slice the baked file lacks throws: the setting and the file have parted.
+   */
+  function setParams(values: LayerParamValues): void {
+    if (typeof values.slice === 'string') {
+      const position = positionOf(data, values.slice);
+      if (position === null) throw new Error(`ice sheets: no slice ${values.slice} in the data`);
+      control.setValue(position);
+    }
+    if (typeof values.playing === 'boolean') control.setPlaying(values.playing);
+  }
 
   let visible = false;
   let shownId: string | null | undefined;
@@ -91,6 +106,7 @@ export async function createIceSheetsTimeLayer(context: LayerContext): Promise<L
   control.onChange(apply);
 
   return {
+    setParams,
     setVisible(on) {
       visible = on;
       control.setVisible(on);
