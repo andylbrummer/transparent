@@ -1014,17 +1014,23 @@ The voice AI's phases start after phase 3. See
 
 - **Q1. Narration voice.** Recorded by a person, or synthesized ahead of time
   and checked in? Either is a file in the repository. It decides the licence
-  line and whether guides sound alike.
+  line and whether guides sound alike. *Decided 2026-11-25: synthesized with
+  Piper's public-domain LJ Speech voice by `tools/guides/narrate.py` and
+  checked in; a recording can replace any file
+  ([docs/guides/AUTHORING.md](../docs/guides/AUTHORING.md)).*
 - **Q2. Licence for guide content.** The code is MIT and the data keeps its
   publishers' licences (LICENSE-DATA.md). Guide scripts and recordings are
   new works. CC BY 4.0 as the default, with each guide free to choose?
-  [voice-guide.md](voice-guide.md) §8 depends on the answer.
+  [voice-guide.md](voice-guide.md) §8 depends on the answer. *Decided
+  2026-11-25: CC BY 4.0 by default, each guide free to choose.*
 - **Q3. Two dev dependencies.** The schema-first plan wants `ajv` to validate
   in tests and `json-schema-to-ts` to derive the types. Neither ships to the
   browser. The other way is types by hand, a schema by hand, and tests to
   hold them together. Which?
 - **Q4. Where the guide button goes** on a phone screen that already has the
   HUD, the layers toggle, Cardboard, calibrate, AR and the microphone.
+  *Done: a Guides button under Layers; its list shares the layers panel's
+  corner, and it is hidden in Cardboard and while a guide is open.*
 - **Q5. Who uploads video.** A maintainer before merge, as written? That
   makes video guides slower to accept than audio ones.
 - **Q6. The full CSP.** Write it now as its own task, or leave `media-src` as
@@ -1041,3 +1047,5 @@ The voice AI's phases start after phase 3. See
   first guesses. Each needs a session with a phone in the hand and in a
   viewer.
 - **Q10. R2 write on the `cloudflare` devkey token.** Needed for phase 4c.
+  *Decided 2026-11-25: build 4c's code and tooling now; the bucket, its domain
+  and the token's R2 permission wait for the owner.*
