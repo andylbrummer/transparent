@@ -14,6 +14,8 @@ import type { StandingPlace } from '../view/standing-place';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MINUTE_MS = 60_000;
+/** In Cardboard, where the chips stand in the view, the place shows this long after the view moves there (spec/guides.md §5). */
+export const STEREO_PLACE_MS = 4000;
 
 /** "11 Mar 2011 05:46 UTC": UTC, so the same guide reads the same everywhere, and the month in words, so no one reads it day-first or month-first. */
 export function chipTime(ms: number): string {
@@ -36,7 +38,7 @@ export function chipPlace(place: Place): string | null {
 
 export interface ViewChipsDeps {
   readonly standing: Pick<StandingPlace, 'place'>;
-  readonly clock: Pick<AppClock, 'isLive' | 'rate' | 'pinned'>;
+  readonly clock: Pick<AppClock, 'isLive' | 'pace' | 'pinned'>;
   /** Whether a guide is open: then the clock is the guide's, and the chip says so. */
   readonly guideOpen: () => boolean;
 }
@@ -51,6 +53,14 @@ export class ViewChips {
   private shownMinute = NaN;
   private shownRate = NaN;
   private shownSource: string | null = null;
+  /** What each chip says, null when it is down, and when the place last changed: for the viewer's line. */
+  private placeText: string | null = null;
+  private timeText: string | null = null;
+  private placeChangedMs = Number.NEGATIVE_INFINITY;
+  // The viewer's line as last built, and what it was built from.
+  private line = '';
+  private lineHadPlace = false;
+  private lineTime: string | null = null;
 
   constructor(
     parent: HTMLElement,
@@ -76,23 +86,27 @@ export class ViewChips {
   }
 
   /** `simMs`: the clock's time this frame, read once by the frame, so the chips build no Date of their own. */
-  update(simMs: number): void {
+  update(simMs: number, wallMs = 0): void {
     const place = this.deps.standing.place();
     if (place !== this.shownPlace) {
       this.shownPlace = place;
       const text = chipPlace(place);
       this.placeChip.hidden = text === null;
       if (text !== null) this.placeChip.textContent = text;
+      this.placeText = text;
+      this.placeChangedMs = wallMs;
     }
 
     const { clock } = this.deps;
     if (clock.isLive()) {
       this.timeChip.hidden = true;
+      this.timeText = null;
       this.shownMinute = NaN;
       return;
     }
     const minute = Math.floor(simMs / MINUTE_MS);
-    const rate = clock.rate();
+    // The pace, not the rate set: in Cardboard a fast run is slowed, and the chip says how fast it really goes.
+    const rate = clock.pace();
     // Who set the clock: a guide, or the link the page was opened with. Anything else set it for the user, who knows.
     const source = this.deps.guideOpen() ? 'guide' : clock.pinned ? 'link' : null;
     if (minute === this.shownMinute && rate === this.shownRate && source === this.shownSource) return;
@@ -105,6 +119,22 @@ export class ViewChips {
     if (source !== null) text += ` · ${source}`;
     this.timeChip.textContent = text;
     this.timeChip.hidden = false;
+    this.timeText = text;
+  }
+
+  /**
+   * What the chips say in Cardboard, as one line for a per-eye readout: the place for STEREO_PLACE_MS after the view
+   * moves there, and the time while the clock is not live; '' for nothing. After update, with the same wall time.
+   * Built again only when it changes, as it is read every frame.
+   */
+  stereoLine(wallMs: number): string {
+    const hasPlace = this.placeText !== null && wallMs - this.placeChangedMs < STEREO_PLACE_MS;
+    if (hasPlace === this.lineHadPlace && this.timeText === this.lineTime) return this.line;
+    this.lineHadPlace = hasPlace;
+    this.lineTime = this.timeText;
+    const parts = [hasPlace ? this.placeText : null, this.timeText].filter((part): part is string => part !== null);
+    this.line = parts.join(' · ');
+    return this.line;
   }
 
   dispose(): void {

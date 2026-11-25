@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { createClock } from '../clock';
 import type { Place } from '../view/actions';
 import { createStandingPlace } from '../view/standing-place';
-import { chipPlace, chipTime, ViewChips } from './view-chips';
+import { chipPlace, chipTime, STEREO_PLACE_MS, ViewChips } from './view-chips';
 
 const QUAKE_MS = Date.parse('2011-03-11T05:46:24Z');
 
@@ -94,3 +94,43 @@ describe('the view chips', () => {
     expect(t.parent.querySelector('.view-chips')).toBeNull();
   });
 });
+
+describe('the view chips in Cardboard', () => {
+  const TOHOKU: Place = { kind: 'at', lat: 38.3, lon: 142.4, name: 'Off Tohoku' };
+
+  it('say nothing here and now', () => {
+    const t = setup();
+    t.chips.update(t.clock.now().getTime(), 0);
+    expect(t.chips.stereoLine(0)).toBe('');
+  });
+
+  it('name the place for STEREO_PLACE_MS after the view moves there, then only the time', () => {
+    const t = setup();
+    t.standing.set(TOHOKU);
+    t.clock.set(QUAKE_MS);
+    t.clock.setRate(0);
+    t.chips.update(t.clock.now().getTime(), 1000);
+    expect(t.chips.stereoLine(1000)).toBe('Off Tohoku · 11 Mar 2011 05:46 UTC · stopped');
+    t.chips.update(t.clock.now().getTime(), 1000 + STEREO_PLACE_MS);
+    expect(t.chips.stereoLine(1000 + STEREO_PLACE_MS)).toBe('11 Mar 2011 05:46 UTC · stopped');
+  });
+
+  it('give the same string while nothing changes, so a frame builds none', () => {
+    const t = setup();
+    t.clock.set(QUAKE_MS);
+    t.chips.update(t.clock.now().getTime(), 0);
+    const first = t.chips.stereoLine(0);
+    t.chips.update(t.clock.now().getTime(), 16);
+    expect(t.chips.stereoLine(16)).toBe(first);
+  });
+
+  it('say how fast a capped run really goes', () => {
+    const t = setup();
+    t.clock.set(QUAKE_MS);
+    t.clock.setRate(3600);
+    t.clock.capRate(2400);
+    t.frame();
+    expect(t.chip('time').textContent).toBe('11 Mar 2011 05:46 UTC · 2,400×');
+  });
+});
+

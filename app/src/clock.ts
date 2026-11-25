@@ -33,6 +33,8 @@ export interface AppClock {
    * runs again once the cap is lifted. Cardboard's: a sky turning fast in a headset makes people ill.
    */
   capRate(maxAbs: number | null): void;
+  /** The rate the clock runs at: rate() under any cap. What a chip should say. */
+  pace(): number;
   /** Jump to `atMs`, running on at the rate it had. Any stop set with setRate is dropped. */
   set(atMs: number): void;
   /** Run at `rate` from where it is now; with `untilMs`, stop there, for good. */
@@ -80,8 +82,12 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
       rate = 0;
       untilMs = null;
     }
-    const paced = Math.sign(rate) * Math.min(Math.abs(rate), cap);
+    const paced = paceOf(rate);
     state = { ...state, simTimeMs: simMs, wallTimeMs: wall, compression: paced, running: rate !== 0 && !held };
+  }
+
+  function paceOf(r: number): number {
+    return Math.sign(r) * Math.min(Math.abs(r), cap);
   }
 
   function finite(name: string, value: number): void {
@@ -99,6 +105,7 @@ export function createClock(search: string, wallNow: () => number = Date.now): A
     pinned,
     isLive: () => live,
     rate: () => rate,
+    pace: () => paceOf(rate),
     capRate(maxAbs) {
       if (maxAbs !== null && !(maxAbs > 0)) throw new RangeError(`clock rate cap ${maxAbs} is not above 0`);
       const sim = simAt(wallNow());

@@ -329,6 +329,8 @@ export function init(): App | null {
   const gazePointer = new GazePointer(container);
   const captions = new CaptionOverlay(container);
   const stereoNotice = new StereoNotice(container);
+  // The place and time chips in the viewer, above the guide's notice: not a live region, as the clock runs by itself.
+  const stereoChips = new StereoNotice(container, { topFraction: 0.1, live: false, className: 'stereo-notice--chips' });
   const pauseCard = new PauseCard(container);
 
   const resetButton = document.createElement('button');
@@ -738,8 +740,10 @@ export function init(): App | null {
     stereoNotice.show(stereo ? guideSession.stereoNotice() : '');
     if (!stereo && pauseCard.isOpen()) pauseCard.close();
     if (stereo) stereoNotice.place(width, height, cardboardCalibration.spacingPx());
-    // The chips are not drawn per eye yet: the spec's place chip in the viewer is still to come.
+    // In the viewer the chips are drawn once per eye instead (stereoChips).
     viewChips.setVisible(position !== null && !ar && !stereo);
+    if (stereo) stereoChips.place(width, height, cardboardCalibration.spacingPx());
+    else stereoChips.show('');
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
@@ -755,7 +759,8 @@ export function init(): App | null {
       if (!ar) look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
       // Turn the sky to where the Earth's rotation has it now.
       const date = clock.now();
-      viewChips.update(date.getTime());
+      viewChips.update(date.getTime(), nowMs);
+      stereoChips.show(stereo ? viewChips.stereoLine(nowMs) : '');
       const m = icrsToEcefMatrix(date);
       skyRotation.set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1);
       inertialRoot.quaternion.setFromRotationMatrix(skyRotation);
@@ -924,6 +929,7 @@ export function init(): App | null {
       guideList.dispose();
       captions.dispose();
       stereoNotice.dispose();
+      stereoChips.dispose();
       pauseCard.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();

@@ -43,4 +43,15 @@ describe('StereoNotice', () => {
     notice.dispose();
     expect(parent.querySelector('.stereo-notice')).toBeNull();
   });
+
+  it('stands where it is told, and is no live region when it is not to be read out as it changes', () => {
+    const chips = new StereoNotice(parent, { topFraction: 0.1, live: false, className: 'stereo-notice--chips' });
+    const chipRoot = parent.querySelector<HTMLElement>('.stereo-notice--chips')!;
+    expect(chipRoot.getAttribute('role')).toBeNull();
+    expect(root().getAttribute('role')).toBe('status');
+    chips.show('North Pole');
+    chips.place(844, 390, 300);
+    expect(chipRoot.querySelector<HTMLElement>('.stereo-notice__readout')!.style.top).toBe('39px');
+  });
 });
+
