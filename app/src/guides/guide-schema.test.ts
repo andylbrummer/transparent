@@ -25,6 +25,13 @@ function refusedAt(g: Json, path: string): boolean {
 const STEP = '/chapters/0/steps/0';
 const CUE = `${STEP}/cues/0`;
 const SCENE = '/chapters/0/scene';
+const HOTSPOT = `${STEP}/hotspots/0`;
+
+const CREDIT = { what: 'Diagram', source: 'USGS', licence: 'public domain', url: 'https://www.usgs.gov/' };
+const IMAGE_CLIP: Json = { kind: 'image', src: 'images/prem.webp', alt: 'The layers', caption: 'Seismic waves bend.', credit: CREDIT };
+const AUDIO_CLIP: Json = { kind: 'audio', src: 'audio/prem.m4a', captions: 'audio/prem.vtt', credit: CREDIT };
+/** A hotspot straight down with `clip`; JSON drops a field set to undefined, as the cases use to take one out. */
+const hotspot = (clip: Json): Json => JSON.parse(JSON.stringify({ id: 'prem', title: 'How we know', anchor: DOWN, clip })) as Json;
 
 describe('the guide schema', () => {
   it('is what guide.schema.json holds', () => {
@@ -64,6 +71,12 @@ describe('the guide schema', () => {
     const g = copy();
     (chapter(g).scene as Json).place = { kind: 'at', lat: 90, lon: 0, name: 'North Pole' };
     (step(g).cues as Json[]).push({ at: 9, do: 'stand', place: { kind: 'antipode' } });
+    expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
+  });
+
+  it('takes hotspots with an image or an audio clip, on a switch or not', () => {
+    const g = copy();
+    step(g).hotspots = [hotspot(IMAGE_CLIP), { ...hotspot(AUDIO_CLIP), id: 'listen', layer: 'shell-core' }];
     expect(isGuide(g), JSON.stringify(isGuide.errors)).toBe(true);
   });
 
@@ -116,7 +129,15 @@ describe('the guide schema', () => {
     ['an unknown topic', '/topics/0', (g) => (g.topics = ['cooking'])],
     ['a credit over plain http', '/credits/0/url', (g) => ((g.credits as Json[])[0].url = 'http://example.org')],
     ['a sponsor', '', (g) => (g.sponsor = null)],
-    ['a hotspot', STEP, (g) => (step(g).hotspots = [])],
+    ['an empty list of hotspots', `${STEP}/hotspots`, (g) => (step(g).hotspots = [])],
+    ['a hotspot with no clip', `${HOTSPOT}`, (g) => (step(g).hotspots = [{ ...hotspot(IMAGE_CLIP), clip: undefined }])],
+    ['an image with no alt text', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...IMAGE_CLIP, alt: undefined })])],
+    ['an image with no caption', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...IMAGE_CLIP, caption: undefined })])],
+    ['an image that is a PNG', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...IMAGE_CLIP, src: 'images/x.png' })])],
+    ['an audio clip with no captions', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...AUDIO_CLIP, captions: undefined })])],
+    ['a clip with no credit', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...AUDIO_CLIP, credit: undefined })])],
+    ['a video, not yet played', `${HOTSPOT}/clip`, (g) => (step(g).hotspots = [hotspot({ ...AUDIO_CLIP, kind: 'video' })])],
+    ['a hotspot title too long for a marker', `${HOTSPOT}/title`, (g) => (step(g).hotspots = [{ ...hotspot(IMAGE_CLIP), title: 'x'.repeat(61) }])],
   ])('refuses %s', (_, path, change) => {
     const g = copy();
     change(g);

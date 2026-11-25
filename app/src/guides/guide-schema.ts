@@ -4,8 +4,8 @@
  * public/guides/guide.schema.json is its output, written by
  * `npm run guides:schema` and held to it by a test.
  *
- * Only what the app plays: no hotspots or clips yet. A schema that
- * accepted them would pass guides the app cannot play.
+ * Only what the app plays: of clips, only audio and images. A schema that
+ * accepted more would pass guides the app cannot play.
  */
 
 import {
@@ -31,6 +31,7 @@ const HTTPS_URL = { type: 'string', pattern: '^https://' } as const;
 // cannot leave the guide's folder.
 const AUDIO_PATH = { type: 'string', pattern: '^[a-z0-9-]+(/[a-z0-9-]+)*\\.m4a$', description: "An .m4a file in the guide's folder." } as const;
 const CAPTIONS_PATH = { type: 'string', pattern: '^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$', description: "A WebVTT file in the guide's folder." } as const;
+const IMAGE_PATH = { type: 'string', pattern: '^[a-z0-9-]+(/[a-z0-9-]+)*\\.(webp|jpg)$', description: "A .webp or .jpg file in the guide's folder." } as const;
 
 const CREDIT = {
   type: 'object',
@@ -43,6 +44,40 @@ const AUTHOR = {
   type: 'object',
   properties: { name: TEXT, url: HTTPS_URL },
   required: ['name'],
+  additionalProperties: false,
+} as const;
+
+/** A clip of speech: like a narration, every one has its captions. */
+const AUDIO_CLIP = {
+  type: 'object',
+  properties: { kind: { const: 'audio' }, src: AUDIO_PATH, captions: CAPTIONS_PATH, credit: CREDIT },
+  required: ['kind', 'src', 'captions', 'credit'],
+  additionalProperties: false,
+} as const;
+
+/** A picture, shown with its caption; `alt` says what it shows to someone who cannot see it. */
+const IMAGE_CLIP = {
+  type: 'object',
+  properties: { kind: { const: 'image' }, src: IMAGE_PATH, alt: TEXT, caption: TEXT, credit: CREDIT },
+  required: ['kind', 'src', 'alt', 'caption', 'credit'],
+  additionalProperties: false,
+} as const;
+
+/**
+ * A clip hung on something in the view (spec/guides.md §8.1): its marker sits on `anchor` and reads "▶ title". One
+ * format for a guide's step and for the "Stories and clips" layer.
+ */
+export const HOTSPOT_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { ...ID, description: 'Unique in its file: what a clip cue names.' },
+    // Short: a marker stands among the map's names.
+    title: { ...TEXT, maxLength: 60 },
+    anchor: TARGET_SCHEMA,
+    layer: { ...TEXT, description: 'A layer switch: the marker shows only while it is on.' },
+    clip: { oneOf: [AUDIO_CLIP, IMAGE_CLIP] },
+  },
+  required: ['id', 'title', 'anchor', 'clip'],
   additionalProperties: false,
 } as const;
 
@@ -119,6 +154,12 @@ const STEP_FIELDS = {
   advance: {
     enum: ['auto', 'gaze', 'continue'],
     description: 'When the step is over: as the narration ends, once the user has turned to the look, or when they say so.',
+  },
+  hotspots: {
+    type: 'array',
+    items: HOTSPOT_SCHEMA,
+    minItems: 1,
+    description: 'Clips beside the narration, shown from this step to the end of its chapter.',
   },
 } as const;
 

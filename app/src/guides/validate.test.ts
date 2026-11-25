@@ -4,9 +4,9 @@ import type { LayerSwitch } from '../ui/layers-panel';
 import { LAYER_PRESETS } from '../ui/presets';
 import { APP_WORLD as world } from './app-world.testdata';
 import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
-import type { Guide } from './format';
+import type { Guide, Hotspot } from './format';
 import { GUIDE_SCHEMA } from './guide-schema';
-import { guideProblems } from './validate';
+import { guideProblems, hotspotsProblems } from './validate';
 
 const isGuide = new Ajv2020().compile(GUIDE_SCHEMA);
 
@@ -37,6 +37,26 @@ function problemsIn(g: Json): ReturnType<typeof guideProblems> {
 }
 
 const STEP = '/chapters/0/steps/0';
+
+/** An image hotspot straight down, on a real switch. */
+const hotspot = (id: string): Json => ({
+  id,
+  title: 'How we know: PREM',
+  anchor: DOWN,
+  layer: 'shell-core',
+  clip: { kind: 'image', src: 'images/prem.webp', alt: 'The layers', caption: 'Seismic waves', credit: EXAMPLE_GUIDE.credits[0] },
+});
+
+describe('hotspotsProblems', () => {
+  it('holds a file of hotspots to the rules of a step', () => {
+    const list = [hotspot('a'), hotspot('a'), { ...hotspot('b'), layer: 'nothing', anchor: { kind: 'label', name: 'Atlantis' } }];
+    expect(hotspotsProblems(list as unknown as Hotspot[], world)).toEqual([
+      { path: '/hotspots/1/id', reason: 'hotspot id a is used twice' },
+      { path: '/hotspots/2/layer', reason: 'no layer switch nothing' },
+      { path: '/hotspots/2/anchor', reason: 'no label named Atlantis' },
+    ]);
+  });
+});
 
 describe('guideProblems', () => {
   it('finds the real exclusive group and shared label name the tests use', () => {
@@ -109,6 +129,19 @@ describe('guideProblems', () => {
       'no label named Atlantis',
     ],
     ['a cue before the one ahead of it', (g) => (cues(g, 1)[3].at = 2), '/chapters/0/steps/1/cues/3/at', 'cue at 2 comes after one at 3'],
+    [
+      'a hotspot id used twice in a guide',
+      (g) => ((steps(g)[0].hotspots = [hotspot('prem')]), (steps(g)[2].hotspots = [hotspot('prem')])),
+      '/chapters/0/steps/2/hotspots/0/id',
+      'hotspot id prem is used twice',
+    ],
+    ['a hotspot on a switch the app does not have', (g) => (steps(g)[0].hotspots = [{ ...hotspot('prem'), layer: 'nothing' }]), `${STEP}/hotspots/0/layer`, 'no layer switch nothing'],
+    [
+      'a hotspot on an unknown label',
+      (g) => (steps(g)[0].hotspots = [{ ...hotspot('prem'), anchor: { kind: 'label', name: 'Atlantis' } }]),
+      `${STEP}/hotspots/0/anchor`,
+      'no label named Atlantis',
+    ],
     [
       'a step that waits for the gaze with nothing to look at',
       (g) => (cues(g).splice(0, 1), (cues(g)[0].at = 0)),
@@ -196,6 +229,7 @@ describe('guideProblems', () => {
         cues(g, 1)[2] = { at: 3, do: 'layers', on: [live] };
       },
     ],
+    ['hotspots of different ids in two chapters', (g) => ((steps(g)[0].hotspots = [hotspot('a')]), (g.chapters = [...chapters(g), { ...chapters(g)[0], id: 'again', steps: [{ ...steps(g)[0], hotspots: [hotspot('b')] }] }]))],
   ])('allows %s', (_, change) => {
     const g = copy();
     change(g);

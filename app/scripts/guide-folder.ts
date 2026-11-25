@@ -5,7 +5,8 @@
  * uses, with none left over and none over budget, and each narration is mono
  * AAC-LC and long enough for its cues. Each captions file is read with the
  * app's own reader and held to its narration: in order, within its length,
- * short lines, and no long gaps.
+ * short lines, and no long gaps. A hotspot's audio clip is held to the same
+ * as a narration, and its image to a format and a size read from its header.
  *
  * Node code (node:fs, node:path), used only by the validator's tests and
  * never bundled into the app. It lives in scripts/, the Node project, because
@@ -16,8 +17,9 @@
 import { lstatSync, readdirSync, readFileSync, type Stats } from 'node:fs';
 import { join } from 'node:path';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020';
-import type { Guide } from '../src/guides/format';
+import type { Clip, Guide } from '../src/guides/format';
 import { GUIDE_SCHEMA } from '../src/guides/guide-schema';
+import { readImageInfo, type ImageInfo } from '../src/guides/image-info';
 import { readM4aInfo, type M4aInfo } from '../src/guides/m4a-info';
 import { guideProblems, type GuideWorld } from '../src/guides/validate';
 import { parseVtt, type CaptionCue } from '../src/guides/vtt';
@@ -47,6 +49,11 @@ export const CAPTION_MAX_LINES = 2;
 export const CAPTION_MAX_LINE_CHARS = 37;
 /** The longest a narration may run between two captions: longer, and speech is likely going uncaptioned. */
 export const CAPTION_MAX_GAP_S = 3;
+
+/** The most an image clip may weigh, and the longest side it may have: more than a phone's screen shows (spec/guides.md §9). */
+export const IMAGE_MAX_BYTES = 1024 * 1024;
+export const IMAGE_MAX_SIDE_PX = 2048;
+const IMAGE_EXTENSION = /\.(webp|jpg)$/;
 
 /** The files in the guides folder that are not guides. */
 const ROOT_FILES = ['index.json', 'guide.schema.json'];
@@ -152,19 +159,87 @@ function checkGuide(root: string, folder: string, world: GuideWorld, problem: Re
         }
       }),
     );
+    const clips: ClipFiles = { dir, folder, file: guideFile, used, lengths, captioned, problem };
+    guide.chapters.forEach((chapter, c) =>
+      chapter.steps.forEach((step, s) => step.hotspots?.forEach((hotspot, h) => checkClip(clips, `/chapters/${c}/steps/${s}/hotspots/${h}/clip`, hotspot.clip))),
+    );
     for (const file of files) {
       if (file.path !== 'guide.json' && !file.link && !used.has(file.path)) problem(`${folder}/${file.path}`, '', `${file.path} is not used by the guide`);
     }
   }
 
   // The budget holds whatever guide.json says, so it is checked even when the guide is not readable.
+  checkFileBudgets(folder, files, problem);
+  const folderBytes = files.reduce((sum, file) => sum + file.bytes, 0);
+  if (folderBytes > GUIDE_FOLDER_MAX_BYTES) problem(folder, '', `the folder is ${mib(folderBytes)} MiB, over the 20 MiB a guide may be`);
+}
+
+/** Each audio and image file held to its own budget, by its extension. */
+function checkFileBudgets(folder: string, files: readonly FolderFile[], problem: Report): void {
   for (const file of files) {
     if (file.path.endsWith('.m4a') && file.bytes > NARRATION_MAX_BYTES) {
       problem(`${folder}/${file.path}`, '', `${file.path} is ${mib(file.bytes)} MiB, over the 5 MiB a narration file may be`);
     }
+    if (IMAGE_EXTENSION.test(file.path) && file.bytes > IMAGE_MAX_BYTES) {
+      problem(`${folder}/${file.path}`, '', `${file.path} is ${mib(file.bytes)} MiB, over the 1 MiB an image may be`);
+    }
   }
-  const folderBytes = files.reduce((sum, file) => sum + file.bytes, 0);
-  if (folderBytes > GUIDE_FOLDER_MAX_BYTES) problem(folder, '', `the folder is ${mib(folderBytes)} MiB, over the 20 MiB a guide may be`);
+}
+
+/** Where a clip's files are checked: the folder they are in, the file that names them, and what is known already. */
+interface ClipFiles {
+  readonly dir: string;
+  /** The folder's name, as problems give it. */
+  readonly folder: string;
+  /** The file that names the clips, as problems give it. */
+  readonly file: string;
+  readonly used: Set<string>;
+  /** Each audio file's length, read once; undefined when it cannot be read. */
+  readonly lengths: Map<string, number | undefined>;
+  /** The captions files checked already. */
+  readonly captioned: Set<string>;
+  readonly problem: Report;
+}
+
+/** A clip's files: there, used, and each in a format and size the app can show (spec/guides.md §9). */
+function checkClip(files: ClipFiles, path: string, clip: Clip): void {
+  const { dir, folder, file, used, lengths, captioned, problem } = files;
+  /** Whether the file at `key` is there; it is used either way. */
+  const there = (key: string, at: string): boolean => {
+    used.add(at);
+    if (statOf(join(dir, at))?.isFile()) return true;
+    problem(file, `${path}/${key}`, `no file ${at}`);
+    return false;
+  };
+  if (clip.kind === 'image') {
+    if (there('src', clip.src)) checkImage(dir, folder, clip.src, problem);
+    return;
+  }
+  const audioThere = there('src', clip.src);
+  const captionsThere = there('captions', clip.captions);
+  if (audioThere && !lengths.has(clip.src)) lengths.set(clip.src, narrationLength(dir, folder, clip.src, problem));
+  if (captionsThere && !captioned.has(clip.captions)) {
+    captioned.add(clip.captions);
+    checkCaptions(dir, folder, clip.captions, lengths.get(clip.src), problem);
+  }
+}
+
+/** An image read from its header, held to its extension and to the size a phone shows without waste. */
+function checkImage(dir: string, folder: string, path: string, problem: Report): void {
+  const file = `${folder}/${path}`;
+  let info: ImageInfo;
+  try {
+    info = readImageInfo(readFileSync(join(dir, path)));
+  } catch (error) {
+    // The reader throws only to say what the file lacks; that is the guide's problem, said where it is.
+    if (!(error instanceof Error)) throw error;
+    problem(file, '', `${path} is not an image the app can show: ${error.message}`);
+    return;
+  }
+  const named = path.endsWith('.webp') ? 'webp' : 'jpeg';
+  if (info.format !== named) problem(file, '', `${path} is a ${info.format.toUpperCase()} file, not what its name says`);
+  const longSide = Math.max(info.width, info.height);
+  if (longSide > IMAGE_MAX_SIDE_PX) problem(file, '', `${path} is ${info.width} × ${info.height} px; its long side is at most ${IMAGE_MAX_SIDE_PX}`);
 }
 
 /** A narration file's length from its header, each way its format is wrong a problem; undefined if it has no header. */

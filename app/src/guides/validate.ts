@@ -15,7 +15,7 @@ import type { FoldedView, Target, TimeSetting } from '../view/actions';
 import { foldAction } from '../view/fold';
 import { TIME_LAPSE_ABOVE_RATE } from '../view/view-control';
 import { targetDirection, type LabelIndex } from '../view/targets';
-import { sceneView, type Guide } from './format';
+import { sceneView, type Guide, type Hotspot } from './format';
 
 /** Something wrong with a guide: where, as a JSON pointer into guide.json, and why. */
 export interface GuideProblem {
@@ -142,6 +142,7 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
     return now;
   };
 
+  const hotspots = hotspotChecker(world, problem);
   const chapterIds = new Set<string>();
   guide.chapters.forEach((chapter, c) => {
     const chapterPath = `/chapters/${c}`;
@@ -198,7 +199,36 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
       if (step.advance === 'gaze' && !step.cues.some((cue) => cue.do === 'look')) {
         problem(`${stepPath}/advance`, 'advance is gaze but the step has no look cue to wait for');
       }
+      step.hotspots?.forEach((hotspot, h) => hotspots.check(`${stepPath}/hotspots/${h}`, hotspot));
     });
   });
   return problems;
+}
+
+/** Everything wrong with a file of hotspots that its schema cannot say: public/media/hotspots.json. */
+export function hotspotsProblems(list: readonly Hotspot[], world: GuideWorld): GuideProblem[] {
+  const problems: GuideProblem[] = [];
+  const hotspots = hotspotChecker(world, (path, reason) => problems.push({ path, reason }));
+  list.forEach((hotspot, h) => hotspots.check(`/hotspots/${h}`, hotspot));
+  return problems;
+}
+
+/**
+ * A check of each hotspot of one file, in order: its id is the file's only one, since a clip cue names it; its
+ * switch exists; its anchor's label is one name.
+ */
+function hotspotChecker(world: GuideWorld, problem: (path: string, reason: string) => void): { check(path: string, hotspot: Hotspot): void } {
+  const ids = new Set<string>();
+  const switches = new Set(world.switches.map((layer) => layer.id));
+  return {
+    check(path, hotspot) {
+      if (ids.has(hotspot.id)) problem(`${path}/id`, `hotspot id ${hotspot.id} is used twice`);
+      ids.add(hotspot.id);
+      if (hotspot.layer !== undefined && !switches.has(hotspot.layer)) problem(`${path}/layer`, `no layer switch ${hotspot.layer}`);
+      if (hotspot.anchor.kind === 'label') {
+        const resolved = targetDirection(hotspot.anchor, ANYWHERE, ANY_TIME, world.labels);
+        if (!resolved.ok) problem(`${path}/anchor`, resolved.message);
+      }
+    },
+  };
 }

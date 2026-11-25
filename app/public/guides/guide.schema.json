@@ -1311,6 +1311,307 @@
                       ],
                       "description": "When the step is over: as the narration ends, once the user has turned to the look, or when they say so."
                     },
+                    "hotspots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                            "description": "Unique in its file: what a clip cue names."
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 60
+                          },
+                          "anchor": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "body"
+                                  },
+                                  "body": {
+                                    "enum": [
+                                      "sun",
+                                      "moon",
+                                      "mercury",
+                                      "venus",
+                                      "mars",
+                                      "jupiter",
+                                      "saturn",
+                                      "uranus",
+                                      "neptune"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A fixed place on the sky, ICRS.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "sky"
+                                  },
+                                  "raDeg": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMaximum": 360
+                                  },
+                                  "decDeg": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "extentDeg": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 180
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "raDeg",
+                                  "decDeg"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "horizon"
+                                  },
+                                  "azDeg": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMaximum": 360
+                                  },
+                                  "altDeg": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "azDeg",
+                                  "altDeg"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A place on or in the Earth.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "ground"
+                                  },
+                                  "lat": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  },
+                                  "lon": {
+                                    "type": "number",
+                                    "minimum": -180,
+                                    "maximum": 180
+                                  },
+                                  "depthKm": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 6371
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "lat",
+                                  "lon"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state. A name no baked file has is looked for among the names of the layers loaded: \"M31\". A guide may use only baked names, which can be checked before it plays.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "label"
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "labelKind": {
+                                    "enum": [
+                                      "country",
+                                      "state",
+                                      "city",
+                                      "plate",
+                                      "deep",
+                                      "hotspot",
+                                      "quake",
+                                      "subduction",
+                                      "volcano"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "layer": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A layer switch: the marker shows only while it is on."
+                          },
+                          "clip": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "const": "audio"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.m4a$",
+                                    "description": "An .m4a file in the guide's folder."
+                                  },
+                                  "captions": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$",
+                                    "description": "A WebVTT file in the guide's folder."
+                                  },
+                                  "credit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "what": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "licence": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "url": {
+                                        "type": "string",
+                                        "pattern": "^https://"
+                                      }
+                                    },
+                                    "required": [
+                                      "what",
+                                      "source",
+                                      "licence",
+                                      "url"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "src",
+                                  "captions",
+                                  "credit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "const": "image"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.(webp|jpg)$",
+                                    "description": "A .webp or .jpg file in the guide's folder."
+                                  },
+                                  "alt": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "caption": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "credit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "what": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "licence": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "url": {
+                                        "type": "string",
+                                        "pattern": "^https://"
+                                      }
+                                    },
+                                    "required": [
+                                      "what",
+                                      "source",
+                                      "licence",
+                                      "url"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "src",
+                                  "alt",
+                                  "caption",
+                                  "credit"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "anchor",
+                          "clip"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1,
+                      "description": "Clips beside the narration, shown from this step to the end of its chapter."
+                    },
                     "narration": {
                       "type": "object",
                       "description": "Every narration has its captions.",
@@ -1964,6 +2265,307 @@
                         "continue"
                       ],
                       "description": "When the step is over: as the narration ends, once the user has turned to the look, or when they say so."
+                    },
+                    "hotspots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                            "description": "Unique in its file: what a clip cue names."
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 60
+                          },
+                          "anchor": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "description": "The Sun, the Moon or a planet, at the app clock's time.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "body"
+                                  },
+                                  "body": {
+                                    "enum": [
+                                      "sun",
+                                      "moon",
+                                      "mercury",
+                                      "venus",
+                                      "mars",
+                                      "jupiter",
+                                      "saturn",
+                                      "uranus",
+                                      "neptune"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A fixed place on the sky, ICRS.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "sky"
+                                  },
+                                  "raDeg": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMaximum": 360
+                                  },
+                                  "decDeg": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "extentDeg": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 180
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "raDeg",
+                                  "decDeg"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A direction in the local frame: azimuth clockwise from north, altitude above the horizon. -90 is straight down.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "horizon"
+                                  },
+                                  "azDeg": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMaximum": 360
+                                  },
+                                  "altDeg": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "azDeg",
+                                  "altDeg"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A place on or in the Earth.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "ground"
+                                  },
+                                  "lat": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  },
+                                  "lon": {
+                                    "type": "number",
+                                    "minimum": -180,
+                                    "maximum": 180
+                                  },
+                                  "depthKm": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 6371
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "lat",
+                                  "lon"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "description": "A name from the baked label files (geo/labels.json, geology.json, quakes.json). `labelKind` tells apart places that share a name: Georgia the country from Georgia the state. A name no baked file has is looked for among the names of the layers loaded: \"M31\". A guide may use only baked names, which can be checked before it plays.",
+                                "properties": {
+                                  "kind": {
+                                    "const": "label"
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "labelKind": {
+                                    "enum": [
+                                      "country",
+                                      "state",
+                                      "city",
+                                      "plate",
+                                      "deep",
+                                      "hotspot",
+                                      "quake",
+                                      "subduction",
+                                      "volcano"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "layer": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A layer switch: the marker shows only while it is on."
+                          },
+                          "clip": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "const": "audio"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.m4a$",
+                                    "description": "An .m4a file in the guide's folder."
+                                  },
+                                  "captions": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.vtt$",
+                                    "description": "A WebVTT file in the guide's folder."
+                                  },
+                                  "credit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "what": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "licence": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "url": {
+                                        "type": "string",
+                                        "pattern": "^https://"
+                                      }
+                                    },
+                                    "required": [
+                                      "what",
+                                      "source",
+                                      "licence",
+                                      "url"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "src",
+                                  "captions",
+                                  "credit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "const": "image"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*\\.(webp|jpg)$",
+                                    "description": "A .webp or .jpg file in the guide's folder."
+                                  },
+                                  "alt": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "caption": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "credit": {
+                                    "type": "object",
+                                    "properties": {
+                                      "what": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "source": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "licence": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "url": {
+                                        "type": "string",
+                                        "pattern": "^https://"
+                                      }
+                                    },
+                                    "required": [
+                                      "what",
+                                      "source",
+                                      "licence",
+                                      "url"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "src",
+                                  "alt",
+                                  "caption",
+                                  "credit"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "anchor",
+                          "clip"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1,
+                      "description": "Clips beside the narration, shown from this step to the end of its chapter."
                     },
                     "silenceS": {
                       "type": "number",

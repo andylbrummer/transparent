@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { guidesProblems, type GuidesProblem } from '../../scripts/guide-folder';
@@ -257,6 +257,81 @@ describe('guidesProblems on captions', () => {
     rmSync(at(ID, 'audio/02-shells.vtt'));
     writeFileSync(at(ID, CAPTIONS_PATH), vtt(['00:00.000', '00:01.000', 'a', 'b', 'c']));
     expect(problems()).toEqual([captionsProblem('caption 1 has 3 lines; a caption has at most 2')]);
+  });
+});
+
+describe('guidesProblems on clips', () => {
+  const CREDIT = { what: 'Diagram', source: 'USGS', licence: 'public domain', url: 'https://www.usgs.gov/' };
+  const IMAGE = { kind: 'image', src: 'images/prem.webp', alt: 'The layers of the Earth', caption: 'Seismic waves bend at each boundary.', credit: CREDIT };
+  const AUDIO = { kind: 'audio', src: 'audio/prem.m4a', captions: 'audio/prem.vtt', credit: CREDIT };
+  const image = (name = 'pic-lossy.webp'): Uint8Array => new Uint8Array(readFileSync(`src/guides/fixtures/${name}`));
+  /** The example guide with an image hotspot and an audio one on its first step, their files written. */
+  beforeEach(() => {
+    const guide = guideJson();
+    const steps = (guide.chapters as { steps: Record<string, unknown>[] }[])[0].steps;
+    steps[0].hotspots = [
+      { id: 'prem', title: 'How we know', anchor: { kind: 'horizon', azDeg: 0, altDeg: -90 }, clip: IMAGE },
+      { id: 'waves', title: 'Listen', anchor: { kind: 'horizon', azDeg: 90, altDeg: 0 }, clip: AUDIO },
+    ];
+    writeGuide(guide);
+    mkdirSync(at(ID, 'images'));
+    writeFileSync(at(ID, IMAGE.src), image());
+    writeFileSync(at(ID, AUDIO.src), narration());
+    writeFileSync(at(ID, AUDIO.captions), CAPTIONS);
+  });
+  const CLIP = '/chapters/0/steps/0/hotspots';
+
+  it('finds nothing wrong with good clips', () => {
+    expect(problems()).toEqual([]);
+  });
+
+  it.each<[string, () => void, GuidesProblem]>([
+    ['an image clip with no file', () => rmSync(at(ID, IMAGE.src)), { file: GUIDE_FILE, path: `${CLIP}/0/clip/src`, reason: 'no file images/prem.webp' }],
+    ['an audio clip with no file', () => rmSync(at(ID, AUDIO.src)), { file: GUIDE_FILE, path: `${CLIP}/1/clip/src`, reason: 'no file audio/prem.m4a' }],
+    ['an audio clip with no captions', () => rmSync(at(ID, AUDIO.captions)), { file: GUIDE_FILE, path: `${CLIP}/1/clip/captions`, reason: 'no file audio/prem.vtt' }],
+    [
+      'an image that is not one',
+      () => writeFileSync(at(ID, IMAGE.src), 'not a picture'),
+      { file: `${ID}/${IMAGE.src}`, path: '', reason: `${IMAGE.src} is not an image the app can show: not a JPEG or WebP file` },
+    ],
+    [
+      'an image whose name says another format',
+      () => writeFileSync(at(ID, IMAGE.src), image('pic.jpg')),
+      { file: `${ID}/${IMAGE.src}`, path: '', reason: `${IMAGE.src} is a JPEG file, not what its name says` },
+    ],
+    [
+      'an image too wide',
+      () => {
+        // The fixture's VP8 header, its 14-bit width set to 3000.
+        const wide = image();
+        new DataView(wide.buffer).setUint16(26, 3000, true);
+        writeFileSync(at(ID, IMAGE.src), wide);
+      },
+      { file: `${ID}/${IMAGE.src}`, path: '', reason: `${IMAGE.src} is 3000 × 24 px; its long side is at most 2048` },
+    ],
+    [
+      'an image over its budget',
+      () => {
+        const path = at(ID, IMAGE.src);
+        writeFileSync(path, image());
+        truncateSync(path, 1.5 * MIB);
+      },
+      { file: `${ID}/${IMAGE.src}`, path: '', reason: `${IMAGE.src} is 1.5 MiB, over the 1 MiB an image may be` },
+    ],
+    [
+      'an audio clip in stereo',
+      () => writeFileSync(at(ID, AUDIO.src), narration(readFixture('tone-stereo'))),
+      { file: `${ID}/${AUDIO.src}`, path: '', reason: `${AUDIO.src} has 2 channels; narration is mono` },
+    ],
+    [
+      "an audio clip's captions past its end",
+      () => writeFileSync(at(ID, AUDIO.captions), vtt(['00:58.000', '01:01.000', 'a'])),
+      { file: `${ID}/${AUDIO.captions}`, path: '', reason: `caption 1 ends at 61 s, past the end of the narration, ${NARRATION_S} s` },
+    ],
+    ['an image the guide does not use', () => writeFileSync(at(ID, 'images/old.webp'), image()), { file: `${ID}/images/old.webp`, path: '', reason: 'images/old.webp is not used by the guide' }],
+  ])('reports %s', (_, change, expected) => {
+    change();
+    expect(problems()).toEqual([expected]);
   });
 });
 

@@ -28,6 +28,9 @@ export type Scene = Chapter['scene'];
 export type Step = Chapter['steps'][number];
 /** A view action at a time in its step. */
 export type Cue = Step['cues'][number];
+/** A clip hung on something in the view (spec/guides.md §8.1), in a step or in the "Stories and clips" layer. */
+export type Hotspot = NonNullable<Step['hotspots']>[number];
+export type Clip = Hotspot['clip'];
 
 /** The view at a chapter's start: its scene, whole. */
 export function sceneView(scene: Scene): FoldedView {
