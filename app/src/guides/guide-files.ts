@@ -8,6 +8,7 @@
  */
 
 import { GUIDE_FORMAT_VERSION, ID_PATTERN, type Guide } from './format';
+import type { GuideListing } from './guide-list';
 
 export interface GuideFilesDeps {
   /** As the browser's fetch. */
@@ -43,6 +44,22 @@ export async function fetchGuideIds(deps: GuideFilesDeps): Promise<string[]> {
     throw new Error(`${INDEX_FILE}: is not a list of guide ids`);
   }
   return json as string[];
+}
+
+/**
+ * Every guide index.json lists, in its order. A guide that cannot be fetched is listed with its problem rather than
+ * failing the rest; only an unreadable index.json rejects.
+ */
+export async function fetchGuides(deps: GuideFilesDeps): Promise<GuideListing[]> {
+  const ids = await fetchGuideIds(deps);
+  return Promise.all(
+    ids.map((id) =>
+      fetchGuide(deps, id).then(
+        (guide): GuideListing => ({ id, guide }),
+        (error: unknown): GuideListing => ({ id, problem: error instanceof Error ? error.message : String(error) })
+      )
+    )
+  );
 }
 
 /**

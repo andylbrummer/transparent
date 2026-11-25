@@ -61,7 +61,8 @@ import { LayerManager } from './layers/manager';
 import type { ViewControl } from './view/actions';
 import { GazePointer } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
-import { guideLink } from './guides/guide-files';
+import { fetchGuides, guideLink } from './guides/guide-files';
+import { GuideList } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
@@ -420,6 +421,15 @@ export function init(): App | null {
     labels: () => geoStatus,
     storage: localStorage,
   });
+  // The list shares the top-left corner with the layers panel: one open closes the other.
+  const guideList = new GuideList({
+    parent: container,
+    load: () => fetchGuides({ fetch: (url) => fetch(url), baseUrl: import.meta.env.BASE_URL }),
+    choose: (id) => guideSession.open({ id, at: null }),
+    onOpen: () => layersPanel.setOpen(false),
+  });
+  const closeGuideList = (): void => guideList.setOpen(false);
+  document.getElementById('layers-toggle')?.addEventListener('click', closeGuideList);
   // A link opens the guide's card; one that cannot be read opens it too, to say why.
   const link = guideLink(window.location.search);
   if (link) guideSession.open(link);
@@ -461,6 +471,7 @@ export function init(): App | null {
     onChange: (active) => {
       if (active && cardboard.isActive()) cardboard.exit();
       layersPanel.setOpen(false);
+      guideList.setOpen(false);
       // Back from AR: the ordinary camera and canvas size again.
       if (!active) onResize();
     },
@@ -591,6 +602,7 @@ export function init(): App | null {
       void sensors.requestPermission();
     }
     layersPanel.setOpen(false);
+    guideList.setOpen(false);
     labels.setStereo(stereo);
     spyglass.reset();
     headGestures.reset();
@@ -832,6 +844,8 @@ export function init(): App | null {
       gazePointer.dispose();
       // Before the captions: leaving the guide takes its captions down.
       guideSession.dispose();
+      document.getElementById('layers-toggle')?.removeEventListener('click', closeGuideList);
+      guideList.dispose();
       captions.dispose();
       resetButton.removeEventListener('click', onResetClick);
       resetButton.remove();

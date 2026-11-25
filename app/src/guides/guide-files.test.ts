@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLE_GUIDE } from './example-guide.testdata';
-import { fetchGuide, fetchGuideIds, guideFileUrl, guideLink, type GuideFilesDeps } from './guide-files';
+import { fetchGuide, fetchGuideIds, fetchGuides, guideFileUrl, guideLink, type GuideFilesDeps } from './guide-files';
 
 const BASE = '/transparent/';
 const GUIDE_FILE = `guides/${EXAMPLE_GUIDE.id}/guide.json`;
@@ -52,6 +52,24 @@ describe('fetchGuideIds', () => {
   ])('rejects naming the file when %s', async (_, file, message) => {
     const t = setup({ [`${BASE}guides/index.json`]: file });
     await expect(fetchGuideIds(t.deps)).rejects.toThrow(new Error(message));
+  });
+});
+
+describe('fetchGuides', () => {
+  it('reads every guide the index lists, in its order, and lists one that fails with its problem', async () => {
+    const t = setup({
+      [`${BASE}guides/index.json`]: json(['second-guide', EXAMPLE_GUIDE.id]),
+      [BASE + GUIDE_FILE]: json(EXAMPLE_GUIDE),
+    });
+    expect(await fetchGuides(t.deps)).toEqual([
+      { id: 'second-guide', problem: 'guides/second-guide/guide.json: HTTP 404' },
+      { id: EXAMPLE_GUIDE.id, guide: EXAMPLE_GUIDE },
+    ]);
+  });
+
+  it('rejects when the index cannot be read', async () => {
+    const t = setup({});
+    await expect(fetchGuides(t.deps)).rejects.toThrow(new Error('guides/index.json: HTTP 404'));
   });
 });
 

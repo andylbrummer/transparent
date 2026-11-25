@@ -528,6 +528,7 @@
       }
       #reset-offset,
       #layers-toggle,
+      #guides-toggle,
       #cardboard-toggle,
       #cardboard-calibrate,
       #voice-talk,
@@ -549,6 +550,10 @@
         right: calc(env(safe-area-inset-right) + 12px);
       }
       #layers-toggle {
+        left: calc(env(safe-area-inset-left) + 12px);
+      }
+      #guides-toggle {
+        top: calc(env(safe-area-inset-top) + 110px);
         left: calc(env(safe-area-inset-left) + 12px);
       }
       #cardboard-toggle {
@@ -574,6 +579,8 @@
       }
       #reset-offset:active,
       #layers-toggle:active,
+      #guides-toggle:active,
+      #guides-toggle[aria-expanded='true'],
       #cardboard-toggle:active,
       #cardboard-calibrate:active,
       #voice-talk.voice-talk--held,
@@ -583,6 +590,8 @@
       }
       #reset-offset:focus-visible,
       #layers-toggle:focus-visible,
+      #guides-toggle:focus-visible,
+      .guide-list__guide:focus-visible,
       #cardboard-toggle:focus-visible,
       #cardboard-calibrate:focus-visible,
       #voice-talk:focus-visible,
@@ -618,9 +627,71 @@
       @media (max-width: 520px) {
         body.layers-open #cardboard-toggle,
         body.layers-open #cardboard-calibrate,
-        body.layers-open #ar-toggle {
+        body.layers-open #ar-toggle,
+        body:has(#guide-list:not([hidden])) #cardboard-calibrate,
+        body:has(#guide-list:not([hidden])) #voice-talk,
+        body:has(#guide-list:not([hidden])) #ar-toggle {
           visibility: hidden;
         }
+      }
+      /* The guide list opens under its button, in the corner the layers panel uses: one open closes the other. */
+      .guide-list {
+        position: fixed;
+        z-index: 2;
+        top: calc(env(safe-area-inset-top) + 162px);
+        left: calc(env(safe-area-inset-left) + 12px);
+        width: min(360px, calc(100vw - 24px));
+        max-height: calc(100vh - env(safe-area-inset-top) - 222px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        box-sizing: border-box;
+        padding: 4px 14px 12px;
+        font: 14px/1.3 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        background: rgba(12, 14, 32, 0.92);
+        border: 1px solid rgba(160, 180, 255, 0.35);
+        border-radius: 14px;
+      }
+      .guide-list__heading {
+        margin: 8px 0;
+        font-size: 15px;
+      }
+      .guide-list__status {
+        margin: 6px 0;
+        color: #cfd4e8;
+      }
+      .guide-list__items {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .guide-list__guide {
+        display: grid;
+        gap: 4px;
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        background: rgb(28, 32, 60);
+        border: 1px solid rgba(160, 180, 255, 0.35);
+        border-radius: 10px;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .guide-list__guide span {
+        color: #cfd4e8;
+        font-size: 13px;
+      }
+      .guide-list__guide--failed {
+        border-color: rgba(255, 170, 120, 0.6);
+      }
+      /* A guide playing or its card showing: the list's button would only start another. */
+      body.guide-open #guides-toggle,
+      body:has(.guide-card:not([hidden])) #guides-toggle {
+        display: none;
       }
       /* Presets: one tap sets every switch; the one the switches stand at is lit. */
       .layers-presets {
@@ -824,6 +895,8 @@
       body.stereo #reset-offset,
       body.stereo #layers-toggle,
       body.stereo #layers-panel,
+      body.stereo #guides-toggle,
+      body.stereo #guide-list,
       body.stereo #cardboard-toggle,
       body.stereo #cardboard-calibrate,
       body.stereo #voice-talk,
