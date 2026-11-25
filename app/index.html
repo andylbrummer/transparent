@@ -428,7 +428,8 @@
       }
       .play-bar button,
       .guide-card button,
-      .transcript button {
+      .transcript button,
+      .clip button {
         min-height: 44px;
         padding: 0 12px;
         font: 600 14px/1 system-ui, -apple-system, sans-serif;
@@ -555,6 +556,101 @@
       .transcript button {
         align-self: flex-end;
         flex: none;
+      }
+      /* A hotspot's clip: over the lower half for an image, a strip near the foot for audio, above the play bar. */
+      .clip {
+        position: fixed;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom) + var(--captions-foot));
+        transform: translateX(-50%);
+        z-index: 2;
+        box-sizing: border-box;
+        width: min(560px, calc(100vw - 24px));
+        max-height: calc(50% - env(safe-area-inset-bottom));
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 14px 12px;
+        font: 15px/1.4 system-ui, -apple-system, sans-serif;
+        color: #e8ecff;
+        background: rgba(12, 14, 32, 0.95);
+        border: 1px solid rgba(255, 210, 122, 0.45);
+        border-radius: 14px;
+        pointer-events: auto;
+      }
+      .clip[hidden],
+      .clip [hidden] {
+        display: none;
+      }
+      .clip__head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .clip__title {
+        flex: 1;
+        margin: 0;
+        font-size: 16px;
+        color: #ffd27a;
+      }
+      .clip .clip__close {
+        flex: none;
+        min-width: 44px;
+        padding: 0;
+        font-size: 22px;
+      }
+      .clip__figure {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        margin: 0;
+      }
+      .clip__image {
+        min-height: 0;
+        max-width: 100%;
+        object-fit: contain;
+        border-radius: 6px;
+      }
+      .clip__caption,
+      .clip__credit,
+      .clip__message {
+        margin: 0;
+      }
+      .clip__credit {
+        font-size: 12px;
+        color: #cfd4e8;
+      }
+      .clip__credit a {
+        color: inherit;
+      }
+      .clip__message:empty {
+        display: none;
+      }
+      .clip__controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .clip__toggle {
+        flex: none;
+        min-width: 72px;
+        min-height: 44px;
+      }
+      .clip__progress {
+        flex: 1;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(160, 180, 255, 0.25);
+        overflow: hidden;
+      }
+      .clip__bar {
+        height: 100%;
+        background: #ffd27a;
+      }
+      /* An audio clip's captions sit over its strip, not under it. */
+      .captions.captions--clip {
+        bottom: calc(env(safe-area-inset-bottom) + var(--captions-foot) + 160px);
       }
       .play-bar__detail {
         font-size: 12px;
@@ -948,7 +1044,8 @@
       body.stereo .play-bar,
       body.stereo .view-chips,
       body.stereo .guide-card,
-      body.stereo .transcript {
+      body.stereo .transcript,
+      body.stereo .clip {
         display: none;
       }
       /* Calibrating: one readout per eye, under its convergence spot, so merged they read as one. */

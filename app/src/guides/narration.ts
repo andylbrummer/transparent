@@ -336,7 +336,7 @@ export function createNarration(deps: NarrationDeps): NarrationPlayer {
 }
 
 /** SILENCE_S of silence as a WAV file: a 44-byte header, then 8-bit mono samples. */
-function silentWav(): Uint8Array<ArrayBuffer> {
+export function silentWav(): Uint8Array<ArrayBuffer> {
   const samples = SILENCE_SAMPLE_RATE * SILENCE_S;
   const bytes = new Uint8Array(44 + samples);
   const view = new DataView(bytes.buffer);

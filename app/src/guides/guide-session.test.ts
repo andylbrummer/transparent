@@ -4,7 +4,8 @@ import type { ActionOutcome, AwaitedGaze } from '../view/actions';
 import { DOWN, EXAMPLE_GUIDE } from './example-guide.testdata';
 import { deferred, FakeAudio } from './fake-audio.testdata';
 import type { Guide } from './format';
-import { CAPTIONS_STORAGE_KEY, createGuideSession, type GuideSessionDeps } from './guide-session';
+import { CAPTIONS_STORAGE_KEY, createGuideSession, type GuideClips, type GuideSessionDeps } from './guide-session';
+import type { HotspotSource } from './hotspot-field';
 import { parseVtt } from './vtt';
 
 const ID = EXAMPLE_GUIDE.id;
@@ -83,7 +84,7 @@ afterEach(() => {
  * every action at once and counts its borrows, restores and stops; `world.awaited` is what awaitedGaze answers and
  * `world.labels` what labels() does. `events` has the borrow's end and each download's abort, in order.
  */
-function setup(options: { guide?: Guide; files?: Partial<Files>; storage?: GuideSessionDeps['storage'] } = {}) {
+function setup(options: { guide?: Guide; files?: Partial<Files>; storage?: GuideSessionDeps['storage']; clips?: GuideClips } = {}) {
   const files: Files = { ...filesOf(options.guide ?? EXAMPLE_GUIDE), ...(options.files as Files) };
   const audio = new FakeAudio();
   const fetched: string[] = [];
@@ -138,6 +139,7 @@ function setup(options: { guide?: Guide; files?: Partial<Files>; storage?: Guide
     },
     labels: () => world.labels,
     storage,
+    clips: options.clips,
   });
   disposals.push(() => session.dispose());
   return { session, audio, files, fetched, events, captionCalls, world, storage };
@@ -911,5 +913,73 @@ describe('spoken guide commands', () => {
     await settle();
     t.session.update(16);
     expect(t.session.getGuide()).toMatchObject({ state: 'playing', stepIndex: 0 });
+  });
+});
+
+describe('the guide and its clips', () => {
+  const CREDIT = EXAMPLE_GUIDE.credits[0];
+  const hotspot = (id: string) => ({ id, title: id, anchor: DOWN, clip: { kind: 'image', src: `images/${id}.webp`, alt: id, caption: id, credit: CREDIT } }) as const;
+  /** EXAMPLE_GUIDE with a hotspot on its first step and one on its last. */
+  const WITH_HOTSPOTS: Guide = {
+    ...EXAMPLE_GUIDE,
+    chapters: [
+      {
+        ...EXAMPLE_GUIDE.chapters[0],
+        steps: EXAMPLE_GUIDE.chapters[0].steps.map((step, i) => (i === 0 ? { ...step, hotspots: [hotspot('a')] } : i === 2 ? { ...step, hotspots: [hotspot('c')] } : step)),
+      },
+    ],
+  };
+  /** Fake clips: `open` is what isOpen says; every source shown, as its ids and a file's URL. */
+  function clips() {
+    const fake = { open: false, unlocks: 0, shown: [] as ([string[], string] | null)[] };
+    const deps: GuideClips = {
+      unlock: () => void fake.unlocks++,
+      isOpen: () => fake.open,
+      showHotspots: (source: HotspotSource | null) => fake.shown.push(source && [source.hotspots.map((h) => h.id), source.fileUrl('images/a.webp')]),
+    };
+    return { fake, deps };
+  }
+
+  it('shows a step’s hotspots from that step to the end of its chapter, and takes them down on leaving', async () => {
+    const c = clips();
+    const t = setup({ guide: WITH_HOTSPOTS, clips: c.deps });
+    await startPlaying(t);
+    expect(c.fake.unlocks).toBe(1);
+    expect(c.fake.shown).toEqual([[['a'], file('images/a.webp')]]);
+    button(bar, 'Next')!.click();
+    await settle();
+    t.session.update(16);
+    button(bar, 'Next')!.click();
+    await settle();
+    t.session.update(16);
+    expect(t.session.getGuide().stepIndex).toBe(2);
+    expect(c.fake.shown.at(-1)).toEqual([['a', 'c'], file('images/a.webp')]);
+    t.session.onKey('Escape');
+    expect(c.fake.shown.at(-1)).toBeNull();
+  });
+
+  it('waits while a clip is open, its captions down, and goes on when it closes', async () => {
+    const c = clips();
+    const t = setup({ guide: WITH_HOTSPOTS, clips: c.deps });
+    await startPlaying(t);
+    c.fake.open = true;
+    t.session.update(16);
+    expect(t.session.getGuide().paused).toBe(true);
+    expect(t.captionCalls.at(-1)).toEqual(['setCues', null]);
+    c.fake.open = false;
+    t.session.update(16);
+    expect(t.session.getGuide().paused).toBe(false);
+  });
+
+  it('stays paused after a clip when the user had paused it first', async () => {
+    const c = clips();
+    const t = setup({ guide: WITH_HOTSPOTS, clips: c.deps });
+    await startPlaying(t);
+    t.session.onKey(' ');
+    c.fake.open = true;
+    t.session.update(16);
+    c.fake.open = false;
+    t.session.update(16);
+    expect(t.session.getGuide().paused).toBe(true);
   });
 });

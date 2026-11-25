@@ -16,6 +16,7 @@ import type { GuideVoiceAction } from '../voice/commands';
 import type { CaptionOverlay } from './captions';
 import type { Guide } from './format';
 import { fetchGuide, guideFileUrl, type GuideLink } from './guide-files';
+import type { HotspotSource } from './hotspot-field';
 import { createNarration, type NarrationAudio, type NarrationDeps } from './narration';
 import { controlEnabled, PlayBar, type Control, type PlayBarActions } from './play-bar';
 import { createPlayer, type PlayerDeps, type PlayerState } from './player';
@@ -36,6 +37,18 @@ export interface GuideSessionDeps {
   labels(): 'loading' | 'ready' | 'failed';
   /** Where the captions switch is remembered: localStorage. */
   readonly storage: Pick<Storage, 'getItem' | 'setItem'>;
+  /** The clip player and the hotspot field, when the app has them (spec/guides.md §8). */
+  readonly clips?: GuideClips;
+}
+
+/** What the session needs of the clips: one thing speaks at a time, and a step's hotspots show till its chapter ends. */
+export interface GuideClips {
+  /** In the tap that starts the guide, beside the narration's own. */
+  unlock(): void;
+  /** A clip is open: the guide waits, its captions down, and goes on when it closes. */
+  isOpen(): boolean;
+  /** The hotspots of the steps played so far in this chapter; null for none. */
+  showHotspots(source: HotspotSource | null): void;
 }
 
 /** The storage key of the captions switch: 'off' when the user turned captions off; anything else, or nothing, is on. */
@@ -136,6 +149,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   let transcriptOpen = false;
   /** The captions of the step last played, kept while the guide waits or is paused there: what the transcript shows. */
   let heard: { readonly chapterIndex: number; readonly stepIndex: number; readonly cues: readonly CaptionCue[] } | null = null;
+  /** The guide was paused here for a clip, and goes on when the clip closes. */
+  let pausedForClip = false;
+  /** Where the hotspots shown were taken from, `guide/chapter/step`; null while none are. */
+  let hotspotsAt: string | null = null;
 
   /**
    * Inside a tap, before anything else: the browser allows the element's first play only there. A refusal is not
@@ -144,6 +161,7 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
    */
   const unlock = (): void => {
     narration.unlock().catch(() => {});
+    deps.clips?.unlock();
   };
 
   // The bar's buttons and the keys alike: a key does what its button does.
@@ -204,6 +222,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     transcriptOpen = false;
     transcript.show(null);
     heard = null;
+    pausedForClip = false;
+    // Now, not in the next frame: dispose leaves with no frame to follow.
+    if (hotspotsAt !== null) deps.clips?.showHotspots(null);
+    hotspotsAt = null;
   }
 
   /**
@@ -246,8 +268,33 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     captions.setCues(next);
   }
 
+  /** A clip opened pauses the guide, and its closing lets it go on: unless the user paused it first, or since. */
+  function holdForClip(): void {
+    const open = deps.clips?.isOpen() ?? false;
+    const state = player.state();
+    if (open && !pausedForClip && !isPaused(state)) {
+      pause();
+      pausedForClip = isPaused(player.state());
+    } else if (!open && pausedForClip) {
+      pausedForClip = false;
+      if (isPaused(player.state())) player.resume();
+    }
+  }
+
+  /** A step's hotspots show from that step to the end of its chapter (spec/guides.md §8.1): handed over when that changes. */
+  function showHotspots(state: PlayerState): void {
+    if (!deps.clips) return;
+    const at = state.kind === 'idle' ? null : `${state.guide.id}/${state.chapterIndex}/${state.stepIndex}`;
+    if (at === hotspotsAt) return;
+    hotspotsAt = at;
+    if (state.kind === 'idle') return deps.clips.showHotspots(null);
+    const { guide } = state;
+    const hotspots = guide.chapters[state.chapterIndex].steps.slice(0, state.stepIndex + 1).flatMap((step) => step.hotspots ?? []);
+    deps.clips.showHotspots(hotspots.length === 0 ? null : { hotspots, fileUrl: (path) => guideFileUrl(deps.baseUrl, guide, path), language: guide.language });
+  }
+
   function showCaptions(state: PlayerState): void {
-    if (!captionsOn || transcriptOpen || state.kind !== 'playing') return setCues(null);
+    if (!captionsOn || transcriptOpen || state.kind !== 'playing' || deps.clips?.isOpen()) return setCues(null);
     setCues({ cues: state.captions, lang: state.guide.language });
     captions.update(state.tS);
   }
@@ -305,8 +352,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
   }
 
   function update(deltaMs: number): void {
+    holdForClip();
     player.update(deltaMs);
     const state = player.state();
+    showHotspots(state);
     if (state.kind === 'playing') heard = { chapterIndex: state.chapterIndex, stepIndex: state.stepIndex, cues: state.captions };
     bar.update(state, deltaMs, { captions: captionsOn, transcript: transcriptOpen });
     showCaptions(state);

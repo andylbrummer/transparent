@@ -29,6 +29,8 @@ export class FakeAudio extends EventTarget {
   pauses = 0;
   ended = false;
   paused = true;
+  /** Unknown until the test says: NaN, as an element before its metadata. */
+  duration = NaN;
   readyState = 0;
   error: MediaError | null = null;
   private time = 0;

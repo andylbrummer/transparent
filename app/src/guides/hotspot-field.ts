@@ -50,11 +50,13 @@ export interface HotspotFieldDeps {
 
 /** A tap opens the marker within this of its direction (spec/guides.md §8.3): looser than a stare, a finger is wide. */
 export const TAP_DEG = 3;
+/** A press that moves no further than this before it is released is a tap, not a drag of the view. */
+export const TAP_SLOP_PX = 8;
 /** How often anchors are found again. */
 export const REFRESH_MS = 250;
 
-/** After a guide's marks (-1) and before every name: a marker is there to be found. */
-const MARKER_RANK = -0.5;
+/** After a guide's marks (-1) and before every name, the depth ladder's too (a country's rank less 0.9): a marker is there to be found. */
+const MARKER_RANK = -0.99;
 const MARKER_STYLE: LabelStyle = { fontPx: 13, color: '#ffd27a', bold: true };
 
 /** A marker drawn for one hotspot. */
@@ -72,6 +74,12 @@ export interface HotspotFuse {
   readonly direction: THREE.Vector3;
   /** 0 to 1. */
   readonly fraction: number;
+}
+
+/** The one fuse dwell hands out, changed in place: a new object a frame would be garbage a frame. */
+interface KeptFuse {
+  readonly direction: THREE.Vector3;
+  fraction: number;
 }
 
 export interface HotspotField {
@@ -97,6 +105,9 @@ export interface HotspotField {
 
 export function createHotspotField(deps: HotspotFieldDeps): HotspotField {
   const sources = new Map<string, Marker[]>();
+  /** Every source's markers in one list, made again on a set: the frame's loops walk it by index, with no iterator. */
+  let markers: Marker[] = [];
+  const fuse: KeptFuse = { direction: new THREE.Vector3(), fraction: 0 };
   let sinceRefreshMs = Infinity;
   /** The stare under way. */
   let staring: Marker | null = null;
@@ -119,57 +130,52 @@ export function createHotspotField(deps: HotspotFieldDeps): HotspotField {
   function set(key: string, source: HotspotSource | null): void {
     for (const marker of sources.get(key) ?? []) marker.group.remove();
     sources.delete(key);
-    if (staring && !all().includes(staring)) staring = null;
     if (source) sources.set(key, source.hotspots.map((hotspot) => markerFor(hotspot, source)));
+    markers = [...sources.values()].flat();
+    if (staring && !markers.includes(staring)) staring = null;
+    if (spent && !markers.includes(spent)) spent = null;
     // The new markers are placed in the next update, not a refresh later.
     sinceRefreshMs = Infinity;
-  }
-
-  function all(): Marker[] {
-    return [...sources.values()].flat();
   }
 
   function update(deltaMs: number): void {
     sinceRefreshMs += deltaMs;
     const refresh = sinceRefreshMs >= REFRESH_MS;
     if (refresh) sinceRefreshMs = 0;
-    for (const markers of sources.values()) {
-      for (const marker of markers) {
-        if (refresh) {
-          const located = deps.locate(marker.hotspot.anchor);
-          // A target lost for now (no position yet) leaves the marker where it was.
-          if (located.ok) {
-            marker.direction.copy(located.direction);
-            marker.position.copy(deps.camera.position).addScaledVector(located.direction, SKY_RADIUS_M);
-            marker.placed = true;
-          }
+    for (let i = 0; i < markers.length; i++) {
+      const marker = markers[i];
+      if (refresh) {
+        const located = deps.locate(marker.hotspot.anchor);
+        // A target lost for now (no position yet) leaves the marker where it was.
+        if (located.ok) {
+          marker.direction.copy(located.direction);
+          marker.position.copy(deps.camera.position).addScaledVector(located.direction, SKY_RADIUS_M);
+          marker.placed = true;
         }
-        const layer = marker.hotspot.layer;
-        const shown = marker.placed && (layer === undefined || deps.isLayerOn(layer));
-        if (shown !== marker.shown) {
-          marker.shown = shown;
-          marker.group.setVisible(shown);
-        }
+      }
+      const layer = marker.hotspot.layer;
+      const shown = marker.placed && (layer === undefined || deps.isLayerOn(layer));
+      if (shown !== marker.shown) {
+        marker.shown = shown;
+        marker.group.setVisible(shown);
       }
     }
   }
 
   function find(id: string): FieldHotspot | null {
-    for (const markers of sources.values()) for (const marker of markers) if (marker.hotspot.id === id) return marker;
-    return null;
+    return markers.find((marker) => marker.hotspot.id === id) ?? null;
   }
 
   function nearestMarker(direction: THREE.Vector3, minCos: number): Marker | null {
     let best: Marker | null = null;
     let bestCos = minCos;
-    for (const markers of sources.values()) {
-      for (const marker of markers) {
-        if (!marker.shown) continue;
-        const cos = marker.direction.dot(direction);
-        if (cos >= bestCos) {
-          best = marker;
-          bestCos = cos;
-        }
+    for (let i = 0; i < markers.length; i++) {
+      const marker = markers[i];
+      if (!marker.shown) continue;
+      const cos = marker.direction.dot(direction);
+      if (cos >= bestCos) {
+        best = marker;
+        bestCos = cos;
       }
     }
     return best;
@@ -202,7 +208,9 @@ export function createHotspotField(deps: HotspotFieldDeps): HotspotField {
       return null;
     }
     if (heldMs < FUSE_DELAY_MS) return null;
-    return { direction: under.direction, fraction: (heldMs - FUSE_DELAY_MS) / (DWELL_MS - FUSE_DELAY_MS) };
+    fuse.direction.copy(under.direction);
+    fuse.fraction = (heldMs - FUSE_DELAY_MS) / (DWELL_MS - FUSE_DELAY_MS);
+    return fuse;
   }
 
   return {

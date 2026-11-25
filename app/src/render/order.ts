@@ -16,4 +16,6 @@ export const RENDER_ORDER = {
   quakes: 3,
   /** Things in orbit and around the Earth. */
   nearSpace: 4,
+  /** A clip's image in the viewer: over everything, as the page's panel is over the view. */
+  clipPanel: 10,
 } as const;

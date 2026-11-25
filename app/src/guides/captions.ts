@@ -20,9 +20,10 @@ export class CaptionOverlay {
   private shown: CaptionCue | null = null;
   private placedKey = '';
 
-  constructor(parent: HTMLElement) {
+  /** `modifier` is a class beside `captions`: a clip's overlay sits higher than the narration's. */
+  constructor(parent: HTMLElement, modifier?: string) {
     this.root = document.createElement('div');
-    this.root.className = 'captions';
+    this.root.className = modifier ? `captions ${modifier}` : 'captions';
     this.plates = [0, 1].map(() => {
       const plate = document.createElement('p');
       plate.className = 'captions__plate';

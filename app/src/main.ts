@@ -66,6 +66,10 @@ import { GazePointer, type StereoEyes } from './view/gaze-pointer';
 import { CaptionOverlay } from './guides/captions';
 import { StereoNotice } from './guides/stereo-notice';
 import { PauseCard } from './guides/pause-card';
+import { createClipPlayer, type ClipOutcome, type ClipStatus } from './guides/clip-player';
+import { ClipScenePanelMesh } from './guides/clip-scene-panel';
+import { createHotspotField, TAP_SLOP_PX, type HotspotFuse } from './guides/hotspot-field';
+import { silentWav } from './guides/narration';
 import { fetchGuides, guideLink } from './guides/guide-files';
 import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
@@ -110,6 +114,10 @@ export interface App {
   getDate(): Date;
   /** The guide's card and player, for the browser harness. */
   getGuide(): GuideStatus;
+  /** The clip open, if any, for the browser harness. */
+  getClip(): ClipStatus;
+  /** Open a hotspot in the view by its id, as a tap on its marker does: for the browser harness. */
+  openHotspot(id: string): Promise<ClipOutcome>;
   /** The Cardboard spyglass's state and window, for the browser harness. */
   getSpyglass(): {
     readonly state: SpyglassState['kind'];
@@ -332,6 +340,7 @@ export function init(): App | null {
   // The place and time chips in the viewer, above the guide's notice: not a live region, as the clock runs by itself.
   const stereoChips = new StereoNotice(container, { topFraction: 0.1, live: false, className: 'stereo-notice--chips' });
   const pauseCard = new PauseCard(container);
+  const clipCaptions = new CaptionOverlay(container, 'captions--clip');
 
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
@@ -439,6 +448,26 @@ export function init(): App | null {
     spyglass: { inStereo: () => cardboard.isActive() && !arRunner.isActive(), openOn: (target) => spyglass.openOn(target) },
     dip: (change) => dip.run(change),
   });
+  // Hotspots and their clips (spec/guides.md §8): the field draws the markers and says which one is meant, the
+  // player plays it. A guide's step and the "Stories and clips" layer both hand their hotspots to the field.
+  const clipScenePanel = new ClipScenePanelMesh(scene);
+  const clipPlayer = createClipPlayer({
+    parent: container,
+    audio: new Audio(),
+    fetch: (url) => fetch(url),
+    captions: clipCaptions,
+    captionsShown: () => guideSession.getGuide().captionsShown,
+    scenePanel: clipScenePanel,
+    objectUrl: { create: (blob) => URL.createObjectURL(blob), revoke: (url) => URL.revokeObjectURL(url) },
+    silence: silentWav,
+  });
+  const hotspotField = createHotspotField({
+    locate: (target) => viewControl.locate(target),
+    camera,
+    addLabels: (spec) => labels.addGroup(spec),
+    isLayerOn: (id) => layerVisibility[id] ?? false,
+    open: (hit) => void clipPlayer.open(hit),
+  });
   const guideSession = createGuideSession({
     parent: container,
     view: viewControl,
@@ -449,6 +478,7 @@ export function init(): App | null {
     captions,
     labels: () => geoStatus,
     storage: localStorage,
+    clips: { unlock: () => clipPlayer.unlock(), isOpen: () => clipPlayer.isOpen(), showHotspots: (source) => hotspotField.set('guide', source) },
   });
   // The list shares the top-left corner with the layers panel: one open closes the other.
   const guideList = new GuideList({
@@ -569,6 +599,9 @@ export function init(): App | null {
     }
     renderer.domElement.setPointerCapture(e.pointerId);
     look.onPointerDown(e.pointerId, e.clientX, e.clientY);
+    // One finger may be a tap on a marker; a second makes it a pinch.
+    tap = tap === null && pointersDown === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null;
+    pointersDown++;
   };
   const onPointerMove = (e: PointerEvent): void =>
     look.onPointerMove(e.pointerId, e.clientX, e.clientY, renderer.domElement.clientHeight);
@@ -576,19 +609,65 @@ export function init(): App | null {
     // Always let the button go: a hold that left the viewer ends here, outside it.
     const tapped = viewerButton.up(e.pointerId);
     if (cardboard.isActive()) {
-      if (tapped && !cardboard.isCalibrating()) {
-        // The spyglass has first call on the button; with nothing for it under the gaze, the guide takes it.
-        const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
-        if (spyglass.claims(candidate) || !guideSession.onViewerInput('tap')) spyglass.deeper(candidate);
-      }
+      if (tapped && !cardboard.isCalibrating()) viewerPress('tap');
       return;
     }
     look.onPointerUp(e.pointerId);
+    pointersDown = Math.max(0, pointersDown - 1);
+    if (tap?.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) <= TAP_SLOP_PX) tapToward(e.clientX, e.clientY);
+    if (tap?.id === e.pointerId) tap = null;
   };
   const onPointerCancel = (e: PointerEvent): void => {
     viewerButton.cancel(e.pointerId);
     look.onPointerUp(e.pointerId);
+    pointersDown = Math.max(0, pointersDown - 1);
+    tap = null;
   };
+  /** A press released within TAP_SLOP_PX of where it went down: a tap, tested by its direction against the markers. */
+  let tap: { readonly id: number; readonly x: number; readonly y: number } | null = null;
+  let pointersDown = 0;
+  const tapDirection = new THREE.Vector3();
+  function tapToward(x: number, y: number): void {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const ndcX = ((x - rect.left) / rect.width) * 2 - 1;
+    const ndcY = 1 - ((y - rect.top) / rect.height) * 2;
+    // Turned by the camera alone: unprojecting a point would lose precision to the camera's distance from the centre.
+    tapDirection.set(ndcX * camera.aspect * tanHalf, ndcY * tanHalf, -1).transformDirection(camera.matrixWorld);
+    hotspotField.tap(tapDirection);
+  }
+  /**
+   * The viewer's button: an open clip closes; an open spyglass goes deeper; a marker under the gaze opens before a
+   * name does (spec/guides.md §8.3), which is still there once the clip is closed.
+   */
+  function viewerPress(input: 'tap' | 'nod'): void {
+    if (clipPlayer.isOpen()) return clipPlayer.close();
+    const marker = spyglass.getState().kind === 'open' ? null : hotspotField.nearest(headForward, CAPTURE_DEG);
+    if (marker) {
+      hotspotField.resetDwell();
+      void clipPlayer.open(marker);
+      return;
+    }
+    // The spyglass has first call on the button; with nothing for it under the gaze, the guide takes it.
+    const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
+    if (spyglass.claims(candidate) || !guideSession.onViewerInput(input)) spyglass.deeper(candidate);
+  }
+  /** An open clip takes Escape and Space before the guide does; Enter opens the marker at the centre of the view. */
+  const keyForward = new THREE.Vector3();
+  function onClipKey(key: string): boolean {
+    if (clipPlayer.isOpen()) {
+      if (key === 'Escape') {
+        clipPlayer.close();
+        return true;
+      }
+      return key === ' ' && clipPlayer.toggle();
+    }
+    if (key !== 'Enter') return false;
+    camera.getWorldDirection(keyForward);
+    const marker = hotspotField.nearest(keyForward, CAPTURE_DEG);
+    if (marker) void clipPlayer.open(marker);
+    return marker !== null;
+  }
   const onKeyDown = (e: KeyboardEvent): void => {
     // In the viewer the zoom keys are the spyglass's; turning keys stay the look's.
     if (cardboard.isActive() && !cardboard.isCalibrating()) {
@@ -605,7 +684,7 @@ export function init(): App | null {
     const focused = e.target instanceof Element ? e.target : null;
     const focusKeeps = focused !== null && (focused.matches(FIELDS) || (focused.matches(PRESSABLE) && (e.key === ' ' || e.key === 'Enter')));
     const guideKey = !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !focusKeeps;
-    if (guideKey && guideSession.onKey(e.key)) {
+    if (guideKey && (onClipKey(e.key) || guideSession.onKey(e.key))) {
       e.preventDefault();
       return;
     }
@@ -645,6 +724,9 @@ export function init(): App | null {
     clock.capRate(stereo ? CARDBOARD_MAX_TIME_RATE : null);
     spyglass.reset();
     headGestures.reset();
+    hotspotField.resetDwell();
+    // The tap on the button lets a clip opened by a stare play in the viewer.
+    if (stereo) clipPlayer.unlock();
     labels.setSpyglassHole(null);
     // Nothing can be pressed in the viewer: the microphone stays open for the wake word.
     voice.setWakeListening(stereo);
@@ -744,6 +826,9 @@ export function init(): App | null {
     viewChips.setVisible(position !== null && !ar && !stereo);
     if (stereo) stereoChips.place(width, height, cardboardCalibration.spacingPx());
     else stereoChips.show('');
+    // A clip's captions are not drawn per eye yet: in the viewer a clip shows without them.
+    clipCaptions.setVisible(position !== null && !ar && !stereo);
+    let hotspotFuse: HotspotFuse | null = null;
     const nowMs = performance.now();
     // Holding the viewer's button leaves the viewer: the moment the hold is long enough, so the wearer knows.
     if (cardboard.isActive() && !cardboard.isCalibrating() && viewerButton.held(nowMs)) cardboard.exit();
@@ -767,20 +852,29 @@ export function init(): App | null {
       skyRoot.quaternion.copy(inertialRoot.quaternion);
       skyRoot.position.copy(camera.position);
       skyUniforms.uObserverUp.value.copy(camera.position).normalize();
+      hotspotField.update(deltaMs);
       let spyglassFrame: SpyglassFrame | undefined;
       if (stereo && !cardboard.isCalibrating()) {
         camera.getWorldDirection(headForward);
-        const candidate = labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
+        // A marker under the gaze wins the stare, the button and the nod over a name (spec/guides.md §8.3).
+        const spyglassOpen = spyglass.getState().kind === 'open';
+        const marker = spyglassOpen || clipPlayer.isOpen() ? null : hotspotField.nearest(headForward, CAPTURE_DEG);
+        const candidate = marker ? null : labels.skyTargetNearViewCenter(camera, THREE.MathUtils.degToRad(CAPTURE_DEG));
         spyglass.update(headForward, candidate, deltaMs);
+        if (spyglassOpen || clipPlayer.isOpen()) hotspotField.resetDwell();
+        else hotspotFuse = hotspotField.dwell(headForward, deltaMs);
         camera.getWorldQuaternion(headOrientation);
         spyglass.tilt(headOrientation, deltaMs);
         const gesture = headGestures.update(headOrientation, deltaMs);
         if (gesture) {
           lastHeadGesture = gesture;
-          // The spyglass's first, as the button is; a nod it passes on may go on at a guide's continue step.
+          // The spyglass's first, as the button is; a nod it passes on may go on at a guide's continue step. A marker
+          // under the gaze takes it before either.
           if (gesture === 'nod') {
-            if (spyglass.claims(candidate) || !guideSession.onViewerInput('nod')) spyglass.deeper(candidate);
-          } else spyglass.back();
+            if (marker) viewerPress('nod');
+            else if (spyglass.claims(candidate) || !guideSession.onViewerInput('nod')) spyglass.deeper(candidate);
+          } else if (clipPlayer.isOpen()) clipPlayer.close();
+          else spyglass.back();
         }
         const view = spyglass.view();
         if (view) {
@@ -792,7 +886,9 @@ export function init(): App | null {
         }
       }
       lazyLayers.update({ date, camera, position, deltaMs, eyes: stereo ? 2 : 1, spyglass: spyglassFrame });
+      clipScenePanel.update(camera);
     }
+    clipPlayer.update(deltaMs, stereo ? headForward : null, stereo);
     lastFrameMs = nowMs;
     // A layer swaps the surface map without telling anyone: the HUD's note about it follows.
     if (imageryStatus !== 'ready' && globe.hasSurfaceImagery() !== imageryShown) renderHud();
@@ -835,6 +931,8 @@ export function init(): App | null {
             );
           } else if (fuse) {
             spyglassLens.drawFuse(renderer, eye, viewport, spyglassDirection, fuse.fraction);
+          } else if (hotspotFuse) {
+            spyglassLens.drawFuse(renderer, eye, viewport, hotspotFuse.direction, hotspotFuse.fraction);
           }
         }
       );
@@ -883,6 +981,11 @@ export function init(): App | null {
     getVisibleLabels: () => labels.visibleNames(),
     getDate: () => clock.now(),
     getGuide: () => guideSession.getGuide(),
+    getClip: () => clipPlayer.getClip(),
+    openHotspot(id) {
+      const hit = hotspotField.find(id);
+      return hit ? clipPlayer.open(hit) : Promise.resolve({ ok: false, message: `no hotspot ${id} in the view` });
+    },
     getSpyglass: () => {
       const state = spyglass.getState();
       return {
@@ -925,6 +1028,10 @@ export function init(): App | null {
       gazePointer.dispose();
       // Before the captions: leaving the guide takes its captions down.
       guideSession.dispose();
+      clipPlayer.dispose();
+      hotspotField.dispose();
+      clipScenePanel.dispose();
+      clipCaptions.dispose();
       document.getElementById('layers-toggle')?.removeEventListener('click', closeGuideList);
       guideList.dispose();
       captions.dispose();
