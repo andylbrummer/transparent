@@ -8,10 +8,13 @@
 
 import type * as THREE from 'three';
 import type { LayerParamValues } from '../layers/types';
-import type { SchemaType, TARGET_SCHEMA, VIEW_ACTION_SCHEMA } from './action-schema';
+import type { PLACE_SCHEMA, SchemaType, TARGET_SCHEMA, VIEW_ACTION_SCHEMA } from './action-schema';
 
 /** Something to look at. Every kind resolves to a direction from where the view stands (targets.ts). Written once, as a schema (action-schema.ts). */
 export type Target = SchemaType<typeof TARGET_SCHEMA>;
+
+/** Where the view stands: here, the far side from here, or a named place. Written once, as a schema (action-schema.ts). */
+export type Place = SchemaType<typeof PLACE_SCHEMA>;
 
 /** One thing asked of the view. Written once, as a schema (action-schema.ts). */
 export type ViewAction = SchemaType<typeof VIEW_ACTION_SCHEMA>;

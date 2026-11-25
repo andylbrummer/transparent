@@ -97,7 +97,34 @@ export const TARGET_SCHEMA = {
   ],
 } as const;
 
-const SWITCH_IDS = { type: 'array', items: NAME, minItems: 1, uniqueItems: true } as const;
+/** Where the view stands (standing-place.ts). Always on the ground: a guide moves the viewer, never the camera off them. */
+export const PLACE_SCHEMA = {
+  oneOf: [
+    {
+      type: 'object',
+      description: 'Where the sensors say the user is.',
+      properties: { kind: { const: 'here' } },
+      required: ['kind'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      description: 'The far side of the Earth from here.',
+      properties: { kind: { const: 'antipode' } },
+      required: ['kind'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      description: 'A named place on the ground. The name is what the place chip says.',
+      properties: { kind: { const: 'at' }, lat: LATITUDE, lon: { type: 'number', minimum: -180, maximum: 180 }, name: NAME },
+      required: ['kind', 'lat', 'lon', 'name'],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+const SWITCH_IDS ={ type: 'array', items: NAME, minItems: 1, uniqueItems: true } as const;
 
 /**
  * Settings for the layers an action turns on, by switch id. What each layer takes is in its definition

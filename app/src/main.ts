@@ -69,6 +69,7 @@ import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
 import { createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
+import { createStandingPlace } from './view/standing-place';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
 import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
 
@@ -363,6 +364,8 @@ export function init(): App | null {
     fix: { phase: 'acquiring', accuracy: null },
     fallback: false,
   };
+  // Where the view stands: the fix, or a place an action set. AR keeps the fix, since its window opens onto the real ground.
+  const standing = createStandingPlace(() => sensorState.position);
 
   // A layer that fails may be code from a build the site no longer serves; one check covers a burst of failures.
   let buildCheck: Promise<BuildCheck> | null = null;
@@ -404,7 +407,7 @@ export function init(): App | null {
         return (await response.json()) as T;
       },
       now: () => clock.now(),
-      getPosition: () => sensorState.position,
+      getPosition: () => standing.position(),
       addLabels: (spec) => labels.addGroup(spec),
     },
     (id, text, tone) => layersPanel.setStatus(id, text, tone),
@@ -417,7 +420,7 @@ export function init(): App | null {
     lazyLayers,
     shells: globe,
     camera,
-    getPosition: () => sensorState.position,
+    getPosition: () => standing.position(),
     now: () => clock.now(),
     getLabels: () => labelIndex,
     loadedLabels: labels,
@@ -707,7 +710,7 @@ export function init(): App | null {
   function animate(_time: number, frame?: XRFrame): void {
     const ar = arRunner.isActive();
     // No position, no view. Without a fix the sensors stand in at FALLBACK_POSITION, and the HUD says so. In AR, nothing until the window is open.
-    const position = sensorState.position;
+    const position = ar ? sensorState.position : standing.position();
     const showEarth = position !== null && (!ar || arRunner.isPlaced());
     globe.getMesh().visible = showEarth;
     geoRoot.visible = showEarth;
