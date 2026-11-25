@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { momentAt, momentDescription, momentStatus, positionFromLocation, yearText, yearsSpanned, type CoreFieldData } from './epochs';
 import { CORE_FIELD_SHADE_GLSL } from './shade';
-import definition from './layer';
+import { paramProblems } from '../params';
+import definition, { CORE_FIELD_PARAMS } from './layer';
 
 /** The baked file itself: what the layer will read. */
 const data = JSON.parse(new TextDecoder().decode(readFileSync('public/geo/core-field.json'))) as CoreFieldData;
@@ -59,5 +60,14 @@ describe('the switch', () => {
     expect(definition.section).toBe('Inside the Earth');
     expect(definition.credits[0].source).toContain('IGRF');
     expect(definition.caption).toMatch(/continued down/);
+  });
+});
+
+describe('the settings', () => {
+  it('span the baked epochs, and are the definition\'s', () => {
+    expect([CORE_FIELD_PARAMS.year.minimum, CORE_FIELD_PARAMS.year.maximum]).toEqual([data.epochs[0].year, data.epochs.at(-1)!.year]);
+    expect(definition.params).toBe(CORE_FIELD_PARAMS);
+    expect(paramProblems('core-field', CORE_FIELD_PARAMS, { year: 1937.5, playing: false })).toEqual([]);
+    expect(paramProblems('core-field', CORE_FIELD_PARAMS, { year: 1850 })).toEqual(['core-field year is from 1900 to 2025']);
   });
 });

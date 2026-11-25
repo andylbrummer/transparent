@@ -15,9 +15,9 @@ import { RENDER_ORDER } from '../../render/order';
 import type { OutlineData } from '../../render/outlines';
 import { ProjectedCoast } from '../../render/projected-coast';
 import { TimeControl } from '../deep-time/time-control';
-import type { FrameState, LayerContext, LayerInstance } from '../types';
+import type { FrameState, LayerContext, LayerInstance, LayerParamValues } from '../types';
 import { rampStrip } from '../weather/ramps';
-import { momentAt, momentDescription, momentStatus, positionFromLocation, yearText, yearsSpanned, type CoreFieldData, type CoreFieldEpoch } from './epochs';
+import { momentAt, momentDescription, momentStatus, newestYear, positionFromLocation, yearText, yearsSpanned, type CoreFieldData, type CoreFieldEpoch } from './epochs';
 import { CORE_FIELD_RAMP, CORE_FIELD_SHADE_GLSL } from './shade';
 
 const RAMP_TEXELS = 128;
@@ -89,8 +89,16 @@ export async function createCoreFieldLayer(context: LayerContext): Promise<Layer
       formatSpoken: (position) => `${yearText(momentAt(data, position))}`,
       describe: (position) => momentDescription(momentAt(data, position)),
     },
-    positionFromLocation(window.location.search, data)
+    0
   );
+  // The address is one caller of setParams; a guide's cue is another, after it.
+  setParams({ year: newestYear(data) - positionFromLocation(window.location.search, data) });
+
+  /** The layer's settings (layer.ts CORE_FIELD_PARAMS), checked already; one left out stays as it is. The year before play. */
+  function setParams(values: LayerParamValues): void {
+    if (typeof values.year === 'number') control.setValue(newestYear(data) - values.year);
+    if (typeof values.playing === 'boolean') control.setPlaying(values.playing);
+  }
 
   let visible = false;
   let dirty = true;
@@ -122,6 +130,7 @@ export async function createCoreFieldLayer(context: LayerContext): Promise<Layer
   };
 
   return {
+    setParams,
     setVisible(on) {
       visible = on;
       control.setVisible(on);

@@ -1,5 +1,11 @@
-import type { LayerDefinition } from '../types';
+import type { LayerDefinition, LayerParams } from '../types';
 import { CORE_FIELD_LEGEND } from './shade';
+
+/** What a guide or a link may set (core-field.ts setParams). The years are IGRF's span: a test holds them to the baked epochs. */
+export const CORE_FIELD_PARAMS = {
+  year: { type: 'number', description: 'The year shown; between two epochs the pictures are blended.', minimum: 1900, maximum: 2025 },
+  playing: { type: 'boolean', description: 'Play toward the present, or pause. Played from the present, it starts at 1900.' },
+} as const satisfies LayerParams;
 
 const coreField: LayerDefinition = {
   id: 'core-field',
@@ -21,6 +27,7 @@ const coreField: LayerDefinition = {
       url: 'https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field',
     },
   ],
+  params: CORE_FIELD_PARAMS,
   load: async (context) => (await import('./core-field')).createCoreFieldLayer(context),
 };
 
