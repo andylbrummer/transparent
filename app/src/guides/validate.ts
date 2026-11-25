@@ -13,6 +13,7 @@ import { canFade, type LayerSwitch } from '../ui/layers-panel';
 import type { LayerPreset } from '../ui/presets';
 import type { FoldedView, Target, TimeSetting } from '../view/actions';
 import { foldAction } from '../view/fold';
+import { TIME_LAPSE_ABOVE_RATE } from '../view/view-control';
 import { targetDirection, type LabelIndex } from '../view/targets';
 import { sceneView, type Guide } from './format';
 
@@ -31,9 +32,6 @@ export interface GuideWorld {
   /** The baked labels by name: indexLabels of geo/labels.json, geology.json and quakes.json. */
   readonly labels: LabelIndex;
 }
-
-/** Faster than this, a time-lapse needs a stop: under reduced motion it is a jump there instead (spec/guides.md §7.3). */
-export const RATE_NEEDS_UNTIL_ABOVE = 60;
 
 // A label resolves to the same place from anywhere at any time; the direction is not used.
 const ANYWHERE: SurfacePosition = { lat: 0, lon: 0 };
@@ -106,7 +104,8 @@ export function guideProblems(guide: Guide, world: GuideWorld): GuideProblem[] {
 
   const checkTime = (path: string, time: TimeSetting): void => {
     const rate = time.rate ?? 1;
-    if (Math.abs(rate) > RATE_NEEDS_UNTIL_ABOVE && time.until === undefined) {
+    // A time-lapse needs a stop: under reduced motion it is a jump there instead (spec/guides.md §7.3).
+    if (Math.abs(rate) > TIME_LAPSE_ABOVE_RATE && time.until === undefined) {
       problem(path, `a rate of ${rate} needs an until: with reduced motion the clock jumps there instead`);
     }
     if (time.until === undefined) return;

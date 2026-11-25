@@ -666,15 +666,27 @@ describe('createViewControl', () => {
       expect(t.look.getState().fovDeg).toBe(state.fovDeg);
     });
 
-    it('jumps rather than eases when less motion is asked for', async () => {
+    it('cuts in the dark rather than eases when less motion is asked for', async () => {
       const t = setup();
       t.view.reducedMotion = true;
-      expect(await t.viewControl.perform({ do: 'look', target: east, fovDeg: 15 })).toEqual({ ok: true });
+      t.dips.held = true;
+      const looked = t.viewControl.perform({ do: 'look', target: east, fovDeg: 15 });
+      await settle();
+      // Not a frame of movement before the dark.
+      t.viewControl.update(100);
+      expect(t.look.getState().fovDeg).toBe(DEFAULT_LOOK_STATE.fovDeg);
+      t.dips.release();
+      expect(await looked).toEqual({ ok: true });
       t.look.updateCamera(t.camera, austin, null, 0);
       expect(centre(t.camera).angleTo(direction(east))).toBeLessThan(1e-6);
       expect(t.look.getState().fovDeg).toBe(15);
+      t.dips.held = false;
       expect(await t.viewControl.perform({ do: 'fov', fovDeg: 40 })).toEqual({ ok: true });
       expect(t.look.getState().fovDeg).toBe(40);
+      expect(t.dips.count).toBe(2);
+      // Where it is already, there is nothing to cut to.
+      expect(await t.viewControl.perform({ do: 'fov', fovDeg: 40 })).toEqual({ ok: true });
+      expect(t.dips.count).toBe(2);
     });
 
     it('in a pose, leaves the aim to the user and waits for their gaze, but sets the field of view', async () => {
@@ -1265,6 +1277,40 @@ describe('createViewControl', () => {
       t.view.wallMs += 1000;
       expect(t.clock.now().getTime()).toBe(quakeMs + 1000);
       expect(t.clock.isLive()).toBe(true);
+    });
+
+    it('with less motion, goes straight to where a time-lapse would stop, and stands there', async () => {
+      const t = setup();
+      t.view.reducedMotion = true;
+      expect(await t.viewControl.perform({ do: 'time', to: quake, rate: 3600, until: '2011-03-12T05:46:24Z' })).toEqual({ ok: true });
+      expect(t.clock.now().toISOString()).toBe('2011-03-12T05:46:24.000Z');
+      t.view.wallMs += 1000;
+      expect(t.clock.now().toISOString()).toBe('2011-03-12T05:46:24.000Z');
+      expect(t.clock.rate()).toBe(0);
+      expect(t.dips.count).toBe(1);
+      // A run slow enough to watch is not a time-lapse, and runs.
+      await t.viewControl.perform({ do: 'time', to: quake, rate: 60 });
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(quakeMs + 60_000);
+      // One with no stop stands where it starts.
+      await t.viewControl.perform({ do: 'time', to: quake, rate: -3600 });
+      t.view.wallMs += 1000;
+      expect(t.clock.now().getTime()).toBe(quakeMs);
+    });
+
+    it('with less motion, restores a time-lapse at its stop', async () => {
+      const t = setup();
+      t.view.reducedMotion = true;
+      const lapse: FoldedView = {
+        layers: { only: [] },
+        place: { kind: 'here' },
+        time: { to: quake, rate: 3600, until: '2011-03-12T05:46:24Z' },
+        look: { target: { kind: 'horizon', azDeg: 0, altDeg: 0 }, fovDeg: 60 },
+        marks: [],
+      };
+      expect(await t.viewControl.restore(lapse)).toEqual({ ok: true });
+      expect(t.clock.now().toISOString()).toBe('2011-03-12T05:46:24.000Z');
+      expect(t.clock.rate()).toBe(0);
     });
 
     it('gives the clock back as the user left it when the borrow ends, run on meanwhile', async () => {

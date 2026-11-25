@@ -74,6 +74,8 @@ export const FOV_NEEDS_TARGET_BELOW_DEG = 30;
 export const MAX_FADE_S = 10;
 /** The fastest a guide may run the app clock, either way: a year a second. */
 export const MAX_TIME_RATE = 31_557_600;
+/** Faster than this, a clock is a time-lapse: a sky turning past more than a degree every four seconds. */
+export const TIME_LAPSE_ABOVE_RATE = 60;
 /** A time setting this near where the clock stands is no jump, and no reason to go dark. */
 const TIME_JUMP_MS = 60_000;
 
@@ -240,9 +242,17 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     // A new action takes over from an ease still under way, from where it has got to.
     endEase({ ok: true });
     const ease = easeAim(currentAim(), to);
-    if (deps.prefersReducedMotion() || ease.durationMs === 0) {
-      setAim(ease.at(ease.durationMs));
+    if (ease.durationMs === 0) {
+      setAim(ease.at(0));
       return Promise.resolve({ ok: true });
+    }
+    // No camera moves with reduced motion, nor a jump the eye cannot follow: a dip to dark and a cut. The dip is a
+    // fade, not movement (spec/guides.md §11).
+    if (deps.prefersReducedMotion()) {
+      return inTheDark(() => {
+        setAim(ease.at(ease.durationMs));
+        return { ok: true };
+      });
     }
     return new Promise((resolve) => {
       easing = { ease, gaze, resolve, elapsedMs: 0, seen: deps.look.getState() };
@@ -349,11 +359,12 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       case 'time': {
         const checked = checkTime(action);
         if (!checked.ok) return checked;
+        const time = withoutTimeLapse(checked);
         // Live already, and asked for live: nothing to do.
-        if (checked.live && deps.clock.isLive()) return { ok: true };
+        if (time.live && deps.clock.isLive()) return { ok: true };
         // A change of rate where the clock stands is not a jump: it just runs on faster, and seeing it is the point.
-        if (Math.abs(checked.fromMs - deps.clock.now().getTime()) < TIME_JUMP_MS) return applyTime(checked);
-        return inTheDark(() => applyTime(checked));
+        if (Math.abs(time.fromMs - deps.clock.now().getTime()) < TIME_JUMP_MS) return applyTime(time);
+        return inTheDark(() => applyTime(time));
       }
       case 'stand': {
         const { place } = action;
@@ -391,8 +402,9 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
     if (view.place.kind === 'at' && !(Math.abs(view.place.lat) <= 90 && Math.abs(view.place.lon) <= 180)) {
       return { ok: false, code: 'bad-value', message: `no place at ${view.place.lat}, ${view.place.lon}` };
     }
-    const time = checkTime(view.time);
-    if (!time.ok) return time;
+    const checkedTime = checkTime(view.time);
+    if (!checkedTime.ok) return checkedTime;
+    const time = withoutTimeLapse(checkedTime);
     // Found from where the view will stand, which is not yet where it stands.
     const destination = deps.standing.positionOf(view.place);
     const located = locate(look.target, destination);
@@ -824,6 +836,15 @@ export function createViewControl(deps: ViewControlDeps): ViewControl & {
       return bad(`the clock does not reach ${setting.until} from ${new Date(fromMs).toISOString()} at a rate of ${rate}`);
     }
     return { ok: true, fromMs, fromNow: now, rate, untilMs, live: false };
+  }
+
+  /**
+   * With reduced motion there is no time-lapse: the clock goes straight to where it would stop, and stands there. A
+   * guide's fast run always has a stop (the validator holds it to one); one without is held where it starts.
+   */
+  function withoutTimeLapse(time: CheckedTime): CheckedTime {
+    if (Math.abs(time.rate) <= TIME_LAPSE_ABOVE_RATE || !deps.prefersReducedMotion()) return time;
+    return { ok: true, fromMs: time.untilMs ?? time.fromMs, fromNow: false, rate: 0, untilMs: undefined, live: false };
   }
 
   function applyTime(time: CheckedTime): ActionOutcome {
