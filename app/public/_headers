@@ -1,9 +1,16 @@
 # Cloudflare Workers static assets (wrangler.jsonc). Everything else keeps
 # Cloudflare's default, revalidate on every load; a header set by two
 # matching rules would be joined with a comma, so Cache-Control is set once.
+#
+# The policy has one directive and restricts only audio and video
+# (spec/guides.md §10.3): this site, the blob: URLs narration plays from,
+# and the guide-video host, MEDIA_ORIGIN in src/guides/media-origin.ts,
+# which a test holds to this line. Everything else is as open as before.
+# GitHub Pages ignores this file.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: media-src 'self' blob: https://media.transparent.sbdev.io
 
 # Vite fingerprints everything under assets/, so it never changes in place.
 /assets/*
