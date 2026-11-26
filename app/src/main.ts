@@ -1125,3 +1125,11 @@ declare global {
 
 const app = init();
 if (app) window.__transparentEarth = app;
+
+// Offline start and kept data for the app pinned to a home screen (public/sw.js). Not in dev: Vite serves modules
+// that change on every edit, and a kept copy would hide the change.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch((error: unknown) => {
+    console.warn('service worker:', error);
+  });
+}
