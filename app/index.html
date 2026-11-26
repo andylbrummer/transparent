@@ -2,10 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <!-- viewport-fit=cover: the app draws edge to edge, under a notch too; the CSS keeps controls in the safe area. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Transparent Earth</title>
-    <!-- No icon file: an empty one stops the browser asking for /favicon.ico and logging a 404. -->
-    <link rel="icon" href="data:," />
+    <meta name="description" content="Point your phone at the ground and see through the planet: the far side, the mantle and core, earthquakes and plates, and the sky below your feet." />
+    <!-- Pinned to a home screen it opens full screen, as an app (manifest.webmanifest, sw.js). -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#03050d" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192" />
+    <!-- iOS reads these rather than the manifest's icons and display. -->
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Transparent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <style>
       :root {
         /* The compass bar's height: the gaze pointer's clear area starts beneath it. */

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Transparent Earth: the planet as glass, its shells drawn to PREM's radii and the app's colours
+       (src/render/prem.ts), over the night sky. Everything sits inside the central 80% circle, so the
+       same art serves as a maskable icon. Rendered to PNG by tools/icons/render.mjs. -->
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="45%" r="75%">
+      <stop offset="0" stop-color="#101a3a"/>
+      <stop offset="1" stop-color="#03050d"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0.8" stop-color="#9fdcff" stop-opacity="0"/>
+      <stop offset="0.97" stop-color="#9fdcff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#9fdcff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <g fill="#dfe8ff">
+    <circle cx="70" cy="86" r="2.2"/><circle cx="430" cy="64" r="1.8"/><circle cx="462" cy="210" r="1.5"/>
+    <circle cx="44" cy="300" r="1.6"/><circle cx="120" cy="458" r="1.9"/><circle cx="396" cy="452" r="2.3"/>
+    <circle cx="300" cy="30" r="1.4"/><circle cx="476" cy="372" r="1.4"/><circle cx="196" cy="40" r="1.2"/>
+  </g>
+  <circle cx="256" cy="256" r="206" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="195" fill="#4d994d" fill-opacity="0.18" stroke="#bfe4ff" stroke-width="5"/>
+  <circle cx="256" cy="256" r="194" fill="#996633" fill-opacity="0.32"/>
+  <circle cx="256" cy="256" r="174.5" fill="#cc4d1a" fill-opacity="0.55"/>
+  <circle cx="256" cy="256" r="106.5" fill="#ff801a" fill-opacity="0.8"/>
+  <circle cx="256" cy="256" r="37.4" fill="#ffcc33"/>
+  <!-- Where you stand, and your horizon: the line the app draws. -->
+  <path d="M184 61 H328" fill="none" stroke="#bfe4ff" stroke-width="5" stroke-opacity="0.85" stroke-linecap="round"/>
+  <circle cx="256" cy="61" r="9" fill="#ffffff"/>
+</svg>
