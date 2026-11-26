@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_M } from '@transparent-earth/core';
 import { PREM_LAYERS, premRadiiToMeters, premColors, premAlphas, type PremLayerName } from './prem';
 import { readProjectionFrame, type ProjectionFrame } from './view-ray';
+import { SKYLINE_BINS } from './skyline';
 
 /**
  * NASA GIBS Blue Marble (Next Generation) as map tiles, put together into one
@@ -77,9 +78,22 @@ const FRAGMENT_SHADER = `
   uniform float uPixelAngle;
   // HORIZON_ALPHA while the horizon line is shown, 0 while the whole sky is.
   uniform float uHorizonAlpha;
+  // The land's skyline (skyline.ts): radians above level per direction, bin 0 north, clockwise. Read only while ready.
+  uniform sampler2D uSkyline;
+  uniform float uSkylineReady;
+  uniform float uSkylineBins;
+  // Level at the place the skyline was worked out for: east and north, unit ECEF.
+  uniform vec3 uSkyEast;
+  uniform vec3 uSkyNorth;
 
   const vec3 SPACE = vec3(0.01, 0.012, 0.03);
   const vec3 HORIZON_COLOR = vec3(0.75, 0.85, 1.0);
+  const vec3 LAND_COLOR = vec3(0.42, 0.36, 0.28);
+  #define TAU 6.283185307179586
+
+  float skylineAt(float bin) {
+    return texture2D(uSkyline, vec2((mod(bin, uSkylineBins) + 0.5) / uSkylineBins, 0.5)).r;
+  }
 
   // Ray/sphere roots for a sphere at the origin, given b = dot(ro, rd) and
   // c = |ro|^2 - r^2. Uses the cancellation-free form: one root from
@@ -166,8 +180,26 @@ const FRAGMENT_SHADER = `
 
     // With the ground clear, a drawn horizon is what keeps "level" legible.
     float elevationSin = dot(rd, normalize(ro));
-    float horizon = 1.0 - smoothstep(0.5 * uPixelAngle, 1.5 * uPixelAngle, abs(elevationSin - uHorizonSin));
-    color = mix(color, HORIZON_COLOR, horizon * uHorizonAlpha);
+    if (uSkylineReady > 0.5) {
+      // The land's own skyline instead of a ring: the hills stand as faint shapes over the far side, outlined.
+      float elevation = asin(clamp(elevationSin, -1.0, 1.0));
+      float azimuth = atan(dot(rd, uSkyEast), dot(rd, uSkyNorth));
+      float bin = mod(azimuth / TAU * uSkylineBins + uSkylineBins, uSkylineBins);
+      float i0 = floor(bin);
+      float s0 = skylineAt(i0);
+      float s1 = skylineAt(i0 + 1.0);
+      float sky = mix(s0, s1, bin - i0);
+      // Distance across the outline, not straight up: a steep slope would otherwise draw a hairline.
+      float slope = (s1 - s0) * uSkylineBins / TAU / max(0.05, sqrt(1.0 - elevationSin * elevationSin));
+      float across = abs(elevation - sky) / sqrt(1.0 + slope * slope);
+      float land = step(elevation, sky) * smoothstep(asin(uHorizonSin) - uPixelAngle, asin(uHorizonSin) + 2.0 * uPixelAngle, elevation);
+      color = mix(color, LAND_COLOR, land * 0.45 * uHorizonAlpha);
+      float outline = 1.0 - smoothstep(0.5 * uPixelAngle, 1.5 * uPixelAngle, across);
+      color = mix(color, HORIZON_COLOR, outline * uHorizonAlpha);
+    } else {
+      float horizon = 1.0 - smoothstep(0.5 * uPixelAngle, 1.5 * uPixelAngle, abs(elevationSin - uHorizonSin));
+      color = mix(color, HORIZON_COLOR, horizon * uHorizonAlpha);
+    }
 
     gl_FragColor = vec4(color, 1.0);
   }
@@ -191,6 +223,9 @@ export class GlobeRenderer {
   // Switched on or off, and how far faded: two things, so a fade never turns a switched-off shell back on.
   private readonly shellShown = new Float32Array(LAYER_COUNT).fill(1);
   private readonly shellOpacity = new Float32Array(LAYER_COUNT).fill(1);
+  // Float, nearest: the shader blends neighbouring bins itself, so no float-linear extension is needed.
+  private readonly skylineData = new Float32Array(SKYLINE_BINS);
+  private readonly skylineTexture = new THREE.DataTexture(this.skylineData, SKYLINE_BINS, 1, THREE.RedFormat, THREE.FloatType);
 
   constructor() {
     const uniforms = {
@@ -212,6 +247,11 @@ export class GlobeRenderer {
       uHorizonSin: { value: 0 },
       uPixelAngle: { value: 0.002 },
       uHorizonAlpha: { value: HORIZON_ALPHA },
+      uSkyline: { value: this.skylineTexture },
+      uSkylineReady: { value: 0 },
+      uSkylineBins: { value: SKYLINE_BINS },
+      uSkyEast: { value: new THREE.Vector3(1, 0, 0) },
+      uSkyNorth: { value: new THREE.Vector3(0, 0, 1) },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -328,6 +368,23 @@ export class GlobeRenderer {
   /** The drawn horizon keeps "level" legible; with the whole sky shown there is no ground to be level with. */
   setHorizonLineShown(shown: boolean): void {
     this.material.uniforms.uHorizonAlpha.value = shown ? HORIZON_ALPHA : 0;
+  }
+
+  /**
+   * Draw the land's skyline (skyline.ts) in place of the level ring, for the place whose local east and north are
+   * given; null goes back to the ring. Copied, so the caller may reuse the array.
+   */
+  setSkyline(profile: Float32Array | null, east?: THREE.Vector3, north?: THREE.Vector3): void {
+    const uniforms = this.material.uniforms;
+    if (!profile || !east || !north) {
+      uniforms.uSkylineReady.value = 0;
+      return;
+    }
+    this.skylineData.set(profile.subarray(0, SKYLINE_BINS));
+    this.skylineTexture.needsUpdate = true;
+    (uniforms.uSkyEast.value as THREE.Vector3).copy(east);
+    (uniforms.uSkyNorth.value as THREE.Vector3).copy(north);
+    uniforms.uSkylineReady.value = 1;
   }
 
   /** viewportHeightPx: drawing-buffer height, which sets the horizon line's width. */

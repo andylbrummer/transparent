@@ -14,6 +14,14 @@ export const BUILTIN_CREDITS: readonly Credit[] = [
     url: 'https://earthdata.nasa.gov/gibs',
   },
   {
+    what: 'The local skyline (elevation)',
+    source:
+      'Terrain Tiles (Tilezen/Joerd) on the AWS Registry of Open Data: USGS 3DEP, SRTM and GMTED2010; NOAA ETOPO1; Copernicus EU-DEM; ' +
+      'Geoscience Australia; Open Government Licence – Canada; INEGI; LINZ; Kartverket; Environment Agency (UK); offene Daten Österreichs; ArcticDEM',
+    licence: 'open data, attribution required',
+    url: 'https://registry.opendata.aws/terrain-tiles/',
+  },
+  {
     what: 'Coastlines, borders, place names',
     source: 'Natural Earth',
     licence: 'public domain',

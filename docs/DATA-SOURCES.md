@@ -48,6 +48,7 @@ files and can be removed without touching other layers.
 | What | Source | Licence |
 | --- | --- | --- |
 | Surface imagery (Blue Marble) | [NASA Global Imagery Browse Services (GIBS), NASA Earth Science Data and Information System](https://earthdata.nasa.gov/gibs) | public domain |
+| The local skyline (elevation) | [Terrain Tiles (Tilezen/Joerd) on the AWS Registry of Open Data: USGS 3DEP, SRTM and GMTED2010; NOAA ETOPO1; Copernicus EU-DEM; Geoscience Australia; Open Government Licence – Canada; INEGI; LINZ; Kartverket; Environment Agency (UK); offene Daten Österreichs; ArcticDEM](https://registry.opendata.aws/terrain-tiles/) | open data, attribution required |
 | Coastlines, borders, place names | [Natural Earth](https://www.naturalearthdata.com/) | public domain |
 | Plate boundaries, spreading rates and plate names | [Bird (2003) PB2002; GIS conversion by H. Ahlenius, Nordpil](https://github.com/fraxen/tectonicplates) | ODC-By 1.0 |
 | Active faults | [GEM Global Active Faults Database, Styron & Pagani (2020)](https://github.com/GEMScienceTools/gem-global-active-faults) | CC BY-SA 4.0 |

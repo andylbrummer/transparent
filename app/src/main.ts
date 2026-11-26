@@ -18,7 +18,7 @@ import { QuakeLayer, type QuakeData } from './render/quakes';
 import { StereoRig } from './render/stereo';
 import { Dip } from './render/dip';
 import { ViewChips } from './ui/view-chips';
-import { icrsToEcefMatrix } from '@transparent-earth/core';
+import { EARTH_RADIUS_M, enuBasis, icrsToEcefMatrix } from '@transparent-earth/core';
 import { createLookController, type LookController } from './input/look';
 import { createSensorController, FALLBACK_PLACE, type SensorState } from './sensors';
 import {
@@ -75,7 +75,8 @@ import { GuideList, type GuideListing } from './guides/guide-list';
 import { createGuideSession, type GuideStatus } from './guides/guide-session';
 import { CARDBOARD_MAX_TIME_RATE, createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
-import { createStandingPlace } from './view/standing-place';
+import { EYE_HEIGHT_M, createStandingPlace } from './view/standing-place';
+import { loadSkyline } from './render/skyline-loader';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
 import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
 
@@ -831,6 +832,38 @@ export function init(): App | null {
   const removeTalkButton = voice.isSupported() ? createTalkButton(container, voice) : () => undefined;
   lazyLayers.setResolution(window.innerWidth, window.innerHeight);
 
+  // The land's skyline where the view stands: loaded once per place, the ring shown until it arrives or if it fails.
+  const SKYLINE_FLOOR_RAD = -Math.acos(EARTH_RADIUS_M / (EARTH_RADIUS_M + EYE_HEIGHT_M));
+  let skylineFor: { lat: number; lon: number } | null = null;
+  let skylineAbort: AbortController | null = null;
+  function skylineMovedM(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+    const dLat = (b.lat - a.lat) * THREE.MathUtils.DEG2RAD;
+    const dLon = (((b.lon - a.lon + 540) % 360) - 180) * THREE.MathUtils.DEG2RAD * Math.cos(a.lat * THREE.MathUtils.DEG2RAD);
+    return Math.hypot(dLat, dLon) * EARTH_RADIUS_M;
+  }
+  function followSkyline(position: { lat: number; lon: number } | null): void {
+    if (position === skylineFor) return;
+    // A fix wanders: only a move of a kilometre or more is a new skyline.
+    if (position && skylineFor && skylineMovedM(skylineFor, position) < 1000) return;
+    skylineFor = position;
+    skylineAbort?.abort();
+    skylineAbort = null;
+    globe.setSkyline(null);
+    if (!position) return;
+    const abort = new AbortController();
+    skylineAbort = abort;
+    loadSkyline(position.lat, position.lon, SKYLINE_FLOOR_RAD, abort.signal).then(
+      (profile) => {
+        if (abort.signal.aborted) return;
+        const enu = enuBasis({ lat: position.lat, lon: position.lon, alt: 0 });
+        globe.setSkyline(profile, new THREE.Vector3(enu.e.x, enu.e.y, enu.e.z), new THREE.Vector3(enu.n.x, enu.n.y, enu.n.z));
+      },
+      (error: unknown) => {
+        if (!abort.signal.aborted) console.warn('skyline:', error);
+      },
+    );
+  }
+
   let frameCount = 0;
   let lastFrameMs = performance.now();
 
@@ -841,6 +874,7 @@ export function init(): App | null {
     const position = ar ? sensorState.position : standing.position();
     const showEarth = position !== null && (!ar || arRunner.isPlaced());
     globe.getMesh().visible = showEarth;
+    followSkyline(position);
     geoRoot.visible = showEarth;
     inertialRoot.visible = showEarth;
     skyRoot.visible = showEarth;
