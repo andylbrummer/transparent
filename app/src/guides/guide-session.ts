@@ -100,6 +100,11 @@ export interface GuideSession {
   /** Whether narration is being heard now: playing, not paused. The voice grammar then takes only the guide's commands. */
   isNarrating(): boolean;
   /**
+   * Whether the guide is under way and not paused: loading a step, playing it, or waiting on the viewer's gaze. The
+   * screen is then kept on (ui/screen-awake.ts): it is watched hands-free. Read every frame, so it builds nothing.
+   */
+  isUnderWay(): boolean;
+  /**
    * A spoken guide command (spec/guides.md §11); the words to show, or null with no guide open. Next and back play on
    * from where they go, as on the pause card.
    */
@@ -501,6 +506,10 @@ export function createGuideSession(deps: GuideSessionDeps): GuideSession {
     isNarrating: () => {
       const state = player.state();
       return state.kind === 'playing' && !state.paused;
+    },
+    isUnderWay: () => {
+      const state = player.state();
+      return (state.kind === 'loading' || state.kind === 'playing' || state.kind === 'waiting') && !state.paused;
     },
     onVoice,
     play,

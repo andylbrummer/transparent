@@ -807,6 +807,15 @@ describe('createGuideSession', () => {
       expect(t.session.isNarrating()).toBe(false);
     });
 
+    it('says whether it is under way, to keep the screen on: not before it starts, nor paused', async () => {
+      const t = setup();
+      expect(t.session.isUnderWay()).toBe(false);
+      await startPlaying(t);
+      expect(t.session.isUnderWay()).toBe(true);
+      t.session.onViewerInput('tap');
+      expect(t.session.isUnderWay()).toBe(false);
+    });
+
     it('says when it is paused, for the pause card', async () => {
       const t = setup();
       await startPlaying(t);
