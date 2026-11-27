@@ -3,7 +3,9 @@
  * looks where the phone points.
  *
  * - Phone with a north-referenced attitude: the device pose aims the view;
- *   a one-finger drag nudges heading to correct the compass.
+ *   a one-finger drag nudges the view: across turns the heading (to correct
+ *   the compass), up and down tilts it (to look past a sensor's tilt error,
+ *   or up without craning).
  * - No attitude (desktop, no compass): a one-finger/mouse drag aims the view.
  * - Two-finger pinch (or +/-) zooms by narrowing the field of view.
  * - Reset (button or R) clears the drag offset and keeps the zoom.
@@ -33,6 +35,8 @@ const HALF_PI = Math.PI / 2;
 export interface LookState {
   /** Heading correction added to the compass, radians, counter-clockwise seen from above. */
   readonly headingNudgeRad: number;
+  /** Tilt correction while the device aims, radians, positive up the screen: -PI/2 to PI/2. */
+  readonly tiltNudgeRad: number;
   /** Manual aim without attitude: yaw counter-clockwise from north, radians. */
   readonly yawRad: number;
   /** Manual aim without attitude: elevation, -PI/2 (straight down) to PI/2. */
@@ -42,6 +46,7 @@ export interface LookState {
 
 export const DEFAULT_LOOK_STATE: LookState = {
   headingNudgeRad: 0,
+  tiltNudgeRad: 0,
   yawRad: 0,
   // Straight down: the antipode, through the core.
   pitchRad: -HALF_PI,
@@ -111,7 +116,11 @@ export function createLookController(): LookController {
   /** Turn the view by a scene displacement, in radians, that follows the finger. */
   function turn(dxRad: number, dyRad: number): void {
     if (gyroActive) {
-      state = { ...state, headingNudgeRad: state.headingNudgeRad + dxRad };
+      state = {
+        ...state,
+        headingNudgeRad: state.headingNudgeRad + dxRad,
+        tiltNudgeRad: clamp(state.tiltNudgeRad + dyRad, -HALF_PI, HALF_PI),
+      };
     } else {
       state = {
         ...state,
@@ -199,10 +208,12 @@ export function createLookController(): LookController {
       if (attitude) {
         // W3C device frame in ENU: Rz(alpha)·Rx(beta)·Ry(gamma). The camera
         // shares the device axes (looks out the back along -Z, +Y toward the
-        // top edge), then rolls with the screen and takes the heading nudge.
+        // top edge), then rolls with the screen and takes the nudges: the tilt
+        // about the screen's own horizontal, the heading about the local up.
         euler.set(attitude.beta * DEG, attitude.gamma * DEG, attitude.alpha * DEG, 'ZXY');
         localQuat.setFromEuler(euler);
         localQuat.multiply(stepQuat.setFromAxisAngle(Z_AXIS, -screenAngleDeg * DEG));
+        localQuat.multiply(stepQuat.setFromAxisAngle(X_AXIS, state.tiltNudgeRad));
         localQuat.premultiply(stepQuat.setFromAxisAngle(Z_AXIS, state.headingNudgeRad));
       } else {
         // Rx(PI/2) turns a down-looking camera to face north on the horizon.

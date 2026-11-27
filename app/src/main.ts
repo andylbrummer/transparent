@@ -77,6 +77,7 @@ import { CARDBOARD_MAX_TIME_RATE, createViewControl } from './view/view-control'
 import { indexLabels, type LabelIndex } from './view/targets';
 import { EYE_HEIGHT_M, createStandingPlace } from './view/standing-place';
 import { ScreenAwake } from './ui/screen-awake';
+import { OffsetIndicator } from './ui/offset-indicator';
 import { loadSkyline } from './render/skyline-loader';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
 import { WHOLE_SKY_BRIGHTNESS } from './layers/sky-below-horizon/layer';
@@ -349,9 +350,9 @@ export function init(): App | null {
   const resetButton = document.createElement('button');
   resetButton.id = 'reset-offset';
   resetButton.type = 'button';
-  resetButton.textContent = 'Reset offset';
   resetButton.title = 'Snap the view back to where the phone points';
   container.appendChild(resetButton);
+  const offsetIndicator = new OffsetIndicator(resetButton);
   const onResetClick = (): void => look.resetOffset();
   resetButton.addEventListener('click', onResetClick);
 
@@ -915,7 +916,12 @@ export function init(): App | null {
     // In AR the camera is the device's, put in the Earth frame where the window was placed.
     if (ar) arRunner.update(frame, camera);
     if (position) {
-      if (!ar) look.updateCamera(camera, position, sensors.getAttitude(), screen.orientation?.angle ?? 0);
+      if (!ar) {
+        const attitude = sensors.getAttitude();
+        look.updateCamera(camera, position, attitude, screen.orientation?.angle ?? 0);
+        const lookState = look.getState();
+        offsetIndicator.update(attitude !== null, lookState.headingNudgeRad, lookState.tiltNudgeRad);
+      }
       // Turn the sky to where the Earth's rotation has it now.
       const date = clock.now();
       viewChips.update(date.getTime(), nowMs);

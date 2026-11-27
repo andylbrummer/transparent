@@ -708,6 +708,11 @@
       #reset-offset {
         right: calc(env(safe-area-inset-right) + 12px);
       }
+      /* The view is off the phone's own aim: the button says by how much, and stands out. */
+      #reset-offset.reset-offset--off {
+        border-color: #ffc46b;
+        font-variant-numeric: tabular-nums;
+      }
       #layers-toggle {
         left: calc(env(safe-area-inset-left) + 12px);
       }

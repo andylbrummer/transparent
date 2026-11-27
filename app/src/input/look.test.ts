@@ -91,6 +91,33 @@ describe('createLookController', () => {
     expect(look.getState().pitchRad).toBe(-Math.PI / 2);
   });
 
+  it('tilts with a vertical drag while the gyro aims, and resets', () => {
+    const look = createLookController();
+    const camera = new THREE.PerspectiveCamera();
+    const upright = { alpha: 0, beta: 90, gamma: 0 };
+    look.updateCamera(camera, AUSTIN, upright, 0);
+
+    // Drag down by half the viewport height = half a field of view: the scene follows the finger, the view tilts up.
+    look.onPointerDown(1, 0, 0);
+    look.onPointerMove(1, 0, 400, 800);
+    look.onPointerUp(1);
+    look.updateCamera(camera, AUSTIN, upright, 0);
+    const tilt = (DEFAULT_FOV_DEG * Math.PI) / 180 / 2;
+    expectDirection(forward(camera), NORTH.clone().applyAxisAngle(EAST, tilt));
+    expect(look.getState().tiltNudgeRad).toBeCloseTo(tilt, 9);
+
+    // The tilt is the screen’s: held landscape, a drag down tilts the view toward the screen’s top, which faces east.
+    look.resetOffset();
+    look.onPointerDown(1, 0, 0);
+    look.onPointerMove(1, 0, 400, 800);
+    look.updateCamera(camera, AUSTIN, upright, 90);
+    expectDirection(forward(camera), NORTH.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(EAST, Math.sin(tilt)));
+
+    look.resetOffset();
+    look.updateCamera(camera, AUSTIN, upright, 0);
+    expectDirection(forward(camera), NORTH);
+  });
+
   it('aims with a drag when there is no attitude', () => {
     const look = createLookController();
     const camera = new THREE.PerspectiveCamera();
