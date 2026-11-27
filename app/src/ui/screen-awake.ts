@@ -1,6 +1,6 @@
 /**
- * Keeps the screen on while something is playing that the viewer watches without touching: a guide's narration, a
- * clip. A phone held up to the sky is moved, never tapped, so its screen timeout (30 s on many phones) would put it
+ * Keeps the screen on while something holds the viewer without a touch: a guide's narration, a clip, or the phone
+ * being panned round the sky (PanningWatch). A phone held up to the sky is moved, never tapped, so its screen timeout (30 s on many phones) would put it
  * to sleep mid-guide. Pinning the app to a home screen changes nothing there; only a screen wake lock does.
  *
  * The frame loop says each frame whether the screen is wanted on (`want`); asking costs nothing when the answer has
@@ -94,5 +94,52 @@ export class ScreenAwake {
           this.problem = error instanceof Error ? error.message : String(error);
         },
       );
+  }
+}
+
+/** A rotation as a unit quaternion: a THREE.Quaternion passes. */
+export interface Orientation {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly w: number;
+}
+
+/** Turned this far from where it last settled, the phone is being moved, not lying still: past a gyro's jitter. */
+export const PANNING_THRESHOLD_RAD = (3 * Math.PI) / 180;
+/** Still this long, the screen is let go: the phone's own timeout runs from there. */
+export const PANNING_HOLD_MS = 20_000;
+
+/**
+ * Whether the phone is being panned around the sky: held up and moved, so its screen should stay on though nothing
+ * touches it. A phone put down on a table stops turning and the screen is let go after PANNING_HOLD_MS. The turn is
+ * measured from an anchor that moves only on a real turn, so a slow drift of the sensor never counts as panning.
+ */
+export class PanningWatch {
+  private ax = 0;
+  private ay = 0;
+  private az = 0;
+  private aw = 1;
+  private anchored = false;
+  private lastTurnMs = -Infinity;
+
+  /** Called every frame with where the phone points, or null when no attitude aims the view; says whether it pans. */
+  update(orientation: Orientation | null, nowMs: number): boolean {
+    if (!orientation) {
+      this.anchored = false;
+      this.lastTurnMs = -Infinity;
+      return false;
+    }
+    const dot = Math.abs(this.ax * orientation.x + this.ay * orientation.y + this.az * orientation.z + this.aw * orientation.w);
+    const turned = 2 * Math.acos(Math.min(1, dot));
+    if (!this.anchored || turned > PANNING_THRESHOLD_RAD) {
+      if (this.anchored) this.lastTurnMs = nowMs;
+      this.anchored = true;
+      this.ax = orientation.x;
+      this.ay = orientation.y;
+      this.az = orientation.z;
+      this.aw = orientation.w;
+    }
+    return nowMs - this.lastTurnMs < PANNING_HOLD_MS;
   }
 }

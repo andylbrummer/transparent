@@ -76,7 +76,7 @@ import { createGuideSession, type GuideStatus } from './guides/guide-session';
 import { CARDBOARD_MAX_TIME_RATE, createViewControl } from './view/view-control';
 import { indexLabels, type LabelIndex } from './view/targets';
 import { EYE_HEIGHT_M, createStandingPlace } from './view/standing-place';
-import { ScreenAwake } from './ui/screen-awake';
+import { PanningWatch, ScreenAwake } from './ui/screen-awake';
 import { OffsetIndicator } from './ui/offset-indicator';
 import { loadSkyline } from './render/skyline-loader';
 import { SKY_RADIUS_M, type SkyUniforms, type SpyglassFrame } from './layers/types';
@@ -199,6 +199,7 @@ export function init(): App | null {
 
   // Asked every frame whether a guide or clip wants the screen kept on; read by the HUD for a refusal.
   const screenAwake = new ScreenAwake();
+  const panningWatch = new PanningWatch();
   const globe = new GlobeRenderer();
   scene.add(globe.getMesh());
 
@@ -879,8 +880,10 @@ export function init(): App | null {
     const showEarth = position !== null && (!ar || arRunner.isPlaced());
     globe.getMesh().visible = showEarth;
     followSkyline(position);
-    // A guide or a clip is watched hands-free: the screen must not time out under it. Paused, it may.
-    screenAwake.want(guideSession.isUnderWay() || clipPlayer.isOpen());
+    // A guide or a clip is watched hands-free, and a phone panned round the sky is moved, never tapped: the screen
+    // must not time out under either. Paused, or the phone put down, it may. The camera is last frame's: a frame late.
+    const panning = panningWatch.update(!ar && sensors.getAttitude() ? camera.quaternion : null, performance.now());
+    screenAwake.want(guideSession.isUnderWay() || clipPlayer.isOpen() || panning);
     geoRoot.visible = showEarth;
     inertialRoot.visible = showEarth;
     skyRoot.visible = showEarth;
