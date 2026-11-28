@@ -57,6 +57,7 @@ import {
 } from './data';
 import { LATEST_KEY, latestLargeEvent, originText, presetEvents, type WaveEvent } from './events';
 import { placeReadout } from './readout';
+import { SIMULATED_QUAKES, SurfaceShaking, parseSurfaceSim, type SimManifest } from './surface-sim';
 import { WAVE_COLORS, WaveRenderer, shadowEdges, sourceFrame } from './render';
 
 /** An arrival counts as "passing here now" for this long on the wall clock. */
@@ -155,7 +156,13 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
   let shadows = true;
   renderer.setShadowsVisible(shadows);
   const motion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-  const onMotion = (): void => renderer.setReducedMotion(motion?.matches ?? false);
+  // The simulated surface shaking of an earthquake that has one baked: loaded the first time it is chosen.
+  let shaking: SurfaceShaking | null = null;
+  let shakingLoading = false;
+  const onMotion = (): void => {
+    renderer.setReducedMotion(motion?.matches ?? false);
+    shaking?.setReducedMotion(motion?.matches ?? false);
+  };
   onMotion();
   motion?.addEventListener('change', onMotion);
   context.earthRoot.add(renderer.object);
@@ -279,7 +286,38 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
       ],
     });
     staticLabels.setVisible(visible);
-    context.setStatus(`${manifest.model} model`, 'info');
+    followSimulation();
+  }
+
+  /** Shows the simulated shaking when the earthquake chosen has one, fetching it the first time. */
+  function followSimulation(): void {
+    const simulated = SIMULATED_QUAKES.includes(selected.key);
+    if (shaking) shaking.mesh.visible = shaking.sim.manifest.key === selected.key;
+    const showing = shaking?.mesh.visible ?? false;
+    context.setStatus(showing ? `${manifest.model} model · surface shaking simulated` : `${manifest.model} model`, 'info');
+    if (!simulated || shaking || shakingLoading) return;
+    shakingLoading = true;
+    const key = selected.key;
+    void Promise.all([
+      context.fetchJson<SimManifest>(context.assetUrl(`geo/quake-sim/${key}.json`)),
+      fetch(context.assetUrl(`geo/quake-sim/${key}.bin`)).then((response) => {
+        if (!response.ok) throw new Error(`quake-sim/${key}.bin: HTTP ${response.status}`);
+        return response.arrayBuffer();
+      }),
+    ])
+      .then(([simManifest, buffer]) => {
+        if (disposed) return;
+        // Over the fronts, under the rings: a front's ring lies on the ground it sets moving.
+        shaking = new SurfaceShaking(parseSurfaceSim(simManifest, buffer), RENDER_ORDER.interior + 0.65);
+        shaking.setReducedMotion(motion?.matches ?? false);
+        shaking.setTime(elapsedS(state));
+        renderer.object.add(shaking.mesh);
+        followSimulation();
+      })
+      .catch((error: unknown) => {
+        // The rays still play: the shaking is extra.
+        console.warn('seismic waves: no simulated shaking:', error);
+      });
   }
 
   function choose(event: WaveEvent, play: boolean, atS: number): void {
@@ -399,6 +437,7 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
       state = tickPlayback(state, frameState.deltaMs);
       const t = elapsedS(state);
       renderer.setTime(t);
+      shaking?.setTime(t);
       placeRingLabels(t);
       refreshReadout(false);
     },
@@ -408,6 +447,7 @@ export async function createSeismicWavesLayer(context: LayerContext): Promise<La
       staticLabels?.remove();
       for (const label of ringLabels) label.group.remove();
       markers.dispose();
+      shaking?.dispose();
       renderer.dispose();
       control.dispose();
     },

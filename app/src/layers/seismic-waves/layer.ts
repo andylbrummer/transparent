@@ -36,7 +36,8 @@ const seismicWaves: LayerDefinition = {
   legend: 'linear-gradient(to right, #a8d4ff 0 25%, #ff9a4d 25% 50%, #8ef0b0 50% 75%, #f2f07a 75% 100%)',
   caption:
     'pick an earthquake and play it: P (blue), S (orange, stops at the liquid core), Love and Rayleigh surface waves · ' +
-    'model: ak135, a radial Earth · point source, no amplitudes or attenuation, reflections not drawn · surface-wave rings approximate',
+    'model: ak135, a radial Earth · point source, no amplitudes or attenuation, reflections not drawn · surface-wave rings approximate · ' +
+    'Tōhoku 2011 also glows where the ground shakes: a full-wavefield simulation of it, every phase and the fault’s radiation pattern',
   credits: [
     {
       what: 'Seismic travel times and ray paths: the ak135 Earth model',
@@ -55,6 +56,18 @@ const seismicWaves: LayerDefinition = {
       source: 'USGS ANSS Comprehensive Earthquake Catalog (ComCat) and real-time feeds',
       licence: 'public domain',
       url: 'https://earthquake.usgs.gov/data/comcat/',
+    },
+    {
+      what: 'Simulated surface shaking of the 2011 Tōhoku earthquake (full wavefield, model prem_a_10s, anisotropic PREM)',
+      source: 'EarthScope Syngine (Krischer et al. 2017, Seismol. Res. Lett. 88(4), 1127–1140), Instaseis on AxiSEM wavefield databases',
+      licence: 'no stated licence: a public research service, cited as its authors ask',
+      url: 'https://doi.org/10.1785/0220160210',
+    },
+    {
+      what: 'Moment tensor of the 2011 Tōhoku earthquake (M201103110546A)',
+      source: 'Global CMT Project (Dziewonski, Chou & Woodhouse 1981; Ekström, Nettles & Dziewonski 2012)',
+      licence: 'no stated licence: a published catalogue, cited as its authors ask',
+      url: 'https://www.globalcmt.org/',
     },
     // Word for word the notable-earthquakes layer's entry, so the two merge into one line:
     // the Valdivia 1960 hypocentre played here is ISC-GEM's.
