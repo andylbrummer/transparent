@@ -39,6 +39,35 @@ integration of the ray integrals through the ak135 velocity table as ANU
 publishes it (deep sources, shadow edges, the front on the axis through the
 centre), and TauP asked by distance.
 
+## One earthquake simulated
+
+`generate_quake_sim.py` bakes the 2011 Tōhoku earthquake's ground motion over
+the whole surface, for the "Seismic waves" layer to light the globe where the
+ground shakes. EarthScope Syngine (Krischer et al. 2017) computes the full
+wavefield in anisotropic PREM (`prem_a_10s`, periods down to 10 s, three
+hours) at 3,000 points spread evenly over the globe, from the Global CMT
+moment tensor placed at the ComCat hypocentre and origin the layer plays. It
+keeps the envelope of vertical velocity, log-scaled to a byte, every 8 s, and
+the triangles between the points.
+
+- `app/public/geo/quake-sim/tohoku2011.bin` - the points, their triangles,
+  then a byte a point a frame
+- `app/public/geo/quake-sim/tohoku2011.json` - the layout, the source, the
+  log scale and the credits
+
+```bash
+tools/pipeline/.cache/venv/bin/pip install obspy numpy scipy
+tools/pipeline/.cache/venv/bin/python tools/pipeline/generate_quake_sim.py   # 15 Syngine requests, ~15 minutes; cached
+tools/pipeline/.cache/venv/bin/python tools/pipeline/test_quake_sim.py
+```
+
+`test_quake_sim.py` checks where the simulated ground first moves against
+TauP's first arrivals (in PREM, and in the ak135 the fronts are drawn with),
+the core's P shadow (Pdiff, weaker), the loudest shaking travelling at one
+surface-wave speed everywhere (about 2.6 km/s: short-period Rayleigh waves,
+slowed by PREM's 3 km ocean, trailing the 3.7 km/s ring the layer draws), the
+surface waves gathering at the antipode, and the triangulation.
+
 ## Outlines and Labels
 
 `generate_geo.py` downloads Natural Earth (public domain) and writes what the

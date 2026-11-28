@@ -1,0 +1,63 @@
+{
+ "formatVersion": 1,
+ "key": "tohoku2011",
+ "comcatId": "official20110311054624120_30",
+ "gcmtId": "M201103110546A",
+ "source": {
+  "time": "2011-03-11T05:46:24.120Z",
+  "lat": 38.297,
+  "lon": 142.373,
+  "depthKm": 29.0,
+  "momentTensorNm": {
+   "Mrr": 1.73e+22,
+   "Mtt": -2.8100000000000005e+21,
+   "Mpp": -1.45e+22,
+   "Mrt": 2.12e+22,
+   "Mrp": 4.55e+22,
+   "Mtp": -6.570000000000001e+21
+  },
+  "gcmtHalfDurationS": 70.0
+ },
+ "model": "prem_a_10s",
+ "component": "vertical velocity, envelope",
+ "points": 3000,
+ "triangles": 5996,
+ "frames": 1350,
+ "frameS": 8,
+ "log10FloorMs": -3.9775,
+ "log10TopMs": 0.0225,
+ "layout": {
+  "lat": {
+   "offset": 0,
+   "length": 3000,
+   "type": "float32"
+  },
+  "lon": {
+   "offset": 12000,
+   "length": 3000,
+   "type": "float32"
+  },
+  "triangles": {
+   "offset": 24000,
+   "length": 17988,
+   "type": "uint16"
+  },
+  "frames": {
+   "offset": 59976,
+   "length": 4050000,
+   "type": "uint8"
+  }
+ },
+ "credits": [
+  {
+   "what": "Simulated ground motion of the 2011 Tōhoku earthquake (full wavefield, model prem_a_10s)",
+   "source": "EarthScope Syngine (Krischer et al. 2017, Seismol. Res. Lett. 88(4), 1127–1140), Instaseis and AxiSEM",
+   "url": "https://service.earthscope.org/irisws/syngine/1/"
+  },
+  {
+   "what": "Moment tensor of the 2011 Tōhoku earthquake (M201103110546A)",
+   "source": "Global CMT Project (Dziewonski et al. 1981; Ekström et al. 2012)",
+   "url": "https://www.globalcmt.org/"
+  }
+ ]
+}
